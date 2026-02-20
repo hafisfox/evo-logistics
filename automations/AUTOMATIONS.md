@@ -34,13 +34,14 @@ To run these automations safely, we utilize a local `.env` file for API keys, an
 
 ### 2. Generate Google OAuth Token
 Because Service Accounts cannot read free Gmail inboxes natively, you must authorize this app to read your personal email.
-1. In Google Cloud Console, create an **OAuth 2.0 Client ID** (Desktop App type).
-2. Download the resulting `credentials.json` directly into the `automations/` folder.
-3. Run the interactive login script:
+1. In Google Cloud Console, create an **OAuth 2.0 Client ID** (Web application type).
+2. Under **Authorized redirect URIs**, add `https://your-vercel-domain.vercel.app/api/auth/callback/google`
+3. Download the resulting `credentials.json` directly into the `automations/` folder.
+4. Run the interactive login script:
    ```bash
    python3 automations/authenticate_google.py
    ```
-4. This will open your web browser. Log in and authorize the app. A `token.json` file will be generated securely on your local machine.
+5. This will open your web browser. Log in and authorize the app. A `token.json` file will be generated securely on your local machine.
 
 The Modal scripts use `.add_local_file()` in the image definition to bundle `token.json` into the container at `/root/token.json`.
 

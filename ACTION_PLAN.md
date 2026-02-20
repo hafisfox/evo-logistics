@@ -31,7 +31,7 @@
 |-------|-----------|
 | Orchestration | Modal.com (serverless Python) |
 | AI/LLM | OpenAI GPT (Python SDK + Pydantic) |
-| Email | Gmail API (OAuth 2.0 User Consent flow) |
+| Email | Gmail API (OAuth 2.0 Web Application flow) |
 | Email Trigger | Google Cloud Pub/Sub (Gmail push notifications) |
 | Database | Supabase PostgreSQL |
 
