@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing AI Automation System - Interactive Blueprint</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #0b1d2a 0%, #16324f 30%, #1f4e79 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            padding: 30px 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 20px;
+            margin-bottom: 40px;
+            border: 1px solid rgba(0, 229, 255, 0.1);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            animation: fadeIn 1s ease-out;
+        }
+
+        .header h1 {
+            font-size: 3.5rem;
+            background: linear-gradient(90deg, #00e5ff, #00b7ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 10px;
+            font-weight: 800;
+        }
+
+        .header h2 {
+            font-size: 1.8rem;
+            color: #ffd166;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            line-height: 1.6;
+        }
+
+        .slides-container {
+            position: relative;
+            min-height: 600px;
+            margin-bottom: 100px;
+        }
+
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 40px;
+            background: rgba(15, 35, 55, 0.85);
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(0, 229, 255, 0.15);
+            opacity: 0;
+            transform: translateX(100px);
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .slide.active {
+            opacity: 1;
+            transform: translateX(0);
+            pointer-events: all;
+            z-index: 10;
+        }
+
+        .slide h1 {
+            font-size: 2.5rem;
+            color: #00e5ff;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid rgba(0, 229, 255, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .slide h1 i {
+            font-size: 2rem;
+        }
+
+        .slide ul {
+            list-style: none;
+            margin: 25px 0;
+        }
+
+        .slide li {
+            font-size: 1.3rem;
+            line-height: 1.8;
+            margin-bottom: 15px;
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .slide li:before {
+            content: "▸";
+            color: #ffd166;
+            position: absolute;
+            left: 0;
+            font-size: 1.5rem;
+        }
+
+        .slide-content {
+            font-size: 1.3rem;
+            line-height: 1.8;
+            margin: 25px 0;
+        }
+
+        .slide-footer {
+            position: absolute;
+            bottom: 20px;
+            right: 40px;
+            font-size: 1rem;
+            opacity: 0.6;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .slide-progress {
+            width: 100%;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            margin-top: 30px;
+            overflow: hidden;
+        }
+
+        .slide-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #00e5ff, #00b7ff);
+            width: 0%;
+            transition: width 0.5s ease;
+        }
+
+        .navigation {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            background: rgba(15, 35, 55, 0.9);
+            padding: 20px 30px;
+            border-radius: 50px;
+            border: 1px solid rgba(0, 229, 255, 0.2);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .nav-btn {
+            padding: 15px 25px;
+            font-size: 1.1rem;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+            min-width: 140px;
+            justify-content: center;
+        }
+
+        .nav-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .nav-btn:active {
+            transform: translateY(0);
+        }
+
+        .nav-btn.prev {
+            background: linear-gradient(135deg, #ffd166, #ffb347);
+            color: #0b1d2a;
+        }
+
+        .nav-btn.next {
+            background: linear-gradient(135deg, #00e5ff, #0099cc);
+            color: #0b1d2a;
+        }
+
+        .slide-counter {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #00e5ff;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .slide-dots {
+            display: flex;
+            gap: 8px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .dot.active {
+            background: #00e5ff;
+            transform: scale(1.3);
+        }
+
+        .dot:hover {
+            background: #ffd166;
+        }
+
+        .tech-stack {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .tech-item {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid rgba(0, 229, 255, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .tech-item:hover {
+            transform: translateY(-5px);
+            border-color: #00e5ff;
+        }
+
+        .phase-timeline {
+            position: relative;
+            margin: 40px 0;
+            padding-left: 30px;
+        }
+
+        .phase-timeline:before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(to bottom, #00e5ff, #ffd166);
+        }
+
+        .phase-item {
+            position: relative;
+            margin-bottom: 30px;
+            padding-left: 20px;
+        }
+
+        .phase-item:before {
+            content: '';
+            position: absolute;
+            left: -33px;
+            top: 5px;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: #00e5ff;
+            border: 3px solid #0b1d2a;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(0, 229, 255, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(0, 229, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 229, 255, 0); }
+        }
+
+        .highlight {
+            background: linear-gradient(120deg, rgba(0, 229, 255, 0.1) 0%, rgba(0, 229, 255, 0) 100%);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2.5rem;
+            }
+            
+            .slide {
+                padding: 25px;
+            }
+            
+            .slide h1 {
+                font-size: 2rem;
+            }
+            
+            .slide li {
+                font-size: 1.1rem;
+            }
+            
+            .navigation {
+                padding: 15px;
+                border-radius: 20px;
+            }
+            
+            .nav-btn {
+                padding: 12px 20px;
+                min-width: 120px;
+                font-size: 1rem;
+            }
+            
+            .tech-stack {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .navigation {
+                flex-direction: column;
+                width: 90%;
+                border-radius: 20px;
+            }
+            
+            .nav-btn {
+                width: 100%;
+            }
+            
+            .slide-counter {
+                order: -1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-robot"></i> Pricing AI Automation System</h1>
+            <h2>Complete Business & System Blueprint</h2>
+            <p>FCL China → UAE | n8n + AI Powered Pricing Engine</p>
+            <p>Designed by Niyas Cheriya Madathil</p>
+            <div class="slide-progress">
+                <div class="slide-progress-bar" id="progressBar"></div>
+            </div>
+        </div>
+
+        <div class="slides-container">
+            <!-- Slide 1 -->
+            <div class="slide active" id="slide1">
+                <h1><i class="fas fa-rocket"></i> System Overview</h1>
+                <div class="slide-content">
+                    <p>A fully automated pricing system for FCL shipments from China to UAE, leveraging AI and workflow automation to streamline the entire quotation process.</p>
+                    <div class="tech-stack">
+                        <div class="tech-item">
+                            <i class="fas fa-cogs fa-2x" style="color: #00e5ff;"></i>
+                            <h3>n8n Workflows</h3>
+                            <p>Automation backbone</p>
+                        </div>
+                        <div class="tech-item">
+                            <i class="fas fa-brain fa-2x" style="color: #ffd166;"></i>
+                            <h3>AI Decision Engine</h3>
+                            <p>OpenAI integration</p>
+                        </div>
+                        <div class="tech-item">
+                            <i class="fas fa-cloud fa-2x" style="color: #00e5ff;"></i>
+                            <h3>Cloud Deployment</h3>
+                            <p>Scalable architecture</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="slide-footer">
+                    <span>Slide 1/15</span>
+                    <i class="fas fa-info-circle"></i>
+                </div>
+            </div>
+
+            <!-- Slide 2 -->
+            <div class="slide" id="slide2">
+                <h1><i class="fas fa-exclamation-triangle"></i> Business Problem</h1>
+                <ul>
+                    <li><span class="highlight">Manual RFQ handling</span> is slow and inefficient</li>
+                    <li>Agent emails are <span class="highlight">unstructured and inconsistent</span></li>
+                    <li>Rate comparison is <span class="highlight">error-prone and time-consuming</span></li>
+                    <li>Carrier DO charges <span class="highlight">vary significantly</span></li>
+                    <li>ETD decisions directly impact <span class="highlight">customer trust</span></li>
+                    <li>Pricing managers are <span class="highlight">overloaded with routine tasks</span></li>
+                </ul>
+                <div class="slide-footer">
+                    <span>Slide 2/15</span>
+                    <i class="fas fa-chart-line"></i>
+                </div>
+            </div>
+
+            <!-- Slide 3 -->
+            <div class="slide" id="slide3">
+                <h1><i class="fas fa-bullseye"></i> System Objective</h1>
+                <ul>
+                    <li>Fully automate FCL pricing from China to UAE</li>
+                    <li>AI reads and processes customer RFQs automatically</li>
+                    <li>AI validates enquiry completeness in real-time</li>
+                    <li>System sends RFQs to multiple China agents simultaneously</li>
+                    <li>AI analyzes rates with carrier performance history</li>
+                    <li>Manager selects best agent with AI recommendations</li>
+                    <li>System calculates final door-to-door price</li>
+                    <li>System quotes customer instantly with standardized format</li>
+                </ul>
+                <div class="slide-footer">
+                    <span>Slide 3/15</span>
+                    <i class="fas fa-flag-checkered"></i>
+                </div>
+            </div>
+
+            <!-- Slide 4 -->
+            <div class="slide" id="slide4">
+                <h1><i class="fas fa-inbox"></i> Customer Enquiry Processing</h1>
+                <ul>
+                    <li>Customer sends RFQ by email to dedicated system address</li>
+                    <li>System reads email via IMAP with automatic parsing</li>
+                    <li>AI extracts critical information:
+                        <ul style="margin-top: 10px; margin-left: 30px;">
+                            <li>POL (Port of Loading), POD (Port of Discharge)</li>
+                            <li>Incoterm requirements</li>
+                            <li>Container type & quantity</li>
+                            <li>Cargo type and special requirements</li>
+                            <li>Cargo readiness date and time</li>
+                        </ul>
+                    </li>
+                    <li>If any information missing → AI replies on same thread requesting clarification</li>
+                </ul>
+                <div class="slide-footer">
+                    <span>Slide 4/15</span>
+                    <i class="fas fa-mail-bulk"></i>
+                </div>
+            </div>
+
+            <!-- Slide 5 -->
+            <div class="slide" id="slide5">
+                <h1><i class="fas fa-paper-plane"></i> Agent RFQ Automation</h1>
+                <ul>
+                    <li>Validated RFQ sent to <span class="highlight">10 fixed China agents</span> simultaneously</li>
+                    <li>Always address agent by name for <span class="highlight">personalized communication</span></li>
+                    <li>Delivery location automatically converted to <span class="highlight">Jebel Ali Port</span></li>
+                    <li>All RFQs sent in <span class="highlight">USD for consistency</span></li>
+                    <li><span class="highlight">Standardized RFQ format</span> to all agents for easy comparison</li>
+                    <li>System tracks delivery and read receipts</li>
+                </ul>
+                <div class="slide-footer">
+                    <span>Slide 5/15</span>
+                    <i class="fas fa-users"></i>
+                </div>
+            </div>
+
+            <!-- Slide 6 -->
+            <div class="slide" id="slide6">
+                <h1><i class="fas fa-clock"></i> China Time Logic</h1>
+                <ul>
+                    <li>System automatically converts enquiry time to <span class="highlight">China time (UTC+8)</span></li>
+                    <li><span class="highlight">Business Hours (09:00–17:00):</span>
+                        <ul style="margin-top: 10px; margin-left: 30px;">
+                            <li>Wait 4 hours for agent replies</li>
+                            <li>Send automated reminder at 3 hours if &lt;4 quotes received</li>
+                        </ul>
+                    </li>
+                    <li><span class="highlight">After Hours (After 17:00):</span>
+                        <ul style="margin-top: 10px; margin-left: 30px;">
+                            <li>Wait until next business day 11:00</li>
+                            <li>Send automated reminder at 10:00</li>
+                        </ul>
+                    </li>
+                </ul>
+                <div class="slide-footer">
+                    <span>Slide 6/15</span>
+                    <i class="fas fa-globe-asia"></i>
+                </div>
+            </div>
+
+            <!-- Slide 7 -->
+            <div class="slide" id="slide7">
+                <h1><i class="fas fa-chart-bar"></i> Agent Rate Analysis</h1>
+                <ul>
+                    <li>AI reads and parses all agent replies automatically</li>
+                    <li>Extracts key information:
+                        <ul style="margin-top: 10px; margin-left: 30px;">
+                            <li><span class="highlight">Ocean Freight</span> (main cost component)</li>
+                            <li><span class="highlight">Carrier</span> name and service level</li>
+                            <li><span class="highlight">ETD</span> (Estimated Time of Departure)</li>
+                            <li><span class="highlight">Transit Time</span> to destination</li>
+                            <li><span class="highlight">Free time</span> at destination port</li>
+                            <li>Additional charges and validity period</li>
+                        </ul>
+                    </li>
+                    <li>AI ranks best options based on multiple factors</li>
+                    <li>Considers carrier DO charge impact on final price</li>
+                </ul>
+                <div class="slide-footer">
+                    <span>Slide 7/15</span>
+                    <i class="fas fa-search-dollar"></i>
+                </div>
+            </div>
+
+            <!-- Slide 8 -->
+            <div class="slide" id="slide8">
+                <h1><i class="fas fa-user-tie"></i> Pricing Manager Control</h1>
+                <ul>
+                    <li>Pricing manager has <span class="highlight">final approval and override authority</span></li>
+                    <li>Manager reviews AI recommendations on dashboard</li>
+                    <li>Manager selects which agent to use based on experience</li>
+                    <li>System <span class="highlight">locks selected rate</span> for calculation</li>
+                    <li>All further steps are <span class="highlight">completely automatic</span></li>
+                    <li>Audit trail maintained for all decisions</li>
+                </ul>
+                <div class="slide-footer">
+                    <span>Slide 8/15</span>
+                    <i class="fas fa-hand-pointer"></i>
+                </div>
+            </div>
+
+            <!-- Slide 9 -->
+            <div class="slide" id="slide9">
+                <h1><i class="fas fa-calculator"></i> Cost Calculation Engine</h1>
+                <ul>
+                    <li><span class="highlight">Ocean Freight</span> (in USD from agent)</li>
+                    <li><span class="highlight">Currency Conversion</span> USD → AED @ 3.685</li>
+                    <li><span class="highlight">UAE Destination Charges</span>:
+                        <ul style="margin-top: 10px; margin-left: 30px;">
+                            <li>DO charges = document fee + per container charge</li>
+                            <li>All UAE charges except BOE & DPC are per container</li>
+                        </ul>
+                    </li>
+                    <li><span class="highlight">Transport to warehouse</span> (distance-based)</li>
+                    <li>Customs clearance and handling fees</li>
+                </ul>
+                <div class="slide-footer">
+                    <span>Slide 9/15</span>
+                    <i class="fas fa-file-invoice-dollar"></i>
+                </div>
+            </div>
+
+            <!-- Slide 10 -->
+            <div class="slide" id="slide10">
+                <h1><i class="fas fa-percentage"></i> Margin & Rounding Rules</h1>
+                <ul>
+                    <li>Add <span class="highlight">13% profit margin</span> to total cost</li>
+                    <li>Always <span class="highlight">round to nearest 10 AED</span></li>
+                    <li>No decimals in final quotation</li>
+                    <li>No values ending in .01, .05 etc. - clean pricing only</li>
+                    <li>Margin breakdown visible to management only</li>
+                    <li>Competitive pricing algorithm for market adjustment</li>
+                </ul>
+                <div class="slide-footer">
+                    <span>Slide 10/15</span>
+                    <i class="fas fa-sort-amount-up"></i>
+                </div>
+            </div>
+
+            <!-- Slide 11 -->
+            <div class="slide" id="slide11">
+                <h1><i class="fas fa-reply"></i> Customer Quotation</h1>
+                <ul>
+                    <li>Reply <span class="highlight">only on original RFQ thread</span></li>
+                    <li>No new email loop - maintains conversation history</li>
+                    <li>Standard quotation format with company branding</li>
+                    <li>Complete transparency:
+                        <ul style="margin-top: 10px; margin-left: 30px;">
+                            <li>Carrier name and service details</li>
+                            <li>ETD and Transit Time clearly shown</li>
+                            <li>All exclusions and special conditions</li>
+                            <li>Quotation validity period</li>
+                        </ul>
+                    </li>
+                    <li>Automated follow-up after 24 hours if no response</li>
+                </ul>
+                <div class="slide-footer">
+                    <span>Slide 11/15</span>
+                    <i class="fas fa-comment-dollar"></i>
+                </div>
+            </div>
+
+            <!-- Slide 12 -->
+            <div class="slide" id="slide12">
+                <h1><i class="fas fa-graduation-cap"></i> AI Learning Engine</h1>
+                <ul>
+                    <li>Tracks which agent <span class="highlight">wins most by specific route</span></li>
+                    <li>Monitors carrier complaint and performance history</li>
+                    <li>Improves ranking automatically based on success rate</li>
+                    <li>Optimizes future RFQ waiting logic and timing</li>
+                    <li>Learns from manager overrides for better suggestions</li>
+                    <li>Predictive analytics for rate fluctuations</li>
+                </ul>
+                <div class="slide-footer">
+                    <span>Slide 12/15</span>
+                    <i class="fas fa-brain"></i>
+                </div>
+            </div>
+
+            <!-- Slide 13 -->
+            <div class="slide" id="slide13">
+                <h1><i class="fas fa-layer-group"></i> Technology Stack</h1>
+                <div class="tech-stack">
+                    <div class="tech-item">
+                        <i class="fas fa-project-diagram fa-2x"></i>
+                        <h3>n8n Workflow Automation</h3>
+                        <p>Orchestrates entire process flow</p>
+                    </div>
+                    <div class="tech-item">
+                        <i class="fab fa-python fa-2x"></i>
+                        <h3>OpenAI Decision Engine</h3>
+                        <p>GPT models for analysis and parsing</p>
+                    </div>
+                    <div class="tech-item">
+                        <i class="fas fa-envelope fa-2x"></i>
+                        <h3>Email IMAP + SMTP</h3>
+                        <p>Email automation and parsing</p>
+                    </div>
+                    <div class="tech-item">
+                        <i class="fas fa-database fa-2x"></i>
+                        <h3>PostgreSQL Database</h3>
+                        <p>Structured data storage</p>
+                    </div>
+                    <div class="tech-item">
+                        <i class="fas fa-server fa-2x"></i>
+                        <h3>Cloud Server</h3>
+                        <p>AWS/Azure deployment</p>
+                    </div>
+                    <div class="tech-item">
+                        <i class="fas fa-chart-line fa-2x"></i>
+                        <h3>Analytics Dashboard</h3>
+                        <p>Real-time monitoring and reporting</p>
+                    </div>
+                </div>
+                <div class="slide-footer">
+                    <span>Slide 13/15</span>
+                    <i class="fas fa-microchip"></i>
+                </div>
+            </div>
+
+            <!-- Slide 14 -->
+            <div class="slide" id="slide14">
+                <h1><i class="fas fa-tasks"></i> Execution Phases</h1>
+                <div class="phase-timeline">
+                    <div class="phase-item">
+                        <h3>Phase 1 — Workflow Design</h3>
+                        <p>n8n workflow mapping and process automation setup</p>
+                    </div>
+                    <div class="phase-item">
+                        <h3>Phase 2 — AI Enquiry Parsing</h3>
+                        <p>Implement AI email reading and information extraction</p>
+                    </div>
+                    <div class="phase-item">
+                        <h3>Phase 3 — Agent RFQ Automation</h3>
+                        <p>Automate agent communication and response collection</p>
+                    </div>
+                    <div class="phase-item">
+                        <h3>Phase 4 — Pricing Engine</h3>
+                        <p>Build cost calculation and margin application system</p>
+                    </div>
+                    <div class="phase-item">
+                        <h3>Phase 5 — Auto Quotation</h3>
+                        <p>Implement automated customer quotation generation</p>
+                    </div>
+                    <div class="phase-item">
+                        <h3>Phase 6 — Learning Engine</h3>
+                        <p>Add AI learning and optimization capabilities</p>
+                    </div>
+                </div>
+                <div class="slide-footer">
+                    <span>Slide 14/15</span>
+                    <i class="fas fa-calendar-alt"></i>
+                </div>
+            </div>
+
+            <!-- Slide 15 -->
+            <div class="slide" id="slide15">
+                <h1><i class="fas fa-eye"></i> Final Vision</h1>
+                <ul>
+                    <li><span class="highlight">10x faster</span> pricing department operations</li>
+                    <li><span class="highlight">Near-zero quotation errors</span> with AI validation</li>
+                    <li><span class="highlight">Instant customer response</span> 24/7</li>
+                    <li>Management control with <span class="highlight">AI-powered insights</span></li>
+                    <li>Scalable to other trades and routes</li>
+                    <li>Competitive advantage through <span class="highlight">pricing intelligence</span></li>
+                </ul>
+                <div class="slide-content" style="margin-top: 40px; padding: 20px; background: rgba(0, 229, 255, 0.1); border-radius: 10px;">
+                    <p style="text-align: center; font-size: 1.4rem; font-weight: 600;">
+                        <i class="fas fa-quote-left" style="color: #ffd166;"></i>
+                        Transforming freight pricing from manual process to intelligent automation
+                        <i class="fas fa-quote-right" style="color: #ffd166;"></i>
+                    </p>
+                </div>
+                <div class="slide-footer">
+                    <span>Slide 15/15</span>
+                    <i class="fas fa-trophy"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide-dots" id="slideDots"></div>
+
+        <div class="navigation">
+            <button class="nav-btn prev" onclick="prevSlide()">
+                <i class="fas fa-chevron-left"></i> Previous
+            </button>
+            <div class="slide-counter" id="slideCounter">1/15</div>
+            <button class="nav-btn next" onclick="nextSlide()">
+                Next <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let currentSlide = 0;
+        const totalSlides = 15;
+        const slides = document.querySelectorAll('.slide');
+        const slideCounter = document.getElementById('slideCounter');
+        const progressBar = document.getElementById('progressBar');
+        const slideDots = document.getElementById('slideDots');
+
+        // Create navigation dots
+        for (let i = 0; i < totalSlides; i++) {
+            const dot = document.createElement('div');
+            dot.className = 'dot';
+            if (i === 0) dot.classList.add('active');
+            dot.addEventListener('click', () => goToSlide(i));
+            slideDots.appendChild(dot);
+        }
+
+        function updateSlide() {
+            // Hide all slides
+            slides.forEach(slide => {
+                slide.classList.remove('active');
+            });
+            
+            // Show current slide
+            slides[currentSlide].classList.add('active');
+            
+            // Update counter
+            slideCounter.textContent = `${currentSlide + 1}/${totalSlides}`;
+            
+            // Update progress bar
+            progressBar.style.width = `${((currentSlide + 1) / totalSlides) * 100}%`;
+            
+            // Update dots
+            document.querySelectorAll('.dot').forEach((dot, index) => {
+                dot.classList.toggle('active', index === currentSlide);
+            });
+            
+            // Add animation to current slide
+            const currentSlideElement = slides[currentSlide];
+            currentSlideElement.style.animation = 'none';
+            setTimeout(() => {
+                currentSlideElement.style.animation = 'fadeIn 0.6s ease-out';
+            }, 10);
+        }
+
+        function nextSlide() {
+            if (currentSlide < totalSlides - 1) {
+                currentSlide++;
+                updateSlide();
+            }
+        }
+
+        function prevSlide() {
+            if (currentSlide > 0) {
+                currentSlide--;
+                updateSlide();
+            }
+        }
+
+        function goToSlide(index) {
+            currentSlide = index;
+            updateSlide();
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') {
+                nextSlide();
+            } else if (e.key === 'ArrowLeft') {
+                prevSlide();
+            } else if (e.key >= 1 && e.key <= 9) {
+                const num = parseInt(e.key);
+                if (num <= totalSlides) {
+                    goToSlide(num - 1);
+                }
+            }
+        });
+
+        // Touch swipe support
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        document.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+        });
+
+        document.addEventListener('touchend', (e) => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        });
+
+        function handleSwipe() {
+            const swipeThreshold = 50;
+            const diff = touchStartX - touchEndX;
+            
+            if (Math.abs(diff) > swipeThreshold) {
+                if (diff > 0) {
+                    nextSlide();
+                } else {
+                    prevSlide();
+                }
+            }
+        }
+
+        // Initialize
+        updateSlide();
+
+        // Auto-advance (optional - comment out if not needed)
+        // setInterval(() => {
+        //     if (currentSlide < totalSlides - 1) {
+        //         nextSlide();
+        //     }
+        // }, 10000);
+    </script>
+</body>
+</html>

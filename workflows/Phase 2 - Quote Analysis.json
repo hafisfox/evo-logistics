@@ -1,0 +1,2209 @@
+{
+  "name": "Phase 2 - Quote Analysis",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "readStatus": "unread"
+        },
+        "options": {
+          "downloadAttachments": true
+        }
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -3520,
+        96
+      ],
+      "id": "cb9bd333-9e90-44fd-97f2-2895c1de9637",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "1ewuYqHBFtobt1D6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// EXTRACT RFQ REFERENCE ID\ntry {\n  const item = $input.first().json;\n  const subject = item.subject || '';\n  const from = item.from?.text || item.from || '';\n  const refMatch = subject.match(/Ref:\\s*\\[?([A-Za-z0-9-]+)\\]?/i);\n  const refId = refMatch ? refMatch[1] : null;\n  if (!refId) { console.log('No Ref ID found in subject: ' + subject); return []; }\n  const nameMatch = from.match(/^([^<]+)/);\n  const agentName = nameMatch ? nameMatch[1].trim().replace(/\\\"/g, '') : 'Unknown Agent';\n  const agentEmail = item.from?.value?.[0]?.address || (typeof item.from === 'string' ? item.from : 'unknown@agent.com');\n  return [{ json: { refId, subject, agentName, agentEmail, emailBody: item.text || item.snippet || '', receivedAt: item.date || new Date().toISOString() } }];\n} catch (e) {\n  console.log('Extract Ref ID failed: ' + e.message); return [];\n}"
+      },
+      "id": "d7c9ddab-02a2-42d5-9604-4ba3987a95c3",
+      "name": "Extract Ref ID",
+      "position": [
+        -2864,
+        32
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=AGENT EMAIL:\nAgent: {{ $('Extract Ref ID').item.json.agentName }}\n\"\"\"\n{{ $('Extract Ref ID').item.json.emailBody }}\n\"\"\"\n\nToday is : {{ $today }}\n\n",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You are a Freight Rate Parser. Extract shipping rate data from freight agent reply emails. The original request may have contained ONE or MULTIPLE distinct shipments.\n\n---\n\n## CRITICAL CONCEPT: What is a \"Shipment\"?\n\nA shipment is a **distinct routing block**, NOT an individual container.\n\n| Scenario | Shipment Count |\n|---|---|\n| 3 x 40FT, one route, one request | **1 shipment** (qty=3, not 3 shipments) |\n| 1 x 20FT SHANGHAI→JEBEL ALI + 2 x 40HC NINGBO→HAMAD PORT | **2 shipments** |\n| Original email shows \"Shipment 1 of 2\" and \"Shipment 2 of 2\" blocks | **2 shipments** |\n\n**Container quantity within a single shipment NEVER creates multiple quote objects.**\nThe number of quote objects in your output must equal the number of distinct shipment BLOCKS in the original request — not the number of containers.\n\n---\n\n## HOW TO COUNT SHIPMENTS\n\nStep 1 — Read the original request (quoted in the agent's reply email):\n- Look for \"Shipment 1 of X\", \"Shipment 2 of X\" labels → that is your shipment count\n- Look for multiple route blocks with different POL/POD → each is a separate shipment\n- A single route block with multiple containers = 1 shipment regardless of container count\n\nStep 2 — Map agent's response to those shipments:\n- Agent gives one price for everything → apply same values to ALL shipment numbers\n- Agent gives different prices per shipment → use respective values\n- Agent only quotes some shipments → only include those shipment numbers\n\n---\n\n## OUTPUT FORMAT\n\nReturn exactly this JSON structure. No markdown, no backticks, no explanation text — raw JSON only.\n\n```\n{\n  \"quotes\": [\n    {\n      \"shipment_number\": 1,\n      \"price\": 1200,\n      \"currency\": \"USD\",\n      \"carrier\": \"COSCO\",\n      \"validity\": \"2026-03-13\",\n      \"transit_time\": 22,\n      \"free_time\": 14,\n      \"etd\": \"2026-03-15\"\n    },\n    {\n      \"shipment_number\": 1,\n      \"price\": 1500,\n      \"currency\": \"USD\",\n      \"carrier\": \"MAERSK\",\n      \"validity\": \"2026-03-13\",\n      \"transit_time\": 24,\n      \"free_time\": 14,\n      \"etd\": \"2026-03-18\"\n    }\n  ]\n}\n```\n\n---\n\n## FIELD RULES\n\n**shipment_number**\nInteger matching the shipment block number from the original request (1, 2, 3...).\nIf the original request had only one shipment block, this is always 1 — regardless of how many containers.\n\n**price**\nThe total ocean freight amount quoted by the agent for that entire shipment (all containers combined).\nnull if agent declines or provides no rate for this shipment.\nDo NOT multiply by container quantity — the agent's stated price is taken as-is.\n\n**currency**\nAlways \"USD\".\n\n**carrier**\nUPPERCASE. Normalize as follows:\n- \"Cosco Shipping\" / \"COSCO SHIPPING LINES\" → \"COSCO\"\n- \"Evergreen Line\" / \"Evergreen Marine\" → \"EVERGREEN\"\n- \"ONE Line\" / \"Ocean Network Express\" → \"ONE\"\n- \"Mediterranean Shipping\" / \"Mediterranean Shipping Company\" → \"MSC\"\n- \"Hapag-Lloyd\" / \"Hapag Lloyd\" → \"HAPAG-LLOYD\"\n- \"CMA CGM\" / \"CMA-CGM\" → \"CMA CGM\"\n- \"Yang Ming\" / \"Yang Ming Marine\" → \"YANG MING\"\n- \"Hyundai Merchant Marine\" / \"HMM\" → \"HMM\"\n- \"PIL\" / \"Pacific International Lines\" → \"PIL\"\n- \"ZIM Integrated\" → \"ZIM\"\n\n**validity**\nQuote expiry date as YYYY-MM-DD. null if not specified.\nWhen stated once for all shipments, apply the same date to every quote object.\nConvert informal dates: \"March 13\" → use the year from context, e.g. \"2026-03-13\".\n\n**transit_time**\nInteger days port-to-port. null if not specified.\nWhen stated once, apply to all quote objects.\n\n**free_time**\nInteger days free detention/demurrage at destination. null if not specified.\nWhen stated once, apply to all quote objects.\n\n**etd**\nEstimated Time of Departure as YYYY-MM-DD. null if not specified.\nLook for: \"ETD\", \"departure date\", \"sailing date\", \"vessel departure\", \"ETD approx\".\nConvert informal dates: \"March 15\" → \"2026-03-15\" (use year from context).\nIf ETD differs per shipment, use the appropriate one per quote object.\n\n---\n\n## MULTI-SHIPMENT HANDLING\n\n- Agent gives ONE price covering ALL shipments → create one quote object per shipment number from the original request, all with identical values\n- Agent gives DIFFERENT prices per shipment → create one quote object per shipment with respective values\n- Agent quotes PARTIAL shipments only → include only the shipment numbers the agent actually quoted\n- Shared fields (carrier, validity, transit_time, free_time) stated once → copy to all quote objects\n- ETD differs per shipment → assign the correct ETD per quote object\n\n---\n\n## SPECIAL CASES\n\n| Scenario | Action |\n|---|---|\n| Agent declines all or has no space available | Return {\"quotes\": []} |\n| Agent offers multiple carriers for same shipment | Return ALL options as separate quote objects with the same shipment_number |\n| Rate is per CBM or per ton, not per container/shipment | Return {\"quotes\": []} |\n| Original request had 1 shipment block, any container count | Return exactly 1 quote object with shipment_number: 1 |\n| Agent gives rate \"per container\" explicitly | Use that as the price value as stated — do NOT multiply |\n| ETD given as a range (\"late March\", \"March 15-20\") | Use the earlier/first date in YYYY-MM-DD format |\n| Year not specified for dates | Infer from context (email date, other dates in the email) |\n\n---\n\n## EXAMPLES\n\n### Example 1 — Single shipment, 3 containers (most common case)\n\nOriginal request in email thread:\n```\nRoute: YANTIAN > JEBEL ALI\nContainers: 3 x 40FT\nService: DOOR-TO-DOOR\n```\n\nAgent reply:\n```\nCarrier: MAERSK\nPrice (USD): 1900\nETD: March 15\nTransit Time: 24 days\nFree Time: 14 days\nValidity: March 13\n```\n\nCorrect output:\n```\n{\n  \"quotes\": [\n    {\n      \"shipment_number\": 1,\n      \"price\": 1900,\n      \"currency\": \"USD\",\n      \"carrier\": \"MAERSK\",\n      \"validity\": \"2026-03-13\",\n      \"transit_time\": 24,\n      \"free_time\": 14,\n      \"etd\": \"2026-03-15\"\n    }\n  ]\n}\n```\n3 containers = 1 shipment = 1 quote object. NOT 3 quote objects.\n\n---\n\n### Example 2 — Two distinct shipments, agent quotes both separately\n\nOriginal request:\n```\nShipment 1 of 2: SHANGHAI > JEBEL ALI, 2 x 40HC, Ready: 2026-03-01\nShipment 2 of 2: NINGBO > HAMAD PORT, 1 x 20FT, Ready: 2026-03-10\n```\n\nAgent reply:\n```\nShipment 1: COSCO USD 2200, transit 22 days\nShipment 2: ONE USD 850, transit 18 days\nValidity: 2026-02-28, Free time: 14 days for both\n```\n\nCorrect output:\n```\n{\n  \"quotes\": [\n    {\n      \"shipment_number\": 1,\n      \"price\": 2200,\n      \"currency\": \"USD\",\n      \"carrier\": \"COSCO\",\n      \"validity\": \"2026-02-28\",\n      \"transit_time\": 22,\n      \"free_time\": 14,\n      \"etd\": null\n    },\n    {\n      \"shipment_number\": 2,\n      \"price\": 850,\n      \"currency\": \"USD\",\n      \"carrier\": \"ONE\",\n      \"validity\": \"2026-02-28\",\n      \"transit_time\": 18,\n      \"free_time\": 14,\n      \"etd\": null\n    }\n  ]\n}\n```\n\n---\n\n### Example 3 — Two distinct shipments, agent gives one price for all\n\nOriginal request:\n```\nShipment 1 of 2: SHANGHAI > JEBEL ALI, 1 x 40HC\nShipment 2 of 2: SHANGHAI > JEBEL ALI, 1 x 20FT\n```\n\nAgent reply:\n```\nMAERSK, USD 1500 for all shipments, transit 22 days, validity 2026-03-01\n```\n\nCorrect output:\n```\n{\n  \"quotes\": [\n    {\n      \"shipment_number\": 1,\n      \"price\": 1500,\n      \"currency\": \"USD\",\n      \"carrier\": \"MAERSK\",\n      \"validity\": \"2026-03-01\",\n      \"transit_time\": 22,\n      \"free_time\": null,\n      \"etd\": null\n    },\n    {\n      \"shipment_number\": 2,\n      \"price\": 1500,\n      \"currency\": \"USD\",\n      \"carrier\": \"MAERSK\",\n      \"validity\": \"2026-03-01\",\n      \"transit_time\": 22,\n      \"free_time\": null,\n      \"etd\": null\n    }\n  ]\n}\n```\n\n---\n\n### Example 4 — Single shipment, agent offers two carriers\n\nAgent reply:\nOption 1: COSCO USD 1200, ETD March 15, transit 22 days\nOption 2: MAERSK USD 1500, ETD March 18, transit 24 days\nFree Time: 14 days, Validity: March 13\n\nCorrect output:\n{\n  \"quotes\": [\n    {\n      \"shipment_number\": 1,\n      \"price\": 1200,\n      \"currency\": \"USD\",\n      \"carrier\": \"COSCO\",\n      \"validity\": \"2026-03-13\",\n      \"transit_time\": 22,\n      \"free_time\": 14,\n      \"etd\": \"2026-03-15\"\n    },\n    {\n      \"shipment_number\": 1,\n      \"price\": 1500,\n      \"currency\": \"USD\",\n      \"carrier\": \"MAERSK\",\n      \"validity\": \"2026-03-13\",\n      \"transit_time\": 24,\n      \"free_time\": 14,\n      \"etd\": \"2026-03-18\"\n    }\n  ]\n}\n```\n\n---\n\nCRITICAL: Return ONLY the raw JSON object. No markdown, no backticks, no explanation text, no preamble."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "id": "d2ad0dc4-27f6-4331-a1dc-4691a80b216c",
+      "name": "AI Rate Parser",
+      "position": [
+        -2416,
+        32
+      ],
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9
+    },
+    {
+      "parameters": {
+        "jsCode": "// ========================================\n// MULTI-SHIPMENT + MULTI-CARRIER QUOTE PARSER\n// Outputs ONE item per carrier option for Google Sheets\n// Each row = one agent + one carrier + one shipment\n// ========================================\n\ntry {\n  const rawInput = $input.first();\n  const extractRefData = $('Extract Ref ID').first()?.json || {};\n\n  if (!rawInput || !rawInput.json) {\n    return [{ json: { ...extractRefData, error: 'No AI input', isValidQuote: false } }];\n  }\n\n  const raw = rawInput.json.text || rawInput.json.output || '';\n  let cleanData = {};\n\n  if (!raw || raw.trim() === '') {\n    cleanData = { error: 'Empty AI response', quotes: [] };\n  } else {\n    try {\n      let cleanString = raw.replace(/```json/g, '').replace(/```/g, '').trim();\n      const jsonMatch = cleanString.match(/\\{[\\s\\S]*\\}/);\n      if (jsonMatch) cleanString = jsonMatch[0];\n      cleanData = JSON.parse(cleanString);\n    } catch (parseErr) {\n      cleanData = { error: 'JSON parse failed: ' + parseErr.message, quotes: [] };\n    }\n  }\n\n  function normalizeCarrier(carrier) {\n    if (!carrier || typeof carrier !== 'string') return null;\n    let c = carrier.trim().toUpperCase();\n    if (c.includes('COSCO')) return 'COSCO';\n    if (c.includes('EVERGREEN')) return 'EVERGREEN';\n    if (c.includes('MEDITERRANEAN') || c === 'MSC') return 'MSC';\n    if (c.includes('ONE') && c.length <= 10) return 'ONE';\n    if (c.includes('MAERSK')) return 'MAERSK';\n    if (c.includes('HAPAG') || c.includes('LLOYD')) return 'HAPAG-LLOYD';\n    if (c.includes('CMA') || c.includes('CGM')) return 'CMA CGM';\n    if (c.includes('YANG MING') || c === 'YML') return 'YANG MING';\n    if (c.includes('HMM') || c.includes('HYUNDAI')) return 'HMM';\n    if (c.includes('ZIM')) return 'ZIM';\n    return c;\n  }\n\n  const quotes = cleanData.quotes || [];\n\n  if (!Array.isArray(quotes) || quotes.length === 0) {\n    return [{ json: {\n      ...extractRefData,\n      error: 'No quotes in response',\n      carrier: null, price: null, currency: null,\n      validity: null, transit_time: null, free_time: null, etd: null,\n      shipment_number: null, isValidQuote: false\n    }}];\n  }\n\n  // Output ONE item per quote (per carrier option per shipment)\n  return quotes.map(quote => {\n    const price = quote.price;\n    const isValidQuote = price !== null &&\n      price !== undefined &&\n      price !== 'NO_QUOTE' &&\n      !isNaN(parseFloat(price)) &&\n      parseFloat(price) > 0;\n\n    return {\n      json: {\n        ...extractRefData,\n        shipment_number: quote.shipment_number || 1,\n        carrier: normalizeCarrier(quote.carrier) || 'N/A',\n        price: isValidQuote ? price : 'N/A',\n        currency: quote.currency || 'USD',\n        validity: quote.validity || 'N/A',\n        transit_time: quote.transit_time ?? 'N/A',\n        free_time: quote.free_time ?? 'N/A',\n        etd: quote.etd || 'N/A',\n        isValidQuote,\n        quote_count: quotes.length\n      }\n    };\n  });\n\n} catch (e) {\n  return [{ json: {\n    error: 'Parse failed: ' + e.message,\n    carrier: null, price: null, currency: null,\n    validity: null, transit_time: null, free_time: null, etd: null,\n    isValidQuote: false\n  }}];\n}"
+      },
+      "id": "49857521-5206-41bf-b450-f5596044ccbf",
+      "name": "Parse AI Output",
+      "position": [
+        -2064,
+        32
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "valid-quote",
+              "leftValue": "={{ $json.isValidQuote }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "797fa04d-f57c-4af7-95e0-aa3db1416b53",
+      "name": "Is Valid Quote?",
+      "position": [
+        -1840,
+        32
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90",
+          "mode": "list",
+          "cachedResultName": "Pricing Automation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 694174897,
+          "mode": "list",
+          "cachedResultName": "Agent_Outbound_Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit#gid=694174897"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "match": "={{ $json.refId }}_{{ $json.agentEmail }}",
+            "status": "Received",
+            "carrier": "={{ $json.carrier }}",
+            "currency": "={{ $json.currency }}",
+            "validity": "={{ $json.validity }}",
+            "transit_time": "={{ $json.transit_time }}",
+            "free_time": "={{ $json.free_time }}",
+            "received_at": "={{ $now.format('yyyy-MM-dd hh:mm a') }}",
+            "price": "={{ $json.price }}",
+            "etd": "={{ $json.etd }}",
+            "shipment_number": "={{ $json.shipment_number }}"
+          },
+          "matchingColumns": [
+            "match"
+          ],
+          "schema": [
+            {
+              "id": "rfq_id",
+              "displayName": "rfq_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "match",
+              "displayName": "match",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "agent_email",
+              "displayName": "agent_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "agent_name",
+              "displayName": "agent_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "sent_at",
+              "displayName": "sent_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "shipment_number",
+              "displayName": "shipment_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "carrier",
+              "displayName": "carrier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "price",
+              "displayName": "price",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "etd",
+              "displayName": "etd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "transit_time",
+              "displayName": "transit_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "free_time",
+              "displayName": "free_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "validity",
+              "displayName": "validity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "received_at",
+              "displayName": "received_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "79c3e44b-e302-48b0-90a8-5383108c303e",
+      "name": "Log to Sheets",
+      "position": [
+        -1616,
+        16
+      ],
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JHr0YGDRPjWHDYAj",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90",
+          "mode": "list",
+          "cachedResultName": "Pricing Automation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 694174897,
+          "mode": "list",
+          "cachedResultName": "Agent_Outbound_Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit#gid=694174897"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "match": "={{ $json.refId }}_{{ $json.agentEmail }}",
+            "status": "Invalid_Quote",
+            "carrier": "={{ $json.carrier }}",
+            "price": "={{ $json.price }}",
+            "currency": "={{ $json.currency }}",
+            "etd": "={{ $json.etd }}",
+            "transit_time": "={{ $json.transit_time }}",
+            "free_time": "={{ $json.free_time }}",
+            "validity": "={{ $json.validity }}",
+            "received_at": "={{ $now.format('yyyy-MM-dd hh:mm a') }}"
+          },
+          "matchingColumns": [
+            "match"
+          ],
+          "schema": [
+            {
+              "id": "rfq_id",
+              "displayName": "rfq_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "match",
+              "displayName": "match",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "agent_email",
+              "displayName": "agent_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "agent_name",
+              "displayName": "agent_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "sent_at",
+              "displayName": "sent_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "carrier",
+              "displayName": "carrier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "price",
+              "displayName": "price",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "currency",
+              "displayName": "currency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "etd",
+              "displayName": "etd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "transit_time",
+              "displayName": "transit_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "free_time",
+              "displayName": "free_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "validity",
+              "displayName": "validity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "received_at",
+              "displayName": "received_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "0b87a0a3-e409-4889-a03c-cd8fe5a3ab10",
+      "name": "Log No Quote",
+      "position": [
+        -1616,
+        208
+      ],
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JHr0YGDRPjWHDYAj",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90",
+          "mode": "list",
+          "cachedResultName": "Pricing Automation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 694174897,
+          "mode": "list",
+          "cachedResultName": "Agent_Outbound_Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit#gid=694174897"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "rfq_id",
+              "lookupValue": "={{ $('Extract Ref ID').first().json.refId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "034f0a77-da8b-490e-9dec-c8a61da9fb9f",
+      "name": "Get All Quotes",
+      "position": [
+        -720,
+        16
+      ],
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JHr0YGDRPjWHDYAj",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ========================================\n// COUNT & CHECK QUOTES - SHIPMENT-BASED FORMAT\n// Access data from both Get All Quotes AND Get Master Status\n// ========================================\n\ntry {\n  const allQuotes = $input.all();\n  const masterRfq = $('Get Master Status').first().json;\n\n  // Handle empty input\n  if (!allQuotes || allQuotes.length === 0) {\n    return [{\n      json: {\n        quoteCount: 0,\n        thresholdMet: false,\n        bestPrice: null,\n        bestAgent: '',\n        bestCarrier: '',\n        rfqRef: null,\n        summaryText: 'No quotes received',\n        summaryHtml: '<p>No quotes received</p>',\n        totalResponses: 0,\n        error: 'No input items'\n      }\n    }];\n  }\n\n  // ========================================\n  // GET SHIPMENT DETAILS FROM MASTER RFQ\n  // ========================================\n\n  const rfqRef = masterRfq.rfq_id || null;\n\n  const serviceType = (masterRfq.service_type || 'port-to-port').toLowerCase().trim();\n  const hasDoorService = serviceType !== 'port-to-port';\n  const hasPickup = serviceType === 'door-to-port' || serviceType === 'door-to-door';\n  const hasDelivery = serviceType === 'port-to-door' || serviceType === 'door-to-door';\n\n  const shipmentDetails = {\n    pol: masterRfq.pol || 'N/A',\n    pod: masterRfq.pod || 'N/A',\n    containerType: masterRfq.container_type || 'N/A',\n    qty: masterRfq.qty || 'N/A',\n    readyDate: masterRfq.ready_date || 'N/A',\n    serviceType,\n    pickupAddress: masterRfq.pickup_address || null,\n    deliveryAddress: masterRfq.delivery_address || null\n  };\n\n  // ========================================\n  // FILTER VALID QUOTES\n  // ========================================\n\n  const validQuotes = allQuotes.filter(item => {\n    const price = item.json.price || item.json.ocean_freight;\n\n    if (typeof price === 'string' && price.includes('\\n')) {\n      const prices = price.split('\\n');\n      return prices.some(p => {\n        const trimmed = p.trim();\n        return trimmed !== 'NO_QUOTE' &&\n               trimmed !== '' &&\n               trimmed !== 'N/A' &&\n               !isNaN(parseFloat(trimmed)) &&\n               parseFloat(trimmed) > 0;\n      });\n    }\n\n    return price &&\n           price !== 'NO_QUOTE' &&\n           price !== '' &&\n           price !== 'N/A' &&\n           !isNaN(parseFloat(price)) &&\n           parseFloat(price) > 0;\n  });\n\n  // ========================================\n  // HELPER FUNCTIONS\n  // ========================================\n\n  function parseMultiValue(value) {\n    if (!value) return ['N/A'];\n    if (typeof value === 'string' && value.includes('\\n')) {\n      return value.split('\\n').map(v => v.trim());\n    }\n    return [value];\n  }\n\n  // ========================================\n  // PARSE MULTI-SHIPMENT DATA\n  // ========================================\n\n  const pols = parseMultiValue(shipmentDetails.pol);\n  const pods = parseMultiValue(shipmentDetails.pod);\n  const containerTypes = parseMultiValue(shipmentDetails.containerType);\n  const qtys = parseMultiValue(shipmentDetails.qty);\n  const readyDates = parseMultiValue(shipmentDetails.readyDate);\n\n  const shipmentCount = Math.max(pols.length, pods.length, containerTypes.length);\n\n  // ========================================\n  // BUILD SHIPMENT-BASED QUOTE STRUCTURE\n  // ========================================\n\n  const shipmentQuotes = [];\n\n  for (let i = 0; i < shipmentCount; i++) {\n    const shipmentNum = i + 1;\n    const shipment = {\n      number: shipmentNum,\n      pol: pols[i] || 'N/A',\n      pod: pods[i] || 'N/A',\n      containerType: containerTypes[i] || 'N/A',\n      qty: qtys[i] || 'N/A',\n      readyDate: readyDates[i] || 'N/A',\n      serviceType: shipmentDetails.serviceType,\n      pickupAddress: shipmentDetails.pickupAddress,\n      deliveryAddress: shipmentDetails.deliveryAddress,\n      quotes: []\n    };\n\n    for (const q of validQuotes) {\n      const agent = q.json.agent_name || 'Unknown';\n      const rawPrice = q.json.price || q.json.ocean_freight;\n      const rawCarrier = q.json.carrier || 'TBD';\n      const rawValidity = q.json.validity || 'N/A';\n      const rawTransit = q.json.transit_time || 'N/A';\n      const rawEtd = q.json.etd || 'N/A';\n      const rawFreeTime = q.json.free_time || 'N/A';\n\n      const prices = parseMultiValue(rawPrice);\n      const carriers = parseMultiValue(rawCarrier);\n      const validities = parseMultiValue(rawValidity);\n      const transits = parseMultiValue(rawTransit);\n      const etds = parseMultiValue(rawEtd);\n      const freeTimes = parseMultiValue(rawFreeTime);\n\n      const price = prices[i];\n      const carrier = carriers[i] || carriers[0];\n      const validity = validities[i] || validities[0];\n      const transit = transits[i] || transits[0];\n      const etd = etds[i] || etds[0];\n      const freeTime = freeTimes[i] || freeTimes[0];\n\n      if (price && price !== 'N/A' && !isNaN(parseFloat(price))) {\n        shipment.quotes.push({\n          agent,\n          carrier,\n          price: parseFloat(price),\n          etd,\n          transit,\n          freeTime,\n          validity\n        });\n      }\n    }\n\n    shipment.quotes.sort((a, b) => a.price - b.price);\n    shipmentQuotes.push(shipment);\n  }\n\n  // ========================================\n  // BUILD PLAIN TEXT SUMMARY\n  // ========================================\n\n  let textSummary = [];\n\n  for (const shipment of shipmentQuotes) {\n    textSummary.push(`\\n━━━ SHIPMENT ${shipment.number} ━━━`);\n    textSummary.push(`Route: ${shipment.pol} → ${shipment.pod}`);\n    textSummary.push(`Container: ${shipment.qty} x ${shipment.containerType}`);\n    textSummary.push(`Ready Date: ${shipment.readyDate}`);\n    textSummary.push(`Service: ${shipment.serviceType.toUpperCase()}`);\n    if (shipment.pickupAddress) textSummary.push(`Pickup: ${shipment.pickupAddress}`);\n    if (shipment.deliveryAddress) textSummary.push(`Delivery: ${shipment.deliveryAddress}`);\n    textSummary.push('');\n\n    if (shipment.quotes.length === 0) {\n      textSummary.push('  No quotes received');\n    } else {\n      for (let i = 0; i < shipment.quotes.length; i++) {\n        const q = shipment.quotes[i];\n        const rank = i === 0 ? '🏆' : `${i + 1}.`;\n        textSummary.push(`  ${rank} ${q.agent}: USD $${q.price}`);\n        textSummary.push(`     Carrier: ${q.carrier} | Transit: ${q.transit} days | ETD: ${q.etd}`);\n        textSummary.push(`     Free Time: ${q.freeTime} days | Valid: ${q.validity}`);\n      }\n    }\n  }\n\n  // ========================================\n  // BUILD HTML TABLE SUMMARY\n  // ========================================\n\n  let htmlSummary = '';\n\n  for (const shipment of shipmentQuotes) {\n    const serviceLabel = shipment.serviceType !== 'port-to-port'\n      ? `<span style=\"background: #e3f2fd; color: #1565c0; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 8px;\">🚪 ${shipment.serviceType.toUpperCase()}</span>`\n      : '';\n\n    const addressBlock = (() => {\n      const lines = [];\n      if (shipment.pickupAddress) lines.push(`<div style=\"font-size:12px; color:#555; margin-top:3px;\">📦 Pickup: ${shipment.pickupAddress}</div>`);\n      if (shipment.deliveryAddress) lines.push(`<div style=\"font-size:12px; color:#555; margin-top:3px;\">🏭 Delivery: ${shipment.deliveryAddress}</div>`);\n      return lines.join('');\n    })();\n\n    htmlSummary += `\n<div style=\"margin-bottom: 30px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;\">\n  <div style=\"background: #f5f5f5; padding: 12px 15px; border-bottom: 2px solid #667eea;\">\n    <div style=\"display:flex; align-items:center;\">\n      <strong style=\"color: #333;\">SHIPMENT ${shipment.number}</strong>\n      ${serviceLabel}\n    </div>\n    <div style=\"font-size: 13px; color: #666; margin-top: 4px;\">\n      ${shipment.pol} → ${shipment.pod} | ${shipment.qty} x ${shipment.containerType} | Ready: ${shipment.readyDate}\n    </div>\n    ${addressBlock}\n  </div>\n  <table style=\"width: 100%; border-collapse: collapse;\">\n    <thead>\n      <tr style=\"background: #fafafa; border-bottom: 1px solid #e0e0e0;\">\n        <th style=\"padding: 10px; text-align: left; font-size: 12px; color: #666;\">Agent</th>\n        <th style=\"padding: 10px; text-align: left; font-size: 12px; color: #666;\">Carrier</th>\n        <th style=\"padding: 10px; text-align: right; font-size: 12px; color: #666;\">Price (USD)</th>\n        <th style=\"padding: 10px; text-align: center; font-size: 12px; color: #666;\">Transit</th>\n        <th style=\"padding: 10px; text-align: center; font-size: 12px; color: #666;\">ETD</th>\n        <th style=\"padding: 10px; text-align: center; font-size: 12px; color: #666;\">Free Time</th>\n        <th style=\"padding: 10px; text-align: center; font-size: 12px; color: #666;\">Valid Until</th>\n      </tr>\n    </thead>\n    <tbody>`;\n\n    if (shipment.quotes.length === 0) {\n      htmlSummary += `\n      <tr>\n        <td colspan=\"7\" style=\"padding: 20px; text-align: center; color: #999;\">No quotes received</td>\n      </tr>`;\n    } else {\n      for (let i = 0; i < shipment.quotes.length; i++) {\n        const q = shipment.quotes[i];\n        const isLowest = i === 0;\n        const rowStyle = isLowest ? 'background: #e8f5e9;' : '';\n        const priceStyle = isLowest ? 'color: #2e7d32; font-weight: bold;' : '';\n        const badge = isLowest ? '<span style=\"background: #4caf50; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-right: 5px;\">BEST</span>' : '';\n\n        htmlSummary += `\n      <tr style=\"${rowStyle} border-bottom: 1px solid #f0f0f0;\">\n        <td style=\"padding: 12px; font-size: 13px;\">${badge}${q.agent}</td>\n        <td style=\"padding: 12px; font-size: 13px;\">${q.carrier}</td>\n        <td style=\"padding: 12px; font-size: 15px; text-align: right; ${priceStyle}\">$${q.price}</td>\n        <td style=\"padding: 12px; font-size: 13px; text-align: center;\">${q.transit} days</td>\n        <td style=\"padding: 12px; font-size: 13px; text-align: center;\">${q.etd}</td>\n        <td style=\"padding: 12px; font-size: 13px; text-align: center;\">${q.freeTime} days</td>\n        <td style=\"padding: 12px; font-size: 13px; text-align: center;\">${q.validity}</td>\n      </tr>`;\n      }\n    }\n\n    htmlSummary += `\n    </tbody>\n  </table>\n</div>`;\n  }\n\n  // ========================================\n  // FIND OVERALL BEST PRICE\n  // ========================================\n\n  let bestPrice = Infinity;\n  let bestAgent = '';\n  let bestCarrier = '';\n  let bestShipment = 0;\n\n  for (const shipment of shipmentQuotes) {\n    if (shipment.quotes.length > 0) {\n      const lowestQuote = shipment.quotes[0];\n      if (lowestQuote.price < bestPrice) {\n        bestPrice = lowestQuote.price;\n        bestAgent = lowestQuote.agent;\n        bestCarrier = lowestQuote.carrier;\n        bestShipment = shipment.number;\n      }\n    }\n  }\n\n  const quoteCount = validQuotes.length;\n  const threshold = 2;\n\n  return [{\n    json: {\n      quoteCount,\n      thresholdMet: quoteCount >= threshold,\n      bestPrice: bestPrice === Infinity ? null : bestPrice,\n      bestAgent,\n      bestCarrier,\n      bestShipment,\n      rfqRef,\n      serviceType,\n      hasDoorService,\n      summaryText: textSummary.join('\\n'),\n      summaryHtml: htmlSummary,\n      totalResponses: allQuotes.length,\n      shipmentQuotes\n    }\n  }];\n\n} catch (e) {\n  return [{\n    json: {\n      quoteCount: 0,\n      thresholdMet: false,\n      bestPrice: null,\n      error: 'Count failed: ' + e.message,\n      errorStack: e.stack\n    }\n  }];\n}"
+      },
+      "id": "28e06e33-788f-432c-a312-182d4c5d6eb2",
+      "name": "Count & Check Quotes",
+      "position": [
+        -496,
+        16
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "threshold-check",
+              "leftValue": "={{ $json.thresholdMet }}",
+              "operator": {
+                "operation": "true",
+                "singleValue": true,
+                "type": "boolean"
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f45e4943-1b77-4b8c-8a5d-9a9c82f00203",
+      "name": "Threshold Met?",
+      "position": [
+        -272,
+        16
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "pricingailog@gmail.com",
+        "subject": "=RFQ {{ $json.rfqRef }} - {{ $json.quoteCount }} Quotes Received - Best: USD {{ $json.bestPrice }}",
+        "message": "=<div style=\"font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; color: #333;\">\n  \n  <!-- Header -->\n  <div style=\"background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 8px 8px 0 0;\">\n    <h2 style=\"margin: 0; font-size: 24px;\">📊 Quote Review Required</h2>\n    <p style=\"margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;\">Pricing Automation System</p>\n  </div>\n  \n  <!-- RFQ Info -->\n  <div style=\"background: #f8f9fa; padding: 20px; border-left: 4px solid #667eea;\">\n    <div style=\"font-size: 13px; color: #666; margin-bottom: 4px;\">RFQ Reference</div>\n    <div style=\"font-size: 20px; font-weight: bold; color: #333;\">{{ $json.rfqRef }}</div>\n    <div style=\"font-size: 14px; color: #666; margin-top: 8px;\">\n      Total Valid Quotes: <strong>{{ $json.quoteCount }}</strong>\n    </div>\n  </div>\n  \n  <!-- Overall Best Rate Card -->\n  <div style=\"background: #e8f5e9; border: 2px solid #4caf50; border-radius: 8px; padding: 20px; margin: 20px 0;\">\n    <div style=\"color: #2e7d32; font-weight: bold; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px;\">\n      🏆 Overall Best Rate (Shipment {{ $json.bestShipment }})\n    </div>\n    <table style=\"width: 100%; border-collapse: collapse;\">\n      <tr>\n        <td style=\"padding: 8px 0; color: #666; font-size: 14px;\">Agent</td>\n        <td style=\"padding: 8px 0; font-weight: bold; font-size: 14px; text-align: right;\">{{ $json.bestAgent }}</td>\n      </tr>\n      <tr>\n        <td style=\"padding: 8px 0; color: #666; font-size: 14px;\">Carrier</td>\n        <td style=\"padding: 8px 0; font-weight: bold; font-size: 14px; text-align: right;\">{{ $json.bestCarrier }}</td>\n      </tr>\n      <tr style=\"border-top: 2px solid #4caf50;\">\n        <td style=\"padding: 12px 0; color: #2e7d32; font-size: 14px; font-weight: 600;\">Price</td>\n        <td style=\"padding: 12px 0; font-weight: bold; font-size: 22px; color: #2e7d32; text-align: right;\">USD ${{ $json.bestPrice }}</td>\n      </tr>\n    </table>\n  </div>\n  \n  <!-- Shipment Tables -->\n  <div style=\"margin: 20px 0;\">\n    {{ $json.summaryHtml }}\n  </div>\n\n  <!-- Action Button -->\n  <div style=\"text-align: center; margin: 30px 0;\">\n    <a href=\"https://docs.google.com/spreadsheets/d/1q3qSLQMvj_t7n_Iq2dM5CVL4gmWmAYWrVI55AMJNrog/edit\" \n       style=\"display: inline-block; background: #667eea; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);\">\n      📊 View Full Data in Google Sheets\n    </a>\n  </div>\n  \n  <!-- Footer -->\n  <div style=\"text-align: center; padding: 20px; color: #999; font-size: 12px; border-top: 1px solid #e0e0e0;\">\n    Automated by Pricing Automation System\n  </div>\n  \n</div>",
+        "responseType": "customForm",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Selected agent",
+              "fieldType": "radio",
+              "defaultValue": "={{ $json.bestAgent }}",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "={{ $json.shipmentQuotes[0].quotes[0].agent }}"
+                  },
+                  {
+                    "option": "={{ $json.shipmentQuotes[0].quotes[1].agent }}"
+                  },
+                  {
+                    "option": "={{ $json.shipmentQuotes[0].quotes[2].agent }}"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "resumeAmount": 48
+            }
+          },
+          "appendAttribution": false
+        }
+      },
+      "id": "1ad03c76-4a67-4748-ba53-4a54ebed2059",
+      "name": "Notify Manager",
+      "position": [
+        0,
+        0
+      ],
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "webhookId": "6429b24c-6ff8-4665-a19a-c9b547bed7fc",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "1ewuYqHBFtobt1D6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90",
+          "mode": "list",
+          "cachedResultName": "Pricing Automation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 552411421,
+          "mode": "list",
+          "cachedResultName": "Master_RFQs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit#gid=552411421"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "rfq_id": "={{ $('Threshold Met?').item.json.rfqRef }}",
+            "status": "Selected",
+            "selected_agent": "={{ $json.data['Selected agent'] }}"
+          },
+          "matchingColumns": [
+            "rfq_id"
+          ],
+          "schema": [
+            {
+              "id": "thread_id",
+              "displayName": "thread_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "rfq_id",
+              "displayName": "rfq_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_email",
+              "displayName": "customer_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "received_at",
+              "displayName": "received_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "pol",
+              "displayName": "pol",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "pod",
+              "displayName": "pod",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "container_type",
+              "displayName": "container_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "qty",
+              "displayName": "qty",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ready_date",
+              "displayName": "ready_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "service_type",
+              "displayName": "service_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "pickup_address",
+              "displayName": "pickup_address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "delivery_address",
+              "displayName": "delivery_address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "selected_agent",
+              "displayName": "selected_agent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "final_price_usd",
+              "displayName": "final_price_usd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "final_price_aed",
+              "displayName": "final_price_aed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "quoted_at",
+              "displayName": "quoted_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "d46e855b-d3ff-4f85-84c1-148df053c190",
+      "name": "Update Master Status",
+      "position": [
+        224,
+        0
+      ],
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JHr0YGDRPjWHDYAj",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $('Cost Door').first().json.threadId }}",
+        "emailType": "text",
+        "message": "=Dear Customer,\n\nThank you for your inquiry.\n\nPlease find our freight quotation below:\n\n{{ $json.customerSummaryText }}\n\nValid till: {{ $json.validity }}\n\nExclusions: customs duty/taxes, inspection fees, warehousing/storage, cargo insurance{{ $json.hasDoorService ? '' : ', origin/destination trucking' }}.\n\nPlease confirm to proceed with booking.\n\nBest regards,\nPricing Team",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "d2196fff-08df-4111-8d3a-75ef7d883898",
+      "name": "Send Quotation",
+      "position": [
+        -1696,
+        512
+      ],
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "webhookId": "3b7589ce-dda4-4057-8acd-6883efa82536",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "1ewuYqHBFtobt1D6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90",
+          "mode": "list",
+          "cachedResultName": "Pricing Automation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 552411421,
+          "mode": "list",
+          "cachedResultName": "Master_RFQs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit#gid=552411421"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "final_price_aed": "={{ $('Cost Door').first().json.grandTotalAED }}",
+            "quoted_at": "={{ $now.format('yyyy-MM-dd hh:mm a') }}",
+            "status": "Quoted",
+            "rfq_id": "={{ $('Get Selected Quote').first().json.rfq_id }}",
+            "final_price_usd": "={{ $('Cost Door').first().json.grandTotalUSD }}"
+          },
+          "matchingColumns": [
+            "rfq_id"
+          ],
+          "schema": [
+            {
+              "id": "thread_id",
+              "displayName": "thread_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "rfq_id",
+              "displayName": "rfq_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_email",
+              "displayName": "customer_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "received_at",
+              "displayName": "received_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "pol",
+              "displayName": "pol",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "pod",
+              "displayName": "pod",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "container_type",
+              "displayName": "container_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "qty",
+              "displayName": "qty",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ready_date",
+              "displayName": "ready_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "service_type",
+              "displayName": "service_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "pickup_address",
+              "displayName": "pickup_address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "delivery_address",
+              "displayName": "delivery_address",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "selected_agent",
+              "displayName": "selected_agent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "final_price_usd",
+              "displayName": "final_price_usd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "final_price_aed",
+              "displayName": "final_price_aed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "quoted_at",
+              "displayName": "quoted_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "6d52769c-a51d-461b-a216-c2abcf0060a4",
+      "name": "Mark as Quoted",
+      "position": [
+        -1472,
+        512
+      ],
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JHr0YGDRPjWHDYAj",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "thread",
+        "operation": "reply",
+        "threadId": "={{ $('Cost Door').first().json.threadId }}",
+        "messageId": "={{ $('Send Quotation').first().json.id }}",
+        "message": "=Dear Customer,\n\nFollowing up on our quotation sent yesterday for your shipment:\n\n{{ $json.customerSummaryText }}\n\nWe haven't received your feedback yet. Please let us know if you have any questions or would like to proceed with the booking.\n\nThe quote is valid until {{ $json.validity }}.\n\nBest regards,\nPricing Team",
+        "options": {}
+      },
+      "id": "e7967f8d-2080-4d41-9537-1e17b78c65d7",
+      "name": "Send Follow-up",
+      "position": [
+        96,
+        512
+      ],
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "webhookId": "acbe974b-762c-43b2-8a61-8d90d88f4763",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "1ewuYqHBFtobt1D6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "thread",
+        "operation": "addLabels",
+        "threadId": "={{ $('Gmail Trigger').item.json.threadId }}",
+        "labelIds": [
+          "Label_6676356030214607285"
+        ]
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1168,
+        16
+      ],
+      "id": "4ad3c42d-b8d6-400c-b3a4-04c8071d418d",
+      "name": "Add Label",
+      "webhookId": "455a9d26-fc28-496c-af23-d8d5b567a0d7",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "1ewuYqHBFtobt1D6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "thread",
+        "operation": "addLabels",
+        "threadId": "={{ $('Cost Door').first().json.threadId }}",
+        "labelIds": [
+          "Label_526697513706453526"
+        ]
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1024,
+        512
+      ],
+      "id": "ad31c903-9756-4e34-9378-410498c8c6a5",
+      "name": "Add Label1",
+      "webhookId": "03cb921e-b7f1-4c0d-bd42-5133a494897b",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "1ewuYqHBFtobt1D6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "thread",
+        "operation": "removeLabels",
+        "threadId": "={{ $('Cost Door').first().json.threadId }}",
+        "labelIds": [
+          "Label_4106174991258335344"
+        ]
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1248,
+        512
+      ],
+      "id": "20b6c730-333b-4a9d-abe4-11aafa9e853f",
+      "name": "Remove Label1",
+      "webhookId": "64e8fbd7-5712-4121-a6e2-c27fc47f8ca7",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "1ewuYqHBFtobt1D6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "thread",
+        "operation": "removeLabels",
+        "threadId": "={{ $('Gmail Trigger').item.json.threadId }}",
+        "labelIds": [
+          "Label_2451245255668409057"
+        ]
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1392,
+        16
+      ],
+      "id": "8e43e5b0-f1d3-49a5-a6f2-480edd15801b",
+      "name": "Remove label",
+      "webhookId": "10996f64-890e-4b62-8a1d-250a053b89fd",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "1ewuYqHBFtobt1D6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90",
+          "mode": "list",
+          "cachedResultName": "Pricing Automation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 694174897,
+          "mode": "list",
+          "cachedResultName": "Agent_Outbound_Log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit#gid=694174897"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "rfq_id",
+              "lookupValue": "={{ $('Get Master Status').first().json.rfq_id }}"
+            },
+            {
+              "lookupColumn": "agent_name",
+              "lookupValue": "={{ $('Notify Manager').first().json.data['Selected agent'] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b297ceda-f14a-4ae9-a74c-abdf1c964532",
+      "name": "Get Selected Quote",
+      "position": [
+        448,
+        0
+      ],
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JHr0YGDRPjWHDYAj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90",
+          "mode": "list",
+          "cachedResultName": "Pricing Automation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2082062872,
+          "mode": "list",
+          "cachedResultName": "DO Charges",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit#gid=2082062872"
+        },
+        "options": {}
+      },
+      "id": "47b918e6-9729-4fa1-895b-5cfff2ef1767",
+      "name": "Get DO Charges",
+      "position": [
+        -2560,
+        800
+      ],
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JHr0YGDRPjWHDYAj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "thread",
+        "operation": "get",
+        "threadId": "={{ $('Cost Door').first().json.threadId }}",
+        "options": {}
+      },
+      "id": "31b4c9d1-9527-4b16-bdde-5f117e36ea67",
+      "name": "Customer Reply",
+      "position": [
+        -576,
+        512
+      ],
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "webhookId": "1397bdbb-af7e-4ffa-93fa-c0978e8d14c8",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "1ewuYqHBFtobt1D6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// SIMPLE METHOD: Check if Customer Replied\n// ============================================================\n// \n// This assumes you have a Gmail node called \"Get Thread After Wait\"\n// that fetches the thread data before this code node runs\n//\n// ============================================================\n\ntry {\n  // Get the quotation data with thread ID\n  const quotationData = $('Cost Door').first().json;\n  const threadId = quotationData.threadId;\n  const customerEmail = quotationData.customerEmail;\n  const quoteSentTime = quotationData.calculatedAt;\n  \n  // Get the Gmail thread messages\n  const threadData = $('Customer Reply').first().json;\n  const messages = threadData.messages || [];\n  \n  // When was our quotation sent?\n  const quoteSentDate = new Date(quoteSentTime);\n  \n  // Check if customer replied AFTER we sent the quote\n  let hasReplied = false;\n  \n  for (const msg of messages) {\n    // Get message date and sender\n    const msgDate = new Date(parseInt(msg.internalDate));\n    const fromHeader = msg.payload?.headers?.find(h => h.name.toLowerCase() === 'from');\n    const fromEmail = fromHeader?.value || '';\n    \n    // Is this from the customer AND after our quote?\n    const isFromCustomer = fromEmail.toLowerCase().includes(customerEmail.toLowerCase());\n    const isAfterQuote = msgDate > quoteSentDate;\n    \n    if (isFromCustomer && isAfterQuote) {\n      hasReplied = true;\n      break;\n    }\n  }\n  \n  // Return result\n  return [{\n    json: {\n      ...quotationData,  // Pass through all quotation data\n      hasReplied: hasReplied,\n      shouldSendFollowUp: !hasReplied,\n      checkedAt: new Date().toISOString()\n    }\n  }];\n  \n} catch (err) {\n  return [{\n    json: {\n      error: err.message,\n      tip: \"Make sure 'Get Thread After Wait' Gmail node runs before this\"\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -352,
+        512
+      ],
+      "id": "073a4fe5-16dc-4d7e-9731-91dc393c6d44",
+      "name": "Check"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "reply-check",
+              "leftValue": "={{ $json.shouldSendFollowUp }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "rightValue": 1
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7ef69160-8a63-4175-b8cb-ac3b815d6488",
+      "name": "Reply?",
+      "position": [
+        -128,
+        512
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90",
+          "mode": "list",
+          "cachedResultName": "Pricing Automation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 552411421,
+          "mode": "list",
+          "cachedResultName": "Master_RFQs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit#gid=552411421"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "rfq_id",
+              "lookupValue": "={{ $('Parse AI Output').first().json.refId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -944,
+        16
+      ],
+      "id": "4ee630a0-77d7-46eb-bc02-07d9f67d8531",
+      "name": "Get Master Status",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JHr0YGDRPjWHDYAj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 24,
+        "unit": "hours"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -800,
+        512
+      ],
+      "id": "de46787f-bbf0-4b60-b3ea-6433b5d8e216",
+      "name": "Wait",
+      "webhookId": "1a6fe3fb-ece2-4889-a440-cf1b56a5ee93"
+    },
+    {
+      "parameters": {
+        "operation": "markAsRead",
+        "messageId": "={{ $('Gmail Trigger').item.json.id }}"
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -2640,
+        32
+      ],
+      "id": "80b0079c-7dd0-4cdd-a92a-95e801b738ee",
+      "name": "Mark as Read",
+      "webhookId": "07181189-506d-48a5-a095-ef2f4ecb0eed",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "1ewuYqHBFtobt1D6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Get Master Status').first().json.service_type }}",
+                    "rightValue": "port-to-port",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "2df50093-c67c-4a8a-99bb-056274c69364"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Port Charges"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Door"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -2816,
+        704
+      ],
+      "id": "9b7ad8a5-9ca7-45c5-8a8c-f51a3df4f762",
+      "name": "Port or Door?"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90",
+          "mode": "list",
+          "cachedResultName": "Pricing Automation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1086243676,
+          "mode": "list",
+          "cachedResultName": "Destination Charges",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit#gid=1086243676"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2560,
+        960
+      ],
+      "id": "d1cc5ba8-4f42-4ba0-a8b9-313dc3aecd99",
+      "name": "Get Destination Charges",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JHr0YGDRPjWHDYAj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90",
+          "mode": "list",
+          "cachedResultName": "Pricing Automation",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 940645597,
+          "mode": "list",
+          "cachedResultName": "Transportation Charges",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1c-O7SCygVbl-x4v_E_IYih4OXBNqtJURD3P66r6zC90/edit#gid=940645597"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2560,
+        1104
+      ],
+      "id": "b8cff625-4bb1-4ca1-9f2f-1fa71977f11f",
+      "name": "Get Transportation Charges",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JHr0YGDRPjWHDYAj",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// COST CALCULATION - DOOR SERVICE\n// Reads from Aggregate node output: $input.first().json.cost_data\n// Contains all rows from DO Charges + Destination Charges + Transportation Charges\n//\n// DO Charges rows:            have 'carrier' field\n// Destination Charges rows:   have 'Charge Type' field\n// Transportation Charges rows: have 'Place' field\n// ============================================================\n\nconst rfq   = $('Get Master Status').first().json;\nconst quote = $('Get Selected Quote').first().json;\n\nif (!rfq || !quote) {\n  return [{ json: { error: 'Missing Required Data', missingRFQ: !rfq, missingQuote: !quote } }];\n}\n\n// ============================================================\n// SPLIT cost_data ARRAY BACK INTO 3 SHEET GROUPS BY SIGNATURE\n// ============================================================\n\nconst costData = $input.first().json.cost_data || [];\n\nconst allDOCharges     = costData.filter(r => r.carrier !== undefined && r.carrier !== null && r.carrier !== '');\nconst allDestCharges   = costData.filter(r => r['Charge Type'] !== undefined && r['Charge Type'] !== null && r['Charge Type'] !== '');\nconst allTranspCharges = costData.filter(r => r.Place !== undefined && r.Place !== null && r.Place !== '');\n\n// ============================================================\n// HELPERS\n// ============================================================\n\nfunction parseMultiValue(value) {\n  if (!value) return ['N/A'];\n  if (typeof value === 'string' && value.includes('\\n')) return value.split('\\n').map(v => v.trim());\n  return [value];\n}\n\n// DO Charges sheet: columns 20FT, 40FT, 40HQ\nfunction getDOCol(containerType) {\n  const t = (containerType || '').toUpperCase().replace(/[^A-Z0-9]/g, '');\n  if (t === '20FT' || t === '20GP') return '20FT';\n  if (t === '40FT' || t === '40GP') return '40FT';\n  return '40HQ'; // 40HC, 40HQ, 45FT\n}\n\n// Destination Charges sheet: columns 20FT, 40FT only (no 40HQ)\nfunction getDestCol(containerType) {\n  const t = (containerType || '').toUpperCase().replace(/[^A-Z0-9]/g, '');\n  if (t === '20FT' || t === '20GP') return '20FT';\n  return '40FT'; // 40FT, 40HC, 40HQ all map here\n}\n\nfunction getDOChargesRow(carrier) {\n  const c = (carrier || '').toUpperCase().trim();\n  for (const row of allDOCharges) {\n    if ((row.carrier || '').toUpperCase().trim() === c) return row;\n  }\n  return allDOCharges.length > 0 ? allDOCharges[0] : {};\n}\n\n// Basis: \"Fixed (per shipment)\" → once, anything else → × qty\nfunction calcDestCharges(col, qty) {\n  let total = 0;\n  for (const row of allDestCharges) {\n    const amount = parseFloat(row[col]) || 0;\n    const basis  = (row['Basis'] || row['basis'] || '').toLowerCase();\n    total += basis.includes('fixed') ? amount : amount * qty;\n  }\n  return total;\n}\n\nfunction getTransportCharge(deliveryAddress) {\n  if (!deliveryAddress) return 0;\n  const addr = deliveryAddress.toUpperCase();\n  for (const row of allTranspCharges) {\n    const place = (row.Place || row.place || '').toUpperCase().trim();\n    if (place && addr.includes(place)) {\n      return parseFloat(row.Price || row.price || 0);\n    }\n  }\n  return 0;\n}\n\n// ============================================================\n// SERVICE TYPE FLAGS\n// ============================================================\n\nconst serviceType     = (rfq.service_type || 'port-to-port').toLowerCase().trim();\nconst hasPickup       = serviceType === 'door-to-port'  || serviceType === 'door-to-door';\nconst hasDelivery     = serviceType === 'port-to-door'  || serviceType === 'door-to-door';\nconst deliveryAddress = rfq.delivery_address || null;\nconst pickupAddress   = rfq.pickup_address   || null;\n\n// ============================================================\n// CONSTANTS\n// ============================================================\n\nconst USD_TO_AED = 3.685;\nconst MARGIN     = 0.13;\n\n// ============================================================\n// PARSE MULTI-SHIPMENT FIELDS\n// ============================================================\n\nconst containerTypes = parseMultiValue(rfq.container_type);\nconst quantities     = parseMultiValue(rfq.qty);\nconst pols           = parseMultiValue(rfq.pol);\nconst pods           = parseMultiValue(rfq.pod);\nconst readyDates     = parseMultiValue(rfq.ready_date);\nconst carriers       = parseMultiValue(quote.carrier);\nconst prices         = parseMultiValue(quote.price);\nconst validities     = parseMultiValue(quote.validity);\nconst transitTimes   = parseMultiValue(quote.transit_time);\nconst freeTimes      = parseMultiValue(quote.free_time);\nconst etds           = parseMultiValue(quote.etd);\n\nconst shipmentCount = Math.max(containerTypes.length, quantities.length, prices.length);\n\n// ============================================================\n// CALCULATE EACH SHIPMENT\n// ============================================================\n\nconst shipmentCalculations = [];\nlet grandTotalAED = 0;\nlet grandTotalUSD = 0;\n\nfor (let i = 0; i < shipmentCount; i++) {\n  const containerType   = containerTypes[i] || containerTypes[0] || '40HQ';\n  const qty             = parseInt(quantities[i] || quantities[0] || 1);\n  const carrier         = carriers[i]    || carriers[0]    || 'TBD';\n  const oceanFreightUSD = parseFloat(prices[i] || prices[0] || 0);\n  const pol             = pols[i]        || pols[0]        || 'N/A';\n  const pod             = pods[i]        || pods[0]        || 'N/A';\n  const readyDate       = readyDates[i]  || readyDates[0]  || 'TBD';\n  const validity        = validities[i]  || validities[0]  || 'N/A';\n  const transitTime     = transitTimes[i]|| transitTimes[0]|| 'N/A';\n  const freeTime        = freeTimes[i]   || freeTimes[0]   || 'N/A';\n  const etd             = etds[i]        || etds[0]        || 'TBD';\n\n  const doCol   = getDOCol(containerType);\n  const destCol = getDestCol(containerType);\n\n  // Ocean Freight\n  const oceanFreightAED = oceanFreightUSD * USD_TO_AED;\n\n  // DO Charges (carrier-specific: document fixed + per-container)\n  const doRow          = getDOChargesRow(carrier);\n  const doDocument     = parseFloat(doRow.document || 0);\n  const doPerContainer = parseFloat(doRow[doCol]   || 0);\n  const doTotal        = doDocument + (doPerContainer * qty);\n\n  // Destination Charges (Terminal Handling, BOE, DPC, Token, etc.)\n  const destTotal = calcDestCharges(destCol, qty);\n\n  // Transportation / Delivery Trucking\n  const transpPerContainer = hasDelivery ? getTransportCharge(deliveryAddress) : 0;\n  const transpTotal        = transpPerContainer * qty;\n\n  // Pickup trucking — no sheet yet, wire in when available\n  const pickupTotal = 0;\n\n  // Subtotal + 13% margin\n  const subtotalAED   = oceanFreightAED + doTotal + destTotal + transpTotal + pickupTotal;\n  const withMarginAED = subtotalAED * (1 + MARGIN);\n  const finalPriceAED = Math.ceil(withMarginAED / 10) * 10;\n  const pricePerContainerAED = Math.round(finalPriceAED / qty);\n  const finalPriceUSD        = Math.round((finalPriceAED / USD_TO_AED) * 100) / 100;\n  const pricePerContainerUSD = Math.round((finalPriceUSD / qty) * 100) / 100;\n\n  shipmentCalculations.push({\n    shipmentNumber: i + 1,\n    serviceType,\n    pol, pod, containerType, qty, readyDate,\n    carrier, validity, transitTime, freeTime, etd,\n    pickupAddress:   hasPickup   ? pickupAddress   : null,\n    deliveryAddress: hasDelivery ? deliveryAddress : null,\n    // Pricing breakdown\n    oceanFreightUSD,\n    oceanFreightAED:     Math.round(oceanFreightAED * 100) / 100,\n    doDocument,\n    doPerContainer,\n    doTotal:             Math.round(doTotal * 100) / 100,\n    destTotal:           Math.round(destTotal * 100) / 100,\n    transpPerContainer,\n    transpTotal:         Math.round(transpTotal * 100) / 100,\n    subtotalAED:         Math.round(subtotalAED * 100) / 100,\n    marginAmount:        Math.round((withMarginAED - subtotalAED) * 100) / 100,\n    finalPriceAED,\n    pricePerContainerAED,\n    finalPriceUSD,\n    pricePerContainerUSD\n  });\n\n  grandTotalAED += finalPriceAED;\n  grandTotalUSD += finalPriceUSD;\n}\n\n// ============================================================\n// BUILD CUSTOMER SUMMARY TEXT\n// ============================================================\n\nconst summaryLines = shipmentCalculations.map((c) => {\n  const lines = [];\n  if (shipmentCount > 1) lines.push(`SHIPMENT ${c.shipmentNumber} of ${shipmentCount}\\n`);\n  lines.push(`Route: ${c.pol} to ${c.pod}`);\n  lines.push(`Container(s): ${c.qty} x ${c.containerType}`);\n  lines.push(`Service: ${c.serviceType.toUpperCase()}`);\n  if (c.pickupAddress)   lines.push(`Pickup: ${c.pickupAddress}`);\n  if (c.deliveryAddress) lines.push(`Delivery: ${c.deliveryAddress}`);\n  lines.push(`Ready Date: ${c.readyDate}`);\n  lines.push('');\n  lines.push(`Carrier: ${c.carrier}`);\n  lines.push(`Transit Time: ${c.transitTime} days`);\n  lines.push(`Free Time: ${c.freeTime} days at destination`);\n  lines.push(`ETD: ${c.etd}`);\n  lines.push(`Total Price (AED): ${c.finalPriceAED.toLocaleString()}`);\n  lines.push(`Total Price (USD): ${c.finalPriceUSD.toLocaleString()}`);\n  if (shipmentCount > 1) lines.push('\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');\n  return lines.join('\\n');\n});\n\nif (shipmentCount > 1) {\n  summaryLines.push(`\\nGRAND TOTAL (AED): ${grandTotalAED.toLocaleString()}`);\n  summaryLines.push(`GRAND TOTAL (USD): ${Math.round(grandTotalUSD * 100) / 100}`);\n}\n\nconst customerSummaryText = summaryLines.join('\\n');\n\n// ============================================================\n// RETURN\n// ============================================================\n\nconst first = shipmentCalculations[0] || {};\n\nreturn [{ json: {\n  threadId:        rfq.thread_id,\n  customerEmail:   rfq.customer_email,\n  rfqId:           rfq.rfq_id,\n  serviceType,\n  hasDoorService:  true,\n  isMultiShipment: shipmentCount > 1,\n  shipmentCount,\n  shipments:       shipmentCalculations,\n  grandTotalAED,\n  grandTotalUSD:   Math.round(grandTotalUSD * 100) / 100,\n  customerSummaryText,\n  // Backward compat\n  carrier:              first.carrier || 'TBD',\n  pol:                  first.pol || 'N/A',\n  pod:                  first.pod || 'N/A',\n  containerType:        first.containerType || 'N/A',\n  qty:                  first.qty || 1,\n  readyDate:            first.readyDate || 'TBD',\n  validity:             first.validity || 'N/A',\n  transitTime:          first.transitTime || 'N/A',\n  freeTime:             first.freeTime || 'N/A',\n  etd:                  first.etd || 'TBD',\n  finalPriceAED:        first.finalPriceAED || 0,\n  finalPriceUSD:        first.finalPriceUSD || 0,\n  pricePerContainerAED: first.pricePerContainerAED || 0,\n  pricePerContainerUSD: first.pricePerContainerUSD || 0,\n  finalPrice:           first.finalPriceAED || 0,\n  pricePerContainer:    first.pricePerContainerAED || 0,\n  calculatedAt:         new Date().toISOString(),\n  exchangeRate:         USD_TO_AED,\n  marginPercent:        MARGIN * 100\n}}];"
+      },
+      "id": "0cdbc97c-7945-4dc7-8c58-e0bb8bb04cf3",
+      "name": "Cost Door",
+      "position": [
+        -1920,
+        688
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// COST CALCULATION - PORT TO PORT\n// Simple: agent ocean freight + 13% margin only\n// ============================================================\n\nconst getData = (nodeName) => {\n  try { return $(nodeName).first().json; } catch (e) { return null; }\n};\n\nconst rfq = getData('Get Master Status');\nconst quote = getData('Get Selected Quote');\n\nif (!rfq || !quote) {\n  return [{ json: { error: 'Missing Required Data', missingRFQ: !rfq, missingQuote: !quote } }];\n}\n\nfunction parseMultiValue(value) {\n  if (!value) return ['N/A'];\n  if (typeof value === 'string' && value.includes('\\n')) return value.split('\\n').map(v => v.trim());\n  return [value];\n}\n\nconst USD_TO_AED = 3.685;\nconst MARGIN = 0.13;\n\nconst containerTypes = parseMultiValue(rfq.container_type);\nconst quantities     = parseMultiValue(rfq.qty);\nconst pols           = parseMultiValue(rfq.pol);\nconst pods           = parseMultiValue(rfq.pod);\nconst readyDates     = parseMultiValue(rfq.ready_date);\nconst carriers       = parseMultiValue(quote.carrier);\nconst prices         = parseMultiValue(quote.price);\nconst validities     = parseMultiValue(quote.validity);\nconst transitTimes   = parseMultiValue(quote.transit_time);\nconst freeTimes      = parseMultiValue(quote.free_time);\nconst etds           = parseMultiValue(quote.etd);\n\nconst shipmentCount = Math.max(containerTypes.length, quantities.length, prices.length);\n\nconst shipmentCalculations = [];\nlet grandTotalAED = 0;\nlet grandTotalUSD = 0;\n\nfor (let i = 0; i < shipmentCount; i++) {\n  const containerType       = containerTypes[i] || containerTypes[0] || '40HQ';\n  const qty                 = parseInt(quantities[i] || quantities[0] || 1);\n  const carrier             = carriers[i] || carriers[0] || 'TBD';\n  const oceanFreightUSD     = parseFloat(prices[i] || prices[0] || 0);\n  const pol                 = pols[i] || pols[0] || 'N/A';\n  const pod                 = pods[i] || pods[0] || 'N/A';\n  const readyDate           = readyDates[i] || readyDates[0] || 'TBD';\n  const validity            = validities[i] || validities[0] || 'N/A';\n  const transitTime         = transitTimes[i] || transitTimes[0] || 'N/A';\n  const freeTime            = freeTimes[i] || freeTimes[0] || 'N/A';\n  const etd                 = etds[i] || etds[0] || 'TBD';\n\n  const oceanFreightAED     = oceanFreightUSD * USD_TO_AED;\n  const withMarginAED       = oceanFreightAED * (1 + MARGIN);\n  const finalPriceAED       = Math.ceil(withMarginAED / 10) * 10;\n  const pricePerContainerAED = Math.round(finalPriceAED / qty);\n  const finalPriceUSD       = Math.round((finalPriceAED / USD_TO_AED) * 100) / 100;\n  const pricePerContainerUSD = Math.round((finalPriceUSD / qty) * 100) / 100;\n\n  shipmentCalculations.push({\n    shipmentNumber: i + 1,\n    serviceType: 'port-to-port',\n    pol, pod, containerType, qty, readyDate,\n    carrier, validity, transitTime, freeTime, etd,\n    // Pricing breakdown\n    oceanFreightUSD,\n    oceanFreightAED:          Math.round(oceanFreightAED * 100) / 100,\n    destCharges:              0,\n    doorChargesAED:           0,\n    subtotalAED:              Math.round(oceanFreightAED * 100) / 100,\n    marginAmount:             Math.round((withMarginAED - oceanFreightAED) * 100) / 100,\n    finalPriceAED,\n    pricePerContainerAED,\n    finalPriceUSD,\n    pricePerContainerUSD\n  });\n\n  grandTotalAED += finalPriceAED;\n  grandTotalUSD += finalPriceUSD;\n}\n\n// Build customer summary text\nconst customerSummaryText = shipmentCalculations.map((c, idx) => {\n  const lines = [];\n  if (shipmentCount > 1) lines.push(`SHIPMENT ${c.shipmentNumber} of ${shipmentCount}\\n`);\n  lines.push(`Route: ${c.pol} to ${c.pod}`);\n  lines.push(`Container(s): ${c.qty} x ${c.containerType}`);\n  lines.push(`Ready Date: ${c.readyDate}`);\n  lines.push('');\n  lines.push(`Carrier: ${c.carrier}`);\n  lines.push(`Transit Time: ${c.transitTime} days`);\n  lines.push(`Free Time: ${c.freeTime} days at destination`);\n  lines.push(`ETD: ${c.etd}`);\n  lines.push(`Total Price (AED): ${c.finalPriceAED.toLocaleString()}`);\n  lines.push(`Total Price (USD): ${c.finalPriceUSD.toLocaleString()}`);\n  if (shipmentCount > 1) lines.push('\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');\n  return lines.join('\\n');\n}).join('\\n');\n\nconst first = shipmentCalculations[0] || {};\n\nreturn [{ json: {\n  threadId:            rfq.thread_id,\n  customerEmail:       rfq.customer_email,\n  rfqId:               rfq.rfq_id,\n  serviceType:         'port-to-port',\n  hasDoorService:      false,\n  isMultiShipment:     shipmentCount > 1,\n  shipmentCount,\n  shipments:           shipmentCalculations,\n  grandTotalAED,\n  grandTotalUSD:       Math.round(grandTotalUSD * 100) / 100,\n  customerSummaryText,\n  // backward compat\n  carrier:             first.carrier || 'TBD',\n  pol:                 first.pol || 'N/A',\n  pod:                 first.pod || 'N/A',\n  containerType:       first.containerType || 'N/A',\n  qty:                 first.qty || 1,\n  readyDate:           first.readyDate || 'TBD',\n  validity:            first.validity || 'N/A',\n  transitTime:         first.transitTime || 'N/A',\n  freeTime:            first.freeTime || 'N/A',\n  etd:                 first.etd || 'TBD',\n  finalPriceAED:       first.finalPriceAED || 0,\n  finalPriceUSD:       first.finalPriceUSD || 0,\n  pricePerContainerAED: first.pricePerContainerAED || 0,\n  pricePerContainerUSD: first.pricePerContainerUSD || 0,\n  finalPrice:          first.finalPriceAED || 0,\n  pricePerContainer:   first.pricePerContainerAED || 0,\n  calculatedAt:        new Date().toISOString(),\n  exchangeRate:        USD_TO_AED,\n  marginPercent:       MARGIN * 100\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2368,
+        512
+      ],
+      "id": "f9615376-91b3-4395-a7d2-32a48bbfdcf3",
+      "name": "Cost Port"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -2368,
+        672
+      ],
+      "id": "450f604e-0ca4-4e8e-88df-9f318f47cb01",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "cost_data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -2144,
+        688
+      ],
+      "id": "bf38b005-4ae4-42bb-8f74-45a22a85294c",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5.2",
+          "mode": "list",
+          "cachedResultName": "gpt-5.2"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -2416,
+        176
+      ],
+      "id": "e049bebe-e75d-4dc7-8bbf-3e7d116ca874",
+      "name": "gpt",
+      "credentials": {
+        "openAiApi": {
+          "id": "S8ixyXpHg3vCQZfS",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "=pricingailog@gmail.com",
+        "subject": "=Quote Sent — {{ $('Cost Door').first().json.rfqId }} | {{ $('Cost Door').first().json.pol }} → {{ $('Cost Door').first().json.pod }} | AED {{ $('Cost Door').first().json.grandTotalAED }}",
+        "message": "=<div style=\"font-family: Arial, sans-serif; max-width: 720px; border: 2px solid #27ae60; border-radius: 8px; padding: 24px;\">\n\n  <h2 style=\"color: #27ae60; margin-top: 0;\">✅ Quotation Successfully Sent to Customer</h2>\n\n  <p>A freight quotation has been automatically sent. Here is a full summary for your records.</p>\n\n  <hr style=\"border: 1px solid #eee;\" />\n\n  <h3 style=\"color: #333;\">📋 RFQ Details</h3>\n  <table style=\"width: 100%; border-collapse: collapse; font-size: 14px;\">\n    <tr style=\"background: #f9f9f9;\">\n      <td style=\"padding: 8px 12px; font-weight: bold; width: 200px;\">RFQ ID</td>\n      <td style=\"padding: 8px 12px;\">{{ $('Cost Door').first().json.rfqId }}</td>\n    </tr>\n    <tr>\n      <td style=\"padding: 8px 12px; font-weight: bold;\">Customer Email</td>\n      <td style=\"padding: 8px 12px;\">{{ $('Cost Door').first().json.customerEmail }}</td>\n    </tr>\n    <tr style=\"background: #f9f9f9;\">\n      <td style=\"padding: 8px 12px; font-weight: bold;\">Service Type</td>\n      <td style=\"padding: 8px 12px;\">{{ $('Cost Door').first().json.serviceType.toUpperCase() }}</td>\n    </tr>\n    <tr>\n      <td style=\"padding: 8px 12px; font-weight: bold;\">Quoted At</td>\n      <td style=\"padding: 8px 12px;\">{{ $now.format('yyyy-MM-dd hh:mm a') }}</td>\n    </tr>\n  </table>\n\n  <hr style=\"border: 1px solid #eee;\" />\n\n  <h3 style=\"color: #333;\">🚢 Shipment Summary</h3>\n  <div style=\"background: #f4f4f4; padding: 14px; border-radius: 6px; font-size: 13px; white-space: pre-wrap;\">{{ $('Cost Door').first().json.customerSummaryText }}</div>\n\n  <hr style=\"border: 1px solid #eee;\" />\n\n  <h3 style=\"color: #333;\">💰 Pricing Summary</h3>\n  <table style=\"width: 100%; border-collapse: collapse; font-size: 14px;\">\n    <tr style=\"background: #f9f9f9;\">\n      <td style=\"padding: 8px 12px; font-weight: bold;\">Grand Total (AED)</td>\n      <td style=\"padding: 8px 12px; font-weight: bold; color: #27ae60;\">AED {{ $('Cost Door').first().json.grandTotalAED.toLocaleString() }}</td>\n    </tr>\n    <tr>\n      <td style=\"padding: 8px 12px; font-weight: bold;\">Grand Total (USD)</td>\n      <td style=\"padding: 8px 12px;\">USD {{ $('Cost Door').first().json.grandTotalUSD.toLocaleString() }}</td>\n    </tr>\n    <tr style=\"background: #f9f9f9;\">\n      <td style=\"padding: 8px 12px; font-weight: bold;\">Margin Applied</td>\n      <td style=\"padding: 8px 12px;\">{{ $('Cost Door').first().json.marginPercent }}%</td>\n    </tr>\n    <tr>\n      <td style=\"padding: 8px 12px; font-weight: bold;\">Exchange Rate</td>\n      <td style=\"padding: 8px 12px;\">1 USD = {{ $('Cost Door').first().json.exchangeRate }} AED</td>\n    </tr>\n    <tr style=\"background: #f9f9f9;\">\n      <td style=\"padding: 8px 12px; font-weight: bold;\">Quote Validity</td>\n      <td style=\"padding: 8px 12px;\">{{ $('Cost Door').first().json.validity }}</td>\n    </tr>\n  </table>\n\n  <hr style=\"border: 1px solid #eee;\" />\n\n  <h3 style=\"color: #333;\">🤝 Selected Agent</h3>\n  <table style=\"width: 100%; border-collapse: collapse; font-size: 14px;\">\n    <tr style=\"background: #f9f9f9;\">\n      <td style=\"padding: 8px 12px; font-weight: bold; width: 200px;\">Carrier</td>\n      <td style=\"padding: 8px 12px;\">{{ $('Cost Door').first().json.carrier }}</td>\n    </tr>\n    <tr>\n      <td style=\"padding: 8px 12px; font-weight: bold;\">ETD</td>\n      <td style=\"padding: 8px 12px;\">{{ $('Cost Door').first().json.etd }}</td>\n    </tr>\n    <tr style=\"background: #f9f9f9;\">\n      <td style=\"padding: 8px 12px; font-weight: bold;\">Transit Time</td>\n      <td style=\"padding: 8px 12px;\">{{ $('Cost Door').first().json.transitTime }} days</td>\n    </tr>\n    <tr>\n      <td style=\"padding: 8px 12px; font-weight: bold;\">Free Time at Destination</td>\n      <td style=\"padding: 8px 12px;\">{{ $('Cost Door').first().json.freeTime }} days</td>\n    </tr>\n  </table>\n\n  <hr style=\"border: 1px solid #eee;\" />\n\n  <p style=\"background: #eafaf1; padding: 12px; border-radius: 4px; font-size: 13px; color: #1e8449;\">\n    <strong>Next Step:</strong> The workflow will automatically check for a customer reply in 24 hours. If no reply is received, a follow-up email will be sent. Monitor <strong>Master_RFQs</strong> sheet — status is now set to <em>Quoted</em>.\n  </p>\n\n  <hr style=\"border: 1px solid #eee;\" />\n  <p style=\"font-size: 12px; color: #999;\">Automated notification. Do not reply to this message.</p>\n\n</div>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1472,
+        720
+      ],
+      "id": "12422791-5177-443f-81b6-9e7f8de079f8",
+      "name": "Notify Sales",
+      "webhookId": "e1b99360-44fd-42cd-83dd-cefc10985a4c",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "1ewuYqHBFtobt1D6",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "inputText": "=Subject: {{ $json.subject }}\nFrom: {{ $json.from?.value?.[0]?.address ?? $json.from }}\nBody: {{ ($json.text || $json.snippet || '').slice(0, 800) }}",
+        "categories": {
+          "categories": [
+            {
+              "category": "agent_rate_reply",
+              "description": "=Email from a freight agent containing shipping rates, carrier names, pricing, validity dates, or a decline/no space response. Subject usually contains a Ref ID like \"Ref: RFQ-XXXXXXXX\"."
+            },
+            {
+              "category": "customer_rfq",
+              "description": "=New email from a customer requesting a freight quote. Contains container types, port mentions, or shipping inquiry language. No Ref ID in subject."
+            },
+            {
+              "category": "customer_followup",
+              "description": "=Customer replying to an existing quote thread. May reference a previous conversation, ask for clarification, or confirm details. Usually has a Ref ID or \"Re:\" in subject."
+            },
+            {
+              "category": "booking_confirmation",
+              "description": "=Booking confirmation, B/L notification, or vessel confirmation from an agent or shipping line. Contains booking numbers or bill of lading references."
+            },
+            {
+              "category": "out_of_scope",
+              "description": "=Spam, newsletters, unrelated emails, or anything that doesn't fit the above categories."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textClassifier",
+      "typeVersion": 1.1,
+      "position": [
+        -3312,
+        48
+      ],
+      "id": "43e57cc5-9579-43be-9858-153753f518f4",
+      "name": "Text Classifier"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -3312,
+        304
+      ],
+      "id": "bd3375c5-f7f5-4748-8d4d-c3a2249dd648",
+      "name": "5 mini",
+      "credentials": {
+        "openAiApi": {
+          "id": "S8ixyXpHg3vCQZfS",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "markAsRead",
+        "messageId": "={{ $('Gmail Trigger').first().json.id }}"
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -3056,
+        272
+      ],
+      "id": "4a934c6c-24f3-4392-848d-55907b2ba314",
+      "name": "Read",
+      "webhookId": "07181189-506d-48a5-a095-ef2f4ecb0eed",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "1ewuYqHBFtobt1D6",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Text Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Ref ID": {
+      "main": [
+        [
+          {
+            "node": "Mark as Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Rate Parser": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Output": {
+      "main": [
+        [
+          {
+            "node": "Is Valid Quote?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid Quote?": {
+      "main": [
+        [
+          {
+            "node": "Log to Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log No Quote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to Sheets": {
+      "main": [
+        [
+          {
+            "node": "Remove label",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Quotes": {
+      "main": [
+        [
+          {
+            "node": "Count & Check Quotes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Count & Check Quotes": {
+      "main": [
+        [
+          {
+            "node": "Threshold Met?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Threshold Met?": {
+      "main": [
+        [
+          {
+            "node": "Notify Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Manager": {
+      "main": [
+        [
+          {
+            "node": "Update Master Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Master Status": {
+      "main": [
+        [
+          {
+            "node": "Get Selected Quote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Quotation": {
+      "main": [
+        [
+          {
+            "node": "Mark as Quoted",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notify Sales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark as Quoted": {
+      "main": [
+        [
+          {
+            "node": "Remove Label1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Label": {
+      "main": [
+        [
+          {
+            "node": "Get Master Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Label1": {
+      "main": [
+        [
+          {
+            "node": "Add Label1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove label": {
+      "main": [
+        [
+          {
+            "node": "Add Label",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Selected Quote": {
+      "main": [
+        [
+          {
+            "node": "Port or Door?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get DO Charges": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Label1": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Customer Reply": {
+      "main": [
+        [
+          {
+            "node": "Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check": {
+      "main": [
+        [
+          {
+            "node": "Reply?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply?": {
+      "main": [
+        [
+          {
+            "node": "Send Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Master Status": {
+      "main": [
+        [
+          {
+            "node": "Get All Quotes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Customer Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark as Read": {
+      "main": [
+        [
+          {
+            "node": "AI Rate Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Port or Door?": {
+      "main": [
+        [
+          {
+            "node": "Cost Port",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get DO Charges",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Destination Charges",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Transportation Charges",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Destination Charges": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get Transportation Charges": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Cost Door": {
+      "main": [
+        [
+          {
+            "node": "Send Quotation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cost Port": {
+      "main": [
+        [
+          {
+            "node": "Send Quotation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Cost Door",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "gpt": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Rate Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5 mini": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Text Classifier",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text Classifier": {
+      "main": [
+        [
+          {
+            "node": "Extract Ref ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [],
+        [],
+        [],
+        [
+          {
+            "node": "Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "dca51cfe-c327-4b69-81c5-4d94efe1fae6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ac6c2f2b1568d3ca48ddf9fe6ac6538b01ec9e4c58869c8c9e883c043f74f11b"
+  },
+  "id": "fcpG3m2wSh-RUel1m80IT",
+  "tags": [
+    {
+      "updatedAt": "2026-02-17T10:12:12.190Z",
+      "createdAt": "2026-02-17T10:12:12.190Z",
+      "id": "iYuTQFEBlT79yAli",
+      "name": "Logistics"
+    }
+  ]
+}
