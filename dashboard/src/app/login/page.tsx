@@ -18,15 +18,23 @@ export default async function LoginPage(props: {
         redirect(searchParams.callbackUrl || "/");
     }
 
+    const getURL = () => {
+        let url =
+            process?.env?.NEXT_PUBLIC_SITE_URL ??
+            process?.env?.NEXT_PUBLIC_VERCEL_URL ??
+            'http://localhost:3000/';
+        url = url.includes('http') ? url : `https://${url}`;
+        url = url.endsWith('/') ? url : `${url}/`;
+        return url;
+    };
+
     // Server Action to handle Email Sign In (Magic Link)
     const handleEmailSignIn = async (formData: FormData) => {
         "use server";
         const email = formData.get("email") as string;
         const supabaseServer = await createClient();
 
-        const redirectTo = process.env.NEXT_PUBLIC_SITE_URL
-            ? `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm?callbackUrl=${searchParams.callbackUrl || "/"}`
-            : `http://localhost:3000/auth/confirm?callbackUrl=${searchParams.callbackUrl || "/"}`;
+        const redirectTo = `${getURL()}auth/confirm?callbackUrl=${searchParams.callbackUrl || "/"}`;
 
         const { error } = await supabaseServer.auth.signInWithOtp({
             email,
@@ -47,9 +55,7 @@ export default async function LoginPage(props: {
         "use server";
         const supabaseServer = await createClient();
 
-        const redirectTo = process.env.NEXT_PUBLIC_SITE_URL
-            ? `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=${searchParams.callbackUrl || "/"}`
-            : `http://localhost:3000/auth/callback?next=${searchParams.callbackUrl || "/"}`;
+        const redirectTo = `${getURL()}auth/callback?next=${searchParams.callbackUrl || "/"}`;
 
         const { data, error } = await supabaseServer.auth.signInWithOAuth({
             provider: "google",
