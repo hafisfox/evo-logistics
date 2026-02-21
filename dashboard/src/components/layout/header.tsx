@@ -3,6 +3,7 @@
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { MobileNav } from "./mobile-nav";
 
 interface HeaderProps {
   title: string;
@@ -12,11 +13,14 @@ interface HeaderProps {
 export function Header({ title, description }: HeaderProps) {
   return (
     <header className="flex h-14 items-center justify-between border-b px-6">
-      <div>
-        <h1 className="text-lg font-semibold">{title}</h1>
-        {description && (
-          <p className="text-sm text-muted-foreground">{description}</p>
-        )}
+      <div className="flex items-center">
+        <MobileNav />
+        <div>
+          <h1 className="text-lg font-semibold">{title}</h1>
+          {description && (
+            <p className="text-sm text-muted-foreground hidden sm:block">{description}</p>
+          )}
+        </div>
       </div>
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" className="relative">

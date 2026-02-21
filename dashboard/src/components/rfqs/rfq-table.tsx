@@ -29,8 +29,8 @@ export function RFQTable({ rfqs }: RFQTableProps) {
   }
 
   return (
-    <div className="rounded-md border">
-      <Table>
+    <div className="rounded-md border overflow-x-auto">
+      <Table className="min-w-[800px]">
         <TableHeader>
           <TableRow>
             <TableHead className="w-[140px]">RFQ ID</TableHead>

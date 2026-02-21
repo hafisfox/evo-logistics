@@ -24,7 +24,7 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-r bg-sidebar">
+    <aside className="hidden md:flex h-screen w-64 flex-col border-r bg-sidebar">
       <div className="flex h-14 items-center gap-2 border-b px-4">
         <Ship className="h-6 w-6 text-primary" />
         <span className="text-lg font-semibold">Evo Logistics</span>

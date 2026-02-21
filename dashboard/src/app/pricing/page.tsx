@@ -32,9 +32,9 @@ export default function PricingPage() {
         description="Lookup tables used in cost calculations"
       />
       <div className="p-6">
-        <Tabs defaultValue="do">
-          <TabsList>
-            <TabsTrigger value="do">DO Charges</TabsTrigger>
+        <Tabs defaultValue="do" className="w-full">
+          <TabsList className="w-full justify-start overflow-x-auto scrollbar-hide py-1 h-auto">
+            <TabsTrigger value="do" className="shrink-0 tracking-tight">DO Charges</TabsTrigger>
             <TabsTrigger value="dest">Destination Charges</TabsTrigger>
             <TabsTrigger value="transport">Transportation</TabsTrigger>
           </TabsList>
@@ -50,8 +50,8 @@ export default function PricingPage() {
                 {doLoading ? (
                   <Skeleton className="h-48" />
                 ) : (
-                  <div className="rounded-md border">
-                    <Table>
+                  <div className="rounded-md border overflow-x-auto">
+                    <Table className="min-w-[600px]">
                       <TableHeader>
                         <TableRow>
                           <TableHead>Carrier</TableHead>
@@ -102,8 +102,8 @@ export default function PricingPage() {
                 {destLoading ? (
                   <Skeleton className="h-48" />
                 ) : (
-                  <div className="rounded-md border">
-                    <Table>
+                  <div className="rounded-md border overflow-x-auto">
+                    <Table className="min-w-[500px]">
                       <TableHeader>
                         <TableRow>
                           <TableHead>Charge Type</TableHead>
@@ -148,8 +148,8 @@ export default function PricingPage() {
                 {transpLoading ? (
                   <Skeleton className="h-48" />
                 ) : (
-                  <div className="rounded-md border">
-                    <Table>
+                  <div className="rounded-md border overflow-x-auto">
+                    <Table className="min-w-[400px]">
                       <TableHeader>
                         <TableRow>
                           <TableHead>Place</TableHead>
