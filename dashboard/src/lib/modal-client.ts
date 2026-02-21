@@ -39,6 +39,10 @@ export async function selectAgent(payload: {
   selected_carrier: string;
   shipment_number: string;
   selected_by: string;
+  exchange_rate: number;
+  margin: number;
+  quote_threshold: number;
+  rounding: string;
 }) {
   const webhookUrl = process.env.MODAL_WEBHOOK_SELECT_AGENT || "";
   if (!webhookUrl) {

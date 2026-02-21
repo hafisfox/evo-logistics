@@ -1,7 +1,18 @@
 import type { DOCharge, DestinationCharge, TransportCharge, ShipmentCost, PricingResult } from "@/types/pricing";
 
-const USD_TO_AED = 3.685;
-const MARGIN = 0.13;
+export interface PricingSettings {
+  exchangeRate: number;
+  margin: number;
+  quoteThreshold: number;
+  rounding: string;
+}
+
+export const DEFAULT_SETTINGS: PricingSettings = {
+  exchangeRate: 3.685,
+  margin: 0.13,
+  quoteThreshold: 2,
+  rounding: "Nearest 10 AED",
+};
 
 export function parseMultiValue(value: string | null | undefined): string[] {
   if (!value) return ["N/A"];
@@ -61,13 +72,14 @@ function getTransportCharge(
 }
 
 export function calculatePortPrice(
-  oceanFreightUSD: number
+  oceanFreightUSD: number,
+  settings: PricingSettings
 ): { finalPriceAED: number; finalPriceUSD: number; marginAmount: number; oceanFreightAED: number } {
-  const oceanFreightAED = oceanFreightUSD * USD_TO_AED;
-  const withMargin = oceanFreightAED * (1 + MARGIN);
+  const oceanFreightAED = oceanFreightUSD * settings.exchangeRate;
+  const withMargin = oceanFreightAED * (1 + settings.margin);
   const finalPriceAED = Math.ceil(withMargin / 10) * 10;
   const finalPriceUSD =
-    Math.round((finalPriceAED / USD_TO_AED) * 100) / 100;
+    Math.round((finalPriceAED / settings.exchangeRate) * 100) / 100;
   const marginAmount =
     Math.round((withMargin - oceanFreightAED) * 100) / 100;
   return { finalPriceAED, finalPriceUSD, marginAmount, oceanFreightAED: Math.round(oceanFreightAED * 100) / 100 };
@@ -82,6 +94,7 @@ export function calculateDoorPrice(params: {
   doCharges: DOCharge[];
   destCharges: DestinationCharge[];
   transpCharges: TransportCharge[];
+  settings: PricingSettings;
 }): ShipmentCost {
   const {
     oceanFreightUSD,
@@ -92,11 +105,12 @@ export function calculateDoorPrice(params: {
     doCharges,
     destCharges,
     transpCharges,
+    settings,
   } = params;
 
   const doCol = getDOCol(containerType);
   const destCol = getDestCol(containerType);
-  const oceanFreightAED = oceanFreightUSD * USD_TO_AED;
+  const oceanFreightAED = oceanFreightUSD * settings.exchangeRate;
 
   // DO Charges
   const doRow = getDOChargesRow(carrier, doCharges);
@@ -113,11 +127,11 @@ export function calculateDoorPrice(params: {
 
   // Totals
   const subtotalAED = oceanFreightAED + doTotal + destTotal + transpTotal;
-  const withMargin = subtotalAED * (1 + MARGIN);
+  const withMargin = subtotalAED * (1 + settings.margin);
   const finalPriceAED = Math.ceil(withMargin / 10) * 10;
   const pricePerContainerAED = Math.round(finalPriceAED / qty);
   const finalPriceUSD =
-    Math.round((finalPriceAED / USD_TO_AED) * 100) / 100;
+    Math.round((finalPriceAED / settings.exchangeRate) * 100) / 100;
   const pricePerContainerUSD =
     Math.round((finalPriceUSD / qty) * 100) / 100;
 
@@ -162,8 +176,9 @@ export function calculateFullPricing(params: {
   doCharges: DOCharge[];
   destCharges: DestinationCharge[];
   transpCharges: TransportCharge[];
+  settings: PricingSettings;
 }): PricingResult {
-  const { rfq, quote, doCharges, destCharges, transpCharges } = params;
+  const { rfq, quote, doCharges, destCharges, transpCharges, settings } = params;
 
   const containerTypes = parseMultiValue(rfq.container_type);
   const quantities = parseMultiValue(rfq.qty);
@@ -195,7 +210,7 @@ export function calculateFullPricing(params: {
     const pod = pods[i] || pods[0] || "N/A";
 
     if (isPortOnly) {
-      const portResult = calculatePortPrice(oceanFreightUSD);
+      const portResult = calculatePortPrice(oceanFreightUSD, settings);
       const shipment: ShipmentCost = {
         shipmentNumber: i + 1,
         serviceType: "port-to-port",
@@ -232,6 +247,7 @@ export function calculateFullPricing(params: {
         doCharges,
         destCharges,
         transpCharges,
+        settings,
       });
       doorResult.shipmentNumber = i + 1;
       doorResult.serviceType = serviceType;

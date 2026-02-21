@@ -33,12 +33,19 @@ export async function POST(request: Request) {
       Price: t.price
     }));
 
+    // Fetch dynamic settings to use in calculation
+    const host = request.headers.get("host") || "localhost:3000";
+    const protocol = process.env.NODE_ENV === "development" ? "http" : "https";
+    const settingsResponse = await fetch(`${protocol}://${host}/api/settings`);
+    const settings = await settingsResponse.json();
+
     const result = calculateFullPricing({
       rfq: body.rfq,
       quote: body.quote,
       doCharges: doRes.data,
       destCharges: mappedDestCharges as DestinationCharge[],
       transpCharges: mappedTranspCharges as TransportCharge[],
+      settings: settings,
     });
 
     return NextResponse.json(result);
