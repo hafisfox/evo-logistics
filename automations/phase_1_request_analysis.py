@@ -87,6 +87,7 @@ class ShipmentData(BaseModel):
         return v
 
 class ExtractedRFQs(BaseModel):
+    extraction_reasoning: str = Field(description="Step by step reasoning about the email contents. Identify the ports, containers, dates, and whether it represents one or multiple shipments, before returning the structured data.")
     multi: bool = Field(False, description="True if there are multiple shipments")
     count: int = Field(0, description="Number of shipments")
     shipments: List[ShipmentData] = Field(default_factory=list, description="Array of shipment objects")
@@ -683,9 +684,18 @@ def _send_agent_outreach(gmail_service, supabase, rfq_id, shipments, is_multi, c
 # =====================================================================
 AI_SYSTEM_PROMPT = """You are an expert logistics data extractor specializing in container shipping. Extract shipment details from emails and return ONLY a valid JSON object.
 
+## CHAIN OF THOUGHT REASONING
+Before extracting the shipments, you MUST write an `extraction_reasoning` paragraph.
+Think step-by-step:
+1. Does the sender explicitly request a rate/freight quote?
+2. What are the loading ports/cities mentioned?
+3. What are the destination ports/cities requested? Are they confirmed or just options?
+4. How many container sizes/types are present?
+5. Group the routing blocks into distinct shipments if necessary.
+
 **OUTPUT FORMAT** (return exactly this structure):
 
-{"multi":false,"count":1,"shipments":[{"pol":null,"pod":null,"pod_hint":[],"qty":null,"type":null,"date":null,"delivery_deadline":null,"service_type":"port-to-port","pickup_address":null,"delivery_address":null}]}
+{"extraction_reasoning":"Your step-by-step thoughts...","multi":false,"count":1,"shipments":[{"pol":null,"pod":null,"pod_hint":[],"qty":null,"type":null,"date":null,"delivery_deadline":null,"service_type":"port-to-port","pickup_address":null,"delivery_address":null}]}
 
 ## FIELD RULES
 
@@ -757,7 +767,59 @@ Must be one of: 20FT, 40FT, 40HC, 40HQ, 45FT, 20OT, 40OT
 - Use null for unknown values — never "TBD", "N/A", or ""
 - qty must be integer or null
 - pod_hint must always be an array
-- shipments array must always contain at least one object"""
+- shipments array must always contain at least one object
+
+## FEW-SHOT EXAMPLE
+**Input:**
+Subject: Freight quote required
+Body: Hi Team, please quote me for 2x40HC and 1x20FT from Shanghai to Dubai or Doha. Also I need 1x40FT from Jebel Ali to Umm Qasr door to door. Factory is at Dubai Investment Park and delivery to Basra warehouse.
+
+**Output:**
+```json
+{
+  "extraction_reasoning": "The customer is asking for two separate shipments due to different routes. Shipment 1: 2x40HC and 1x20FT from Shanghai. The destination is either Dubai (JEBEL ALI) or Doha (HAMAD PORT). Because it's an option, I will leave pod null and put both into pod_hint. Service is port to port by default. Shipment 2: 1x40FT from Jebel Ali to Umm Qasr. Service requested is door-to-door. Origin pickup is Dubai Investment Park, delivery is Basra warehouse.",
+  "multi": true,
+  "count": 2,
+  "shipments": [
+    {
+      "pol": "SHANGHAI",
+      "pod": null,
+      "pod_hint": ["JEBEL ALI", "HAMAD PORT"],
+      "qty": 2,
+      "type": "40HC",
+      "date": null,
+      "delivery_deadline": null,
+      "service_type": "port-to-port",
+      "pickup_address": null,
+      "delivery_address": null
+    },
+    {
+      "pol": "SHANGHAI",
+      "pod": null,
+      "pod_hint": ["JEBEL ALI", "HAMAD PORT"],
+      "qty": 1,
+      "type": "20FT",
+      "date": null,
+      "delivery_deadline": null,
+      "service_type": "port-to-port",
+      "pickup_address": null,
+      "delivery_address": null
+    },
+    {
+      "pol": "JEBEL ALI",
+      "pod": "UMM QASR",
+      "pod_hint": [],
+      "qty": 1,
+      "type": "40FT",
+      "date": null,
+      "delivery_deadline": null,
+      "service_type": "door-to-door",
+      "pickup_address": "Dubai Investment Park",
+      "delivery_address": "Basra warehouse"
+    }
+  ]
+}
+```"""
 
 # =====================================================================
 # HELPERS

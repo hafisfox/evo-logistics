@@ -69,7 +69,8 @@ class QuoteData(BaseModel):
         return v
 
 class ExtractedQuotes(BaseModel):
-    quotes: List[QuoteData] = Field(default_factory=list)
+    extraction_reasoning: str = Field(description="Step-by-step reasoning linking agent responses to the correct shipment numbers, multiplying per-container costs, and mapping carrier shorthands before extracting data.")
+    quotes: List[QuoteData] = Field(default_factory=list, description="List of extracted rate objects")
 
 # =====================================================================
 # CARRIER NORMALIZATION (ported from n8n Parse AI Output)
@@ -218,12 +219,22 @@ A shipment is a **distinct routing block**, NOT an individual container.
 
 **Container quantity within a single shipment NEVER creates multiple quote objects.**
 
+## CHAIN OF THOUGHT REASONING
+Before extracting the shipments, you MUST write an `extraction_reasoning` paragraph.
+Think step-by-step:
+1. Did the agent quote or decline?
+2. If quoted: What shipments are they quoting (Shipment 1, 2, etc)? Identify the shipment_number context from the email thread if not explicitly restated.
+3. Is the quote provided as a total amount, or per-container? If per container, state the math (e.g. $1000 x 2 = $2000 total).
+4. Identify the Carrier and map it to the recognized UPPERCASE shorthand (e.g. Cosco Shipping -> COSCO).
+5. Extract validity, transit, and free days.
+
 ## OUTPUT FORMAT
 
 Return exactly this JSON structure. No markdown, no backticks, no explanation text — raw JSON only.
 
-```
+```json
 {
+  "extraction_reasoning": "Your step-by-step thoughts...",
   "quotes": [
     {
       "shipment_number": 1,
@@ -267,9 +278,37 @@ null if agent declines or provides no rate. If the agent gives a per-container r
 | Scenario | Action |
 |---|---|
 | Agent declines all or has no space | Return {"quotes": []} |
-| Rate is per CBM or per ton | Return {"quotes": []} |
+| Rate is per CBM or per ton | Return {"extraction_reasoning": "...", "quotes": []} |
 | Agent gives rate "per container" explicitly | Multiply by the shipment's container quantity to get the total shipment price |
 | ETD given as a range | Use the earlier/first date |
+
+## FEW-SHOT EXAMPLE
+**Input:**
+Subject: Re: RFQ: 3x40HC Shanghai to Jebel Ali [Ref:RFQ-20260221-A9B]
+Body: 
+Hi,
+For Shipment 1, we can offer Cosco Shipping at USD 1,500/40HC.
+Valid till 15th March. TT is 18 days. Free time 14 days dest.
+Regards
+
+**Output:**
+```json
+{
+  "extraction_reasoning": "The agent is quoting 'Shipment 1'. The rate given is 'USD 1,500/40HC', which means it is per container. The original subject says '3x40HC'. So the math is 1500 * 3 = 4500. The total price for the shipment is 4500. Carrier is 'Cosco Shipping', normalized to 'COSCO'. Validity is '2026-03-15'. Transit time is '18'. Free time is '14'.",
+  "quotes": [
+    {
+      "shipment_number": 1,
+      "price": 4500,
+      "currency": "USD",
+      "carrier": "COSCO",
+      "validity": "2026-03-15",
+      "transit_time": 18,
+      "free_time": 14,
+      "etd": null
+    }
+  ]
+}
+```
 
 CRITICAL: Return ONLY the raw JSON object. No markdown, no backticks, no explanation text."""
 
