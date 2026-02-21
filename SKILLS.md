@@ -9,6 +9,7 @@
 | 1 | prompt-engineering-patterns | `.agents/skills/wshobson-prompt-engineering-patterns/` | Advanced prompt engineering techniques for optimizing LLM performance, reliability, and controllability | Active |
 | 2 | superpowers | `.agents/skills/superpowers/` | Collection of skills and abilities downloaded from obra/superpowers | Active |
 | 3 | nextjs-pro | `.agents/skills/nextjs-pro/` | Next.js Professional Setup (installed via prpm) | Active |
+| 4 | startup-mvp | `.agents/skills/startup-mvp/` | Startup MVP Essentials (installed via prpm) | Active |
 
 <!-- TEMPLATE — copy this row when adding a new skill:
 | 1 | skill-name | `skills/skill-name.md` | Brief description of what it does | Active |
