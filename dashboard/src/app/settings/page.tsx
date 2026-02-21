@@ -11,10 +11,8 @@ import { toast } from "sonner";
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState({
-    exchangeRate: 3.685,
     profitMargin: 13,
     quoteThreshold: 2,
-    rounding: "Nearest 10 AED"
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -39,10 +37,8 @@ export default function SettingsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          exchangeRate: Number(settings.exchangeRate),
           profitMargin: Number(settings.profitMargin),
           quoteThreshold: Number(settings.quoteThreshold),
-          rounding: settings.rounding
         })
       });
 
@@ -81,23 +77,6 @@ export default function SettingsPage() {
               <div>
                 <div className="flex justify-between items-center mb-2 mt-1">
                   <label className="text-sm text-muted-foreground">
-                    Exchange Rate (USD to AED)
-                  </label>
-                  <span className="font-mono text-sm border px-2 py-1 rounded-md min-w-[4rem] text-center">{settings.exchangeRate.toFixed(3)}</span>
-                </div>
-                <Slider
-                  value={[settings.exchangeRate]}
-                  min={3.0}
-                  max={4.5}
-                  step={0.001}
-                  onValueChange={([val]) => setSettings({ ...settings, exchangeRate: val })}
-                  disabled={loading}
-                  className="py-2"
-                />
-              </div>
-              <div>
-                <div className="flex justify-between items-center mb-2 mt-1">
-                  <label className="text-sm text-muted-foreground">
                     Profit Margin (%)
                   </label>
                   <span className="font-mono text-sm border px-2 py-1 rounded-md min-w-[3rem] text-center">{settings.profitMargin}</span>
@@ -112,8 +91,6 @@ export default function SettingsPage() {
                   className="py-2"
                 />
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
               <div>
                 <div className="flex justify-between items-center mb-2 mt-1">
                   <label className="text-sm text-muted-foreground">
@@ -133,17 +110,6 @@ export default function SettingsPage() {
                 <p className="text-xs text-muted-foreground mt-1">
                   Minimum quotes before manager notification
                 </p>
-              </div>
-              <div>
-                <label className="text-sm text-muted-foreground">
-                  Rounding
-                </label>
-                <Input
-                  value={settings.rounding}
-                  onChange={e => setSettings({ ...settings, rounding: e.target.value })}
-                  disabled={loading}
-                  className="mt-1 font-mono"
-                />
               </div>
             </div>
 

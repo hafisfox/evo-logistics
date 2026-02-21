@@ -1,17 +1,15 @@
 import type { DOCharge, DestinationCharge, TransportCharge, ShipmentCost, PricingResult } from "@/types/pricing";
 
+export const EXCHANGE_RATE = 3.685;
+
 export interface PricingSettings {
-  exchangeRate: number;
   margin: number;
   quoteThreshold: number;
-  rounding: string;
 }
 
 export const DEFAULT_SETTINGS: PricingSettings = {
-  exchangeRate: 3.685,
   margin: 0.13,
   quoteThreshold: 2,
-  rounding: "Nearest 10 AED",
 };
 
 export function parseMultiValue(value: string | null | undefined): string[] {
@@ -75,11 +73,10 @@ export function calculatePortPrice(
   oceanFreightUSD: number,
   settings: PricingSettings
 ): { finalPriceAED: number; finalPriceUSD: number; marginAmount: number; oceanFreightAED: number } {
-  const oceanFreightAED = oceanFreightUSD * settings.exchangeRate;
+  const oceanFreightAED = oceanFreightUSD * EXCHANGE_RATE;
   const withMargin = oceanFreightAED * (1 + settings.margin);
   const finalPriceAED = Math.ceil(withMargin / 10) * 10;
-  const finalPriceUSD =
-    Math.round((finalPriceAED / settings.exchangeRate) * 100) / 100;
+  const finalPriceUSD = Math.ceil(finalPriceAED / EXCHANGE_RATE);
   const marginAmount =
     Math.round((withMargin - oceanFreightAED) * 100) / 100;
   return { finalPriceAED, finalPriceUSD, marginAmount, oceanFreightAED: Math.round(oceanFreightAED * 100) / 100 };
@@ -110,7 +107,7 @@ export function calculateDoorPrice(params: {
 
   const doCol = getDOCol(containerType);
   const destCol = getDestCol(containerType);
-  const oceanFreightAED = oceanFreightUSD * settings.exchangeRate;
+  const oceanFreightAED = oceanFreightUSD * EXCHANGE_RATE;
 
   // DO Charges
   const doRow = getDOChargesRow(carrier, doCharges);
@@ -130,10 +127,8 @@ export function calculateDoorPrice(params: {
   const withMargin = subtotalAED * (1 + settings.margin);
   const finalPriceAED = Math.ceil(withMargin / 10) * 10;
   const pricePerContainerAED = Math.round(finalPriceAED / qty);
-  const finalPriceUSD =
-    Math.round((finalPriceAED / settings.exchangeRate) * 100) / 100;
-  const pricePerContainerUSD =
-    Math.round((finalPriceUSD / qty) * 100) / 100;
+  const finalPriceUSD = Math.ceil(finalPriceAED / EXCHANGE_RATE);
+  const pricePerContainerUSD = Math.ceil(finalPriceUSD / qty);
 
   return {
     shipmentNumber: 1,

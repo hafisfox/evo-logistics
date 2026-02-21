@@ -5,10 +5,8 @@ import path from "path";
 const SETTINGS_FILE = path.join(process.cwd(), "data", "settings.json");
 
 const defaultSettings = {
-    exchangeRate: 3.685,
     profitMargin: 13,
     quoteThreshold: 2,
-    rounding: "Nearest 10 AED",
 };
 
 export async function GET() {

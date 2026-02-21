@@ -23,10 +23,8 @@ export async function POST(
       selected_carrier: body.selected_carrier,
       shipment_number: body.shipment_number || "1",
       selected_by: body.selected_by || "dashboard",
-      exchange_rate: settings.exchangeRate,
       margin: settings.profitMargin / 100, // Important: convert % back to decimal, assuming dashboard uses whole numbers
       quote_threshold: settings.quoteThreshold,
-      rounding: settings.rounding
     });
 
     return NextResponse.json(result);

@@ -37,10 +37,8 @@ class SelectAgentRequest(BaseModel):
     selected_carrier: str
     shipment_number: str = "1"
     selected_by: str = "dashboard"
-    exchange_rate: float = 3.685
     margin: float = 0.13
     quote_threshold: int = 2
-    rounding: str = "Nearest 10 AED"
 
 class SelectAgentResponse(BaseModel):
     success: bool
@@ -76,6 +74,8 @@ def get_supabase_client():
 # =====================================================================
 # PRICING ENGINE (Python port of dashboard/src/lib/pricing-engine.ts)
 # =====================================================================
+
+EXCHANGE_RATE = 3.685
 
 
 def parse_multi_value(value):
@@ -151,12 +151,12 @@ def get_transport_charge(delivery_address, all_transp):
     return 0
 
 
-def calculate_port_price(ocean_freight_usd, qty, exchange_rate, margin):
+def calculate_port_price(ocean_freight_usd, qty, margin):
     """Port-to-port pricing calculation."""
-    ocean_freight_aed = ocean_freight_usd * exchange_rate
+    ocean_freight_aed = ocean_freight_usd * EXCHANGE_RATE
     with_margin = ocean_freight_aed * (1 + margin)
     final_price_aed = math.ceil(with_margin / 10) * 10
-    final_price_usd = round(final_price_aed / exchange_rate, 2)
+    final_price_usd = math.ceil(final_price_aed / EXCHANGE_RATE)
     margin_amount = round(with_margin - ocean_freight_aed, 2)
     return {
         "final_price_aed": final_price_aed,
@@ -167,12 +167,11 @@ def calculate_port_price(ocean_freight_usd, qty, exchange_rate, margin):
 
 
 def calculate_door_price(ocean_freight_usd, qty, container_type, carrier,
-                         delivery_address, do_charges, dest_charges, transp_charges,
-                         exchange_rate, margin):
+                         delivery_address, do_charges, dest_charges, transp_charges, margin):
     """Door service pricing with all charge components."""
     do_col = get_do_col(container_type)
     dest_col = get_dest_col(container_type)
-    ocean_freight_aed = ocean_freight_usd * exchange_rate
+    ocean_freight_aed = ocean_freight_usd * EXCHANGE_RATE
 
     # DO Charges
     do_row = get_do_charges_row(carrier, do_charges)
@@ -200,7 +199,7 @@ def calculate_door_price(ocean_freight_usd, qty, container_type, carrier,
     subtotal_aed = ocean_freight_aed + do_total + dest_total + transp_total
     with_margin = subtotal_aed * (1 + margin)
     final_price_aed = math.ceil(with_margin / 10) * 10
-    final_price_usd = round(final_price_aed / exchange_rate, 2)
+    final_price_usd = math.ceil(final_price_aed / EXCHANGE_RATE)
 
     return {
         "final_price_aed": final_price_aed,
@@ -214,7 +213,7 @@ def calculate_door_price(ocean_freight_usd, qty, container_type, carrier,
     }
 
 
-def calculate_full_pricing(rfq, quote, do_charges, dest_charges, transp_charges, exchange_rate, margin):
+def calculate_full_pricing(rfq, quote, do_charges, dest_charges, transp_charges, margin):
     """Master pricing function. Handles single and multi-shipment RFQs."""
     container_types = parse_multi_value(rfq.get("container_type"))
     quantities = parse_multi_value(rfq.get("qty"))
@@ -247,13 +246,13 @@ def calculate_full_pricing(rfq, quote, do_charges, dest_charges, transp_charges,
             ocean_freight_usd = 0
 
         if is_port_only:
-            result = calculate_port_price(ocean_freight_usd, qty, exchange_rate, margin)
+            result = calculate_port_price(ocean_freight_usd, qty, margin)
         else:
             delivery_addr = rfq.get("delivery_address") if has_delivery else None
             result = calculate_door_price(
                 ocean_freight_usd, qty, ct, carrier,
                 delivery_addr, do_charges, dest_charges, transp_charges,
-                exchange_rate, margin
+                margin
             )
 
         result["shipment_number"] = i + 1
@@ -473,7 +472,6 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
         do_charges, 
         dest_charges, 
         transp_charges,
-        request.exchange_rate,
         request.margin
     )
     print(f"Pricing calculated: AED {pricing['grand_total_aed']:,.0f} / USD {pricing['grand_total_usd']:,.2f}")
