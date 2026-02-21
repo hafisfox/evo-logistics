@@ -1,7 +1,8 @@
 # SKILLS.md — Skill Registry
 
 > All custom skills for this project. Update this file whenever a skill is added, modified, or removed.
-
+> 
+> **AI INSTRUCTION:** Do NOT load all these skills into context at once. When working on a task, identify the relevant skill from this table, list the files in its directory, and strictly read only the `.md` or `.mdc` files necessary for your immediate task.
 ## Skills
 
 | # | Skill Name | File | Purpose | Status |
