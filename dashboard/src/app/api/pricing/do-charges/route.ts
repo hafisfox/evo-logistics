@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { getServiceRoleClient } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const supabase = getServiceRoleClient();
+    const supabase = await createClient();
     const { data, error } = await supabase.from('do_charges').select('*');
     if (error) throw error;
 

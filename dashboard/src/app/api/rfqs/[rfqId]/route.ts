@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServiceRoleClient } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 import type { MasterRFQ, AgentQuote } from "@/types/rfq";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export async function GET(
 ) {
   try {
     const { rfqId } = await params;
-    const supabase = getServiceRoleClient();
+    const supabase = await createClient();
 
     // Splitting queries to avoid Promise.all never inference issues with .single()
     const rfqRes = await supabase.from('master_rfqs').select('*').eq('rfq_id', rfqId).single();

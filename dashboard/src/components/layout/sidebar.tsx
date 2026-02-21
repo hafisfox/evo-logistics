@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -52,8 +53,9 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <div className="border-t p-4 text-xs text-muted-foreground">
-        FCL Pricing Engine v1.0
+      <div className="border-t p-4 text-xs text-muted-foreground flex items-center justify-between">
+        <span>FCL Pricing Engine v1.0</span>
+        <ThemeToggle />
       </div>
     </aside>
   );

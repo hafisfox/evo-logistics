@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServiceRoleClient } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 import type { AgentQuote } from "@/types/rfq";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export async function GET(
 ) {
   try {
     const { rfqId } = await params;
-    const supabase = getServiceRoleClient();
+    const supabase = await createClient();
 
     const { data, error } = await supabase
       .from('agent_outbound_log')

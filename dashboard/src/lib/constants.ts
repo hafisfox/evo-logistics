@@ -64,9 +64,9 @@ export const STATUS_CONFIG: Record<
   },
   Quoted: {
     label: "Quoted",
-    color: "#22C55E",
-    bgClass: "bg-green-100",
-    textClass: "text-green-800",
+    color: "#22D3EE",
+    bgClass: "bg-cyan-500/10",
+    textClass: "text-cyan-400",
   },
   Followed_Up: {
     label: "Followed Up",

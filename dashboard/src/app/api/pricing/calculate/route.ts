@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServiceRoleClient } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 import { calculateFullPricing } from "@/lib/pricing-engine";
 import type { DestinationCharge, TransportCharge } from "@/types/pricing";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const supabase = getServiceRoleClient();
+    const supabase = await createClient();
 
     const [doRes, destRes, transpRes] = await Promise.all([
       supabase.from('do_charges').select('*'),

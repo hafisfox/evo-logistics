@@ -63,8 +63,8 @@ export default function AgentsPage() {
                             variant="secondary"
                             className={
                               agent.status === "active"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-gray-100 text-gray-800"
+                                ? "bg-cyan-500/10 text-cyan-400"
+                                : "bg-white/5 text-slate-400"
                             }
                           >
                             {agent.status}

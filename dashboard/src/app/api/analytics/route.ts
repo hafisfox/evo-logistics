@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServiceRoleClient } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 import type { DashboardKPIs, PipelineCount, ActivityItem } from "@/types/analytics";
 import type { MasterRFQ, AgentQuote } from "@/types/rfq";
 
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const supabase = getServiceRoleClient();
+    const supabase = await createClient();
 
     // Fetch all RFQs and Quotes in parallel from Supabase
     const [rfqsRes, quotesRes] = await Promise.all([
