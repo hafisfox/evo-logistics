@@ -6,6 +6,16 @@ import { Label } from "@/components/ui/label";
 import { Shield } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 
+const getURL = () => {
+    let url =
+        process?.env?.NEXT_PUBLIC_SITE_URL ??
+        process?.env?.NEXT_PUBLIC_VERCEL_URL ??
+        'http://localhost:3000/';
+    url = url.includes('http') ? url : `https://${url}`;
+    url = url.endsWith('/') ? url : `${url}/`;
+    return url;
+};
+
 export default async function LoginPage(props: {
     searchParams: Promise<{ callbackUrl?: string; error?: string }>;
 }) {
@@ -17,16 +27,6 @@ export default async function LoginPage(props: {
     if (session) {
         redirect(searchParams.callbackUrl || "/");
     }
-
-    const getURL = () => {
-        let url =
-            process?.env?.NEXT_PUBLIC_SITE_URL ??
-            process?.env?.NEXT_PUBLIC_VERCEL_URL ??
-            'http://localhost:3000/';
-        url = url.includes('http') ? url : `https://${url}`;
-        url = url.endsWith('/') ? url : `${url}/`;
-        return url;
-    };
 
     // Server Action to handle Email Sign In (Magic Link)
     const handleEmailSignIn = async (formData: FormData) => {
