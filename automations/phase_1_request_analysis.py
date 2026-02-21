@@ -33,6 +33,7 @@ image = modal.Image.debian_slim(python_version="3.11").pip_install(
 )
 
 ADMIN_EMAIL = "hafisjavad9@gmail.com"
+OWN_EMAIL = os.environ.get("OWN_EMAIL", "yunapink05@gmail.com")
 
 # =====================================================================
 # CONSTANTS
@@ -41,11 +42,10 @@ VALID_TYPES = ['20FT', '40FT', '40HC', '40HQ', '45FT', '20OT', '40OT']
 VALID_SERVICE_TYPES = ['port-to-port', 'door-to-port', 'port-to-door', 'door-to-door']
 
 PORT_FIELD_INFO = {
-    'pol':  {'label': 'Port of Loading (Origin)',        'example': 'SHENZHEN, SHANGHAI, NINGBO'},
-    'pod':  {'label': 'Port of Discharge (Destination)', 'example': 'JEBEL ALI, JEDDAH, DAMMAM, HAMAD PORT'},
-    'qty':  {'label': 'Number of Containers',            'example': '2, 5, 10'},
-    'type': {'label': 'Container Type',                  'example': '20FT, 40FT, 40HC, 20OT, 40OT'},
-    'date': {'label': 'Cargo Ready Date',                'example': '2026-02-15, 20th February'},
+    'pol':        {'label': 'Port of Loading (Origin)',        'example': 'SHENZHEN, SHANGHAI, NINGBO'},
+    'pod':        {'label': 'Port of Discharge (Destination)', 'example': 'JEBEL ALI, JEDDAH, DAMMAM, HAMAD PORT'},
+    'containers': {'label': 'Container Types & Quantities',   'example': '2x 40FT, 1x 20FT, 3x 40HC'},
+    'date':       {'label': 'Cargo Ready Date',                'example': '2026-02-15, 20th February'},
 }
 
 DOOR_FIELD_INFO = {
@@ -57,12 +57,25 @@ DOOR_FIELD_INFO = {
 # =====================================================================
 # CORE DATA MODELS
 # =====================================================================
+class ContainerItem(BaseModel):
+    qty: Optional[int] = Field(None, description="Number of containers of this type")
+    type: Optional[str] = Field(None, description="Container Type (20FT, 40FT, 40HC, etc.)")
+
+    @field_validator('qty', mode='before')
+    @classmethod
+    def coerce_qty(cls, v):
+        if isinstance(v, str):
+            try:
+                return int(v)
+            except ValueError:
+                return None
+        return v
+
 class ShipmentData(BaseModel):
     pol: Optional[str] = Field(None, description="Port of Loading (Origin)")
     pod: Optional[str] = Field(None, description="Port of Discharge (Destination)")
     pod_hint: List[str] = Field(default_factory=list, description="Port of Discharge Options if not confirmed")
-    qty: Optional[int] = Field(None, description="Number of Containers")
-    type: Optional[str] = Field(None, description="Container Type")
+    containers: List[ContainerItem] = Field(default_factory=list, description="Container types and quantities")
     date: Optional[str] = Field(None, description="Cargo Ready Date YYYY-MM-DD")
     delivery_deadline: Optional[str] = Field(None, description="Required Delivery Date YYYY-MM-DD")
     service_type: str = Field("port-to-port", description="Service Level")
@@ -75,16 +88,6 @@ class ShipmentData(BaseModel):
         if isinstance(v, str):
             return [v] if v else []
         return v or []
-
-    @field_validator('qty', mode='before')
-    @classmethod
-    def coerce_qty(cls, v):
-        if isinstance(v, str):
-            try:
-                return int(v)
-            except ValueError:
-                return None
-        return v
 
 class ExtractedRFQs(BaseModel):
     extraction_reasoning: str = Field(description="Step by step reasoning about the email contents. Identify the ports, containers, dates, and whether it represents one or multiple shipments, before returning the structured data.")
@@ -136,33 +139,48 @@ def generate_rfq_id(thread_id: str = "") -> str:
 # =====================================================================
 # EMAIL CLASSIFICATION
 # =====================================================================
-def classify_email(modal_llm_client, subject: str, sender: str, body_preview: str) -> str:
+def classify_email(modal_llm_client, subject: str, sender: str, body_preview: str,
+                   fallback_llm_client=None) -> str:
     """Classify email into categories using AI. Returns category string."""
     input_text = f"Subject: {subject}\nFrom: {sender}\nBody: {body_preview[:800]}"
+    system_prompt = (
+        "Classify this email into exactly ONE category. Reply with ONLY the category name.\n\n"
+        "Categories:\n"
+        "- agent_rate_reply: Email from a freight agent containing shipping rates, carrier names, pricing, "
+        "validity dates, or a decline/no space response. Subject usually contains a Ref ID like \"Ref: RFQ-XXXXXXXX\".\n"
+        "- customer_rfq: New email from a customer requesting a freight quote. Contains container types, "
+        "port mentions, or shipping inquiry language. No Ref ID in subject.\n"
+        "- customer_followup: Customer replying to an existing quote thread. May reference a previous "
+        "conversation, ask for clarification, or confirm details.\n"
+        "- booking_confirmation: Booking confirmation, B/L notification, or vessel confirmation.\n"
+        "- out_of_scope: Spam, newsletters, unrelated emails."
+    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": input_text}
+    ]
+    valid_categories = ['agent_rate_reply', 'customer_rfq', 'customer_followup',
+                       'booking_confirmation', 'out_of_scope']
 
     try:
         response = modal_llm_client.chat.completions.create(
             model="zai-org/GLM-5-FP8",
-            messages=[
-                {"role": "system", "content": (
-                    "Classify this email into exactly ONE category. Reply with ONLY the category name.\n\n"
-                    "Categories:\n"
-                    "- agent_rate_reply: Email from a freight agent containing shipping rates, carrier names, pricing, "
-                    "validity dates, or a decline/no space response. Subject usually contains a Ref ID like \"Ref: RFQ-XXXXXXXX\".\n"
-                    "- customer_rfq: New email from a customer requesting a freight quote. Contains container types, "
-                    "port mentions, or shipping inquiry language. No Ref ID in subject.\n"
-                    "- customer_followup: Customer replying to an existing quote thread. May reference a previous "
-                    "conversation, ask for clarification, or confirm details.\n"
-                    "- booking_confirmation: Booking confirmation, B/L notification, or vessel confirmation.\n"
-                    "- out_of_scope: Spam, newsletters, unrelated emails."
-                )},
-                {"role": "user", "content": input_text}
-            ],
+            messages=messages,
             max_tokens=20
         )
-        category = response.choices[0].message.content.strip().lower()
-        valid_categories = ['agent_rate_reply', 'customer_rfq', 'customer_followup',
-                           'booking_confirmation', 'out_of_scope']
+        raw = response.choices[0].message.content
+        if raw is None and fallback_llm_client:
+            print(f"Modal LLM returned None for: {subject}, retrying with OpenAI")
+            response = fallback_llm_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                max_tokens=20
+            )
+            raw = response.choices[0].message.content
+        if raw is None:
+            print(f"Classification returned None content for: {subject}")
+            return 'out_of_scope'
+        category = raw.strip().lower()
         return category if category in valid_categories else 'out_of_scope'
     except Exception as e:
         print(f"Classification error: {e}, defaulting to out_of_scope")
@@ -239,13 +257,20 @@ def normalize_pod_hint(hints):
 
 def validate_shipment(s_data: dict, index: int) -> dict:
     """Normalize and validate a single shipment dict."""
+    raw_containers = s_data.get('containers', [])
+    validated_containers = []
+    for c in raw_containers:
+        nq = normalize_qty(c.get('qty'))
+        nt = normalize_type(c.get('type'))
+        if nq or nt:
+            validated_containers.append({'qty': nq, 'type': nt})
+
     return {
         'num': index + 1,
         'pol': normalize_port(s_data.get('pol')),
         'pod': normalize_port(s_data.get('pod')),
         'pod_hint': normalize_pod_hint(s_data.get('pod_hint', [])),
-        'qty': normalize_qty(s_data.get('qty')),
-        'type': normalize_type(s_data.get('type')),
+        'containers': validated_containers,
         'date': normalize_date(s_data.get('date')),
         'delivery_deadline': normalize_date(s_data.get('delivery_deadline')),
         'service_type': normalize_service_type(s_data.get('service_type')),
@@ -262,10 +287,8 @@ def get_missing_port_fields(shipment: dict) -> list:
         missing.append('pol')
     if not shipment['pod'] and len(shipment['pod_hint']) == 0:
         missing.append('pod')
-    if not shipment['qty']:
-        missing.append('qty')
-    if not shipment['type']:
-        missing.append('type')
+    if not shipment['containers'] or any(not c['qty'] or not c['type'] for c in shipment['containers']):
+        missing.append('containers')
     if not shipment['date']:
         missing.append('date')
     return missing
@@ -304,20 +327,47 @@ def determine_routing_action(shipments: list) -> str:
 # SHEETS CONCATENATION FOR MULTI-SHIPMENT
 # =====================================================================
 def concatenate_shipments(shipments: list) -> dict:
-    """Concatenate shipment data with newline separators for sheets."""
+    """Concatenate shipment data with newline separators for Supabase.
+
+    Containers are flattened: each container type becomes a separate newline entry.
+    Route fields (pol, pod, date, etc.) are repeated for each container within a
+    shipment so ALL fields have the same line count and stay index-aligned for
+    Phase 2/3 which iterate by position.
+    """
+    all_pols = []
+    all_pods = []
+    all_types = []
+    all_qtys = []
+    all_dates = []
+    all_services = []
+    all_pickups = []
+    all_deliveries = []
+    all_deadlines = []
+
+    for s in shipments:
+        pod_val = s['pod'] or ('/'.join(s['pod_hint']) if s['pod_hint'] else 'TBD')
+        containers = s['containers'] or [{'qty': None, 'type': None}]
+        for c in containers:
+            all_pols.append(s['pol'] or 'TBD')
+            all_pods.append(pod_val)
+            all_types.append(c['type'] or 'TBD')
+            all_qtys.append(str(c['qty']) if c['qty'] else 'TBD')
+            all_dates.append(s['date'] or 'TBD')
+            all_services.append(s['service_type'])
+            all_pickups.append(s['pickup_address'] or '')
+            all_deliveries.append(s['delivery_address'] or '')
+            all_deadlines.append(s['delivery_deadline'] or '')
+
     return {
-        'pol': '\n'.join(s['pol'] or 'TBD' for s in shipments),
-        'pod': '\n'.join(
-            s['pod'] or ('/'.join(s['pod_hint']) if s['pod_hint'] else 'TBD')
-            for s in shipments
-        ),
-        'container_type': '\n'.join(s['type'] or 'TBD' for s in shipments),
-        'qty': '\n'.join(str(s['qty']) if s['qty'] else 'TBD' for s in shipments),
-        'ready_date': '\n'.join(s['date'] or 'TBD' for s in shipments),
-        'delivery_deadline': '\n'.join(filter(None, (s['delivery_deadline'] or '' for s in shipments))) or None,
-        'service_type': '\n'.join(sorted(set(s['service_type'] for s in shipments))),
-        'pickup_address': '\n'.join(filter(None, (s['pickup_address'] or '' for s in shipments))) or None,
-        'delivery_address': '\n'.join(filter(None, (s['delivery_address'] or '' for s in shipments))) or None,
+        'pol': '\n'.join(all_pols),
+        'pod': '\n'.join(all_pods),
+        'container_type': '\n'.join(all_types),
+        'qty': '\n'.join(all_qtys),
+        'ready_date': '\n'.join(all_dates),
+        'delivery_deadline': '\n'.join(filter(None, all_deadlines)) or None,
+        'service_type': '\n'.join(sorted(set(all_services))),
+        'pickup_address': '\n'.join(filter(None, all_pickups)) or None,
+        'delivery_address': '\n'.join(filter(None, all_deliveries)) or None,
     }
 
 # =====================================================================
@@ -359,10 +409,17 @@ def format_current_details(shipments: list, is_multi: bool) -> str:
             parts.append(f"Destination Port: {s['pod']}")
         if not s['pod'] and s['pod_hint']:
             parts.append(f"POD Options: {' or '.join(s['pod_hint'])} (pending confirmation)")
-        if s['qty'] and s['type']:
-            parts.append(f"Containers: {s['qty']} x {s['type']}")
-        elif s['qty']:
-            parts.append(f"Quantity: {s['qty']} containers")
+        if s['containers']:
+            container_strs = []
+            for c in s['containers']:
+                if c['qty'] and c['type']:
+                    container_strs.append(f"{c['qty']} x {c['type']}")
+                elif c['qty']:
+                    container_strs.append(f"{c['qty']} containers")
+                elif c['type']:
+                    container_strs.append(c['type'])
+            if container_strs:
+                parts.append(f"Containers: {', '.join(container_strs)}")
         if s['date']:
             parts.append(f"Cargo Ready: {s['date']}")
         if s['delivery_deadline']:
@@ -389,10 +446,18 @@ def format_pricing_content(shipments: list, is_multi: bool) -> str:
         header = f"Shipment {s['num']} of {len(shipments)}\n" if is_multi else ''
         pod_display = s['pod'] or (f"TBD (options: {' / '.join(s['pod_hint'])})" if s['pod_hint'] else '???')
         route = f"{s['pol'] or '???'} > {pod_display}"
-        containers = (
-            f"{s['qty']} x {s['type']}" if s['qty'] and s['type']
-            else (f"{s['qty']} containers (type TBD)" if s['qty'] else 'TBD')
-        )
+        if s['containers']:
+            container_strs = []
+            for c in s['containers']:
+                if c['qty'] and c['type']:
+                    container_strs.append(f"{c['qty']} x {c['type']}")
+                elif c['qty']:
+                    container_strs.append(f"{c['qty']} containers (type TBD)")
+                else:
+                    container_strs.append('TBD')
+            containers = ', '.join(container_strs)
+        else:
+            containers = 'TBD'
         ready = s['date'] or 'TBD'
         lines = [f"{header}Route: {route}", f"Containers: {containers}", f"Ready Date: {ready}"]
         if s['service_type'] != 'port-to-port':
@@ -411,7 +476,12 @@ def build_subject_line(shipments: list, is_multi: bool, count: int, action: str)
     s = shipments[0]
     pod_display = s['pod'] or (s['pod_hint'][0] + '?' if s['pod_hint'] else 'TBD')
     route = f"{s['pol'] or 'TBD'} > {pod_display}"
-    containers = f"{s['qty']}x{s['type']}" if s['qty'] and s['type'] else 'TBD'
+    if s['containers']:
+        containers = '+'.join(
+            f"{c['qty']}x{c['type']}" for c in s['containers'] if c['qty'] and c['type']
+        ) or 'TBD'
+    else:
+        containers = 'TBD'
     multi_suffix = f" +{count - 1} more" if is_multi else ''
     door_suffix = f" [{s['service_type'].upper()}]" if s['service_type'] != 'port-to-port' else ''
     prefix = 'Quote Request'
@@ -664,20 +734,23 @@ def _send_agent_outreach(gmail_service, supabase, rfq_id, shipments, is_multi, c
             print(f"Failed to send to {agent_email}: {e}")
             continue
 
-        # 3. Log to Agent_Outbound_Log
-        match_key = f"{rfq_id}_{agent_email}"
-        log_data = {
-            'rfq_id': rfq_id,
-            'match': match_key,
-            'status': 'Requested',
-            'agent_name': agent_name,
-            'agent_email': agent_email,
-            'sent_at': now_str,
-        }
-        try:
-            _upsert_row(supabase, "agent_outbound_log", log_data)
-        except Exception as e:
-            print(f"Failed to log outreach for {agent_email}: {e}")
+        # 3. Log to Agent_Outbound_Log — one row per shipment
+        num_shipments = max(count, 1)
+        for ship_num in range(1, num_shipments + 1):
+            match_key = f"{rfq_id}_{agent_email}_{ship_num}"
+            log_data = {
+                'rfq_id': rfq_id,
+                'match': match_key,
+                'shipment_number': str(ship_num),
+                'status': 'Requested',
+                'agent_name': agent_name,
+                'agent_email': agent_email,
+                'sent_at': now_str,
+            }
+            try:
+                _upsert_row(supabase, "agent_outbound_log", log_data)
+            except Exception as e:
+                print(f"Failed to log outreach for {agent_email} shipment {ship_num}: {e}")
 
 # =====================================================================
 # AI SYSTEM PROMPT (ported from n8n)
@@ -690,12 +763,12 @@ Think step-by-step:
 1. Does the sender explicitly request a rate/freight quote?
 2. What are the loading ports/cities mentioned?
 3. What are the destination ports/cities requested? Are they confirmed or just options?
-4. How many container sizes/types are present?
-5. Group the routing blocks into distinct shipments if necessary.
+4. How many distinct routes (origin→destination pairs) are there?
+5. For each route, what container types and quantities are requested?
 
 **OUTPUT FORMAT** (return exactly this structure):
 
-{"extraction_reasoning":"Your step-by-step thoughts...","multi":false,"count":1,"shipments":[{"pol":null,"pod":null,"pod_hint":[],"qty":null,"type":null,"date":null,"delivery_deadline":null,"service_type":"port-to-port","pickup_address":null,"delivery_address":null}]}
+{"extraction_reasoning":"Your step-by-step thoughts...","multi":false,"count":1,"shipments":[{"pol":null,"pod":null,"pod_hint":[],"containers":[{"qty":null,"type":null}],"date":null,"delivery_deadline":null,"service_type":"port-to-port","pickup_address":null,"delivery_address":null}]}
 
 ## FIELD RULES
 
@@ -714,13 +787,15 @@ Think step-by-step:
 - Array of UPPERCASE port name strings
 - Populate when customer mentions multiple possible ports but hasn't confirmed one
 
-### qty — Container Quantity
-- Container count as INTEGER
-- Parse: 3X40FT → 3, three containers → 3
-- null if no quantity mentioned
+### containers — Array of container items
+Each item has:
+- **qty**: Container count as INTEGER. Parse: 3X40FT → 3, three containers → 3. null if unknown.
+- **type**: Must be one of: 20FT, 40FT, 40HC, 40HQ, 45FT, 20OT, 40OT
 
-### type — Container Type
-Must be one of: 20FT, 40FT, 40HC, 40HQ, 45FT, 20OT, 40OT
+Examples:
+- "2x40FT and 1x20FT" → containers: [{"qty":2,"type":"40FT"},{"qty":1,"type":"20FT"}]
+- "3x40HC" → containers: [{"qty":3,"type":"40HC"}]
+- "some containers from Shanghai" → containers: [{"qty":null,"type":null}]
 
 ### date — Cargo Ready Date
 - Format: YYYY-MM-DD, must be year 2024 or later
@@ -759,14 +834,17 @@ Must be one of: 20FT, 40FT, 40HC, 40HQ, 45FT, 20OT, 40OT
 | Riyadh (no port specified) | null — set pod_hint: ["JEDDAH", "DAMMAM"] |
 
 ## MULTI-SHIPMENT RULES
-- Mixed container types on same shipment → separate shipment objects
-- Multiple containers of same type → single object with that qty
+- A SHIPMENT is defined by its ROUTE (origin → destination). One route = one shipment.
+- Different routes → separate shipment objects
+- Mixed container types on the SAME route → single shipment with multiple containers
+- Same route, same type → single shipment, single container with total qty
 
 ## OUTPUT RULES
 - Return ONLY raw JSON — no markdown, no backticks
 - Use null for unknown values — never "TBD", "N/A", or ""
 - qty must be integer or null
 - pod_hint must always be an array
+- containers must always be an array with at least one item
 - shipments array must always contain at least one object
 
 ## FEW-SHOT EXAMPLE
@@ -777,7 +855,7 @@ Body: Hi Team, please quote me for 2x40HC and 1x20FT from Shanghai to Dubai or D
 **Output:**
 ```json
 {
-  "extraction_reasoning": "The customer is asking for two separate shipments due to different routes. Shipment 1: 2x40HC and 1x20FT from Shanghai. The destination is either Dubai (JEBEL ALI) or Doha (HAMAD PORT). Because it's an option, I will leave pod null and put both into pod_hint. Service is port to port by default. Shipment 2: 1x40FT from Jebel Ali to Umm Qasr. Service requested is door-to-door. Origin pickup is Dubai Investment Park, delivery is Basra warehouse.",
+  "extraction_reasoning": "Two distinct routes. Route 1: Shanghai to Dubai/Doha with mixed containers (2x40HC + 1x20FT). Destination is an option so pod is null with pod_hint. Route 2: Jebel Ali to Umm Qasr, door-to-door, 1x40FT. Pickup at Dubai Investment Park, delivery to Basra warehouse.",
   "multi": true,
   "count": 2,
   "shipments": [
@@ -785,20 +863,10 @@ Body: Hi Team, please quote me for 2x40HC and 1x20FT from Shanghai to Dubai or D
       "pol": "SHANGHAI",
       "pod": null,
       "pod_hint": ["JEBEL ALI", "HAMAD PORT"],
-      "qty": 2,
-      "type": "40HC",
-      "date": null,
-      "delivery_deadline": null,
-      "service_type": "port-to-port",
-      "pickup_address": null,
-      "delivery_address": null
-    },
-    {
-      "pol": "SHANGHAI",
-      "pod": null,
-      "pod_hint": ["JEBEL ALI", "HAMAD PORT"],
-      "qty": 1,
-      "type": "20FT",
+      "containers": [
+        {"qty": 2, "type": "40HC"},
+        {"qty": 1, "type": "20FT"}
+      ],
       "date": null,
       "delivery_deadline": null,
       "service_type": "port-to-port",
@@ -809,8 +877,9 @@ Body: Hi Team, please quote me for 2x40HC and 1x20FT from Shanghai to Dubai or D
       "pol": "JEBEL ALI",
       "pod": "UMM QASR",
       "pod_hint": [],
-      "qty": 1,
-      "type": "40FT",
+      "containers": [
+        {"qty": 1, "type": "40FT"}
+      ],
       "date": null,
       "delivery_deadline": null,
       "service_type": "door-to-door",
@@ -844,7 +913,7 @@ def _gmail_call_with_backoff(request, retries=4, base_delay=2):
 # =====================================================================
 @app.function(
     image=image,
-    secrets=[modal.Secret.from_dotenv(__file__)]
+    secrets=[modal.Secret.from_name("evo-logistics-env")]
 )
 @modal.fastapi_endpoint(method="POST")
 def gmail_push_phase1(_data: dict):
@@ -867,7 +936,7 @@ def gmail_push_phase1(_data: dict):
 @app.function(
     schedule=modal.Cron("0 0 */6 * *"),
     image=image,
-    secrets=[modal.Secret.from_dotenv(__file__)]
+    secrets=[modal.Secret.from_name("evo-logistics-env")]
 )
 def renew_gmail_watch():
     """Renews the Gmail push notification watch on INBOX."""
@@ -916,7 +985,7 @@ def _process_incoming_rfqs():
     # BUG-4 Fix: Exclude agent rate replies (Phase 2 handles those) and our own sent auto-replies
     results = gmail_service.users().messages().list(
         userId='me',
-        q='is:unread -subject:"Ref: RFQ-" -from:yunapink05@gmail.com'
+        q=f'is:unread -subject:"Ref: RFQ-" -from:{OWN_EMAIL}'
     ).execute()
     messages = results.get('messages', [])
 
@@ -952,19 +1021,21 @@ def _process_incoming_rfqs():
         # RFC 2822 Message-ID is needed for proper threading (not the Gmail internal ID)
         rfc_message_id = headers_dict.get('message-id', '')
 
+        # Mark as read IMMEDIATELY to prevent concurrent Pub/Sub invocations
+        # from picking up the same email (closes the race window)
+        try:
+            _gmail_call_with_backoff(
+                gmail_service.users().messages().modify(
+                    userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}
+                )
+            )
+        except Exception:
+            pass
+        processed_msg_ids.add(msg_id)
+
         # FIX-1: Hard guard — skip any email sent by our own address to prevent reply loops
-        OWN_EMAIL = "yunapink05@gmail.com"
         if OWN_EMAIL in sender.lower():
             print(f"Skipping self-sent email: {subject}")
-            try:
-                _gmail_call_with_backoff(
-                    gmail_service.users().messages().modify(
-                        userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}
-                    )
-                )
-            except Exception:
-                pass
-            processed_msg_ids.add(msg_id)
             continue
 
         # Extract body text
@@ -978,21 +1049,12 @@ def _process_incoming_rfqs():
         print(f"Email body length: {len(email_body)} chars | Preview: {body_preview}")
 
         # 2. CLASSIFY EMAIL
-        email_category = classify_email(modal_llm_client, subject, sender, body_preview)
+        email_category = classify_email(modal_llm_client, subject, sender, body_preview,
+                                           fallback_llm_client=openai_client)
         print(f"[{msg_id}] Classification: {email_category}")
 
         if email_category in ('agent_rate_reply', 'booking_confirmation', 'out_of_scope'):
             print(f"Skipping email (category: {email_category}): {subject}")
-            # Mark non-RFQ emails as read so we don't process them again
-            try:
-                _gmail_call_with_backoff(
-                    gmail_service.users().messages().modify(
-                        userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}
-                    )
-                )
-            except Exception:
-                pass
-            processed_msg_ids.add(msg_id)
             continue
 
         # DEDUPLICATION: Check if this thread was already processed
@@ -1002,7 +1064,7 @@ def _process_incoming_rfqs():
             if existing_status in ('Missing_Port_Data', 'Missing_Door_Data'):
                 # Thread needs more data — allow processing as followup
                 print(f"Thread {thread_id} needs data ({existing_status}), processing as followup")
-            elif existing_status in ('Quoted', 'Followed_Up') and category == 'customer_followup':
+            elif existing_status in ('Quoted', 'Followed_Up') and email_category == 'customer_followup':
                 print(f"Customer replied to quoted thread {thread_id}. Updating status.")
                 _upsert_row(
                     supabase, 
@@ -1013,16 +1075,6 @@ def _process_incoming_rfqs():
             else:
                 # Already processed (Processing, Parse_Error, etc.) — skip
                 print(f"Thread {thread_id} already processed (status: {existing_status}), skipping")
-                # Mark as read so it doesn't appear in future runs
-                try:
-                    _gmail_call_with_backoff(
-                        gmail_service.users().messages().modify(
-                            userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}
-                        )
-                    )
-                except Exception:
-                    pass
-                processed_msg_ids.add(msg_id)
                 continue
 
         # Only process customer_rfq and customer_followup
@@ -1067,7 +1119,8 @@ def _process_incoming_rfqs():
             # 4. Validate and normalize each shipment
             shipments = [validate_shipment(s.model_dump(), i) for i, s in enumerate(extracted.shipments)]
             is_multi = extracted.multi or len(shipments) > 1
-            count = len(shipments)
+            # count = total container entries across all shipments (for Phase 2/3 compatibility)
+            count = sum(len(s['containers']) for s in shipments) or 1
 
             # 5. Determine routing action
             action = determine_routing_action(shipments)
@@ -1151,17 +1204,7 @@ def _process_incoming_rfqs():
             except Exception as e2:
                 print(f"Fallback handler also failed for {msg_id}: {e2}")
         finally:
-            # Mark as read AFTER processing, regardless of outcome
-            # Doing this here (not at start) prevents an immediate Pub/Sub re-trigger
-            processed_msg_ids.add(msg_id)
-            try:
-                _gmail_call_with_backoff(
-                    gmail_service.users().messages().modify(
-                        userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}
-                    )
-                )
-            except Exception as mark_err:
-                print(f"Warning: could not mark msg {msg_id} as read: {mark_err}")
+            pass  # Mark-as-read already done at top of loop
 
 
 def _handle_fallback(gmail_service, supabase, rfq_id, sender, thread_id,

@@ -136,7 +136,7 @@ def _get_reminder_target_time(sent_at_utc: datetime) -> datetime:
 @app.function(
     schedule=modal.Cron("*/15 * * * *"),
     image=image,
-    secrets=[modal.Secret.from_dotenv(__file__)]
+    secrets=[modal.Secret.from_name("evo-logistics-env")]
 )
 def check_agent_reminders():
     """Send agent reminders based on China business hours."""
@@ -205,7 +205,7 @@ def check_agent_reminders():
 @app.function(
     schedule=modal.Cron("0 * * * *"),
     image=image,
-    secrets=[modal.Secret.from_dotenv(__file__)]
+    secrets=[modal.Secret.from_name("evo-logistics-env")]
 )
 def check_customer_followups():
     """Send follow-ups to customers 24 hours after quotation if no response."""

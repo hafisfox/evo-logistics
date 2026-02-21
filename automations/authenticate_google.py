@@ -5,10 +5,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 
 # The APIs and specific permissions our app needs
 SCOPES = [
-    "https://www.googleapis.com/auth/gmail.modify",       # Needed to read and send emails
-    "https://www.googleapis.com/auth/spreadsheets",       # Needed to log RFQs to Google Sheets
-    "https://www.googleapis.com/auth/drive.file",         # Needed for Service Started workflow
-    "https://www.googleapis.com/auth/documents"           # Needed for Service Started workflow
+    "https://www.googleapis.com/auth/gmail.modify",       # Read, send, and manage emails
 ]
 
 def main():

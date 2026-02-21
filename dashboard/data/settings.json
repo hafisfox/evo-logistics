@@ -1,6 +1,4 @@
 {
-  "exchangeRate": 3.685,
   "profitMargin": 22,
-  "quoteThreshold": 2,
-  "rounding": "Next 10"
+  "quoteThreshold": 2
 }

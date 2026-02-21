@@ -34,7 +34,7 @@ Browser  ──POST──> Next.js API Routes  ──>  Modal.com Webhooks (writ
 | `/rfqs/[rfqId]/select` | Agent Selection — quote comparison, select & confirm |
 | `/agents` | Agent Directory — performance metrics, response rates |
 | `/pricing` | Pricing Tables — DO, destination, transport charges |
-| `/settings` | Config — exchange rate, margin %, threshold |
+| `/settings` | Config — margin %, quote threshold |
 
 ---
 
@@ -65,10 +65,10 @@ Browser  ──POST──> Next.js API Routes  ──>  Modal.com Webhooks (writ
 | thread_id | string | Gmail thread ID |
 | customer_email | string | |
 | status | enum | Processing, Missing_Port_Data, Missing_Door_Data, Parse_Error, Selected, Quoted, Reminded, Followed_Up, Customer_Replied |
-| pol | string | Port of Loading (newline-separated for multi-shipment) |
-| pod | string | Port of Discharge |
-| container_type | string | 20FT, 40FT, 40HC, 40HQ, 45FT |
-| qty | string | Quantity per shipment |
+| pol | string | Port of Loading (newline-separated, repeated per container entry) |
+| pod | string | Port of Discharge (newline-separated, same format as pol) |
+| container_type | string | Newline-separated container types, e.g. `"40FT\n20FT"` |
+| qty | string | Newline-separated quantities, index-aligned with container_type, e.g. `"2\n1"` |
 | ready_date | string | YYYY-MM-DD |
 | delivery_deadline | string? | Required delivery date YYYY-MM-DD |
 | service_type | string | port-to-port, door-to-port, port-to-door, door-to-door |
@@ -85,7 +85,7 @@ Browser  ──POST──> Next.js API Routes  ──>  Modal.com Webhooks (writ
 | Column | Type | Description |
 |--------|------|-------------|
 | rfq_id | string | Links to master_rfqs |
-| match | string | `rfq_id_agentEmail` (upsert key — one row per agent per RFQ) |
+| match | string | `rfq_id_agentEmail_shipmentNumber` (upsert key — one row per agent per container entry) |
 | agent_name | string | |
 | agent_email | string | |
 | shipment_number | string | For multi-shipment RFQs |
@@ -116,8 +116,9 @@ agent_outbound_log:
 ## 5. Pricing Engine
 
 ### Constants
-- **USD_TO_AED:** 3.685
-- **MARGIN:** 13% (0.13)
+- **USD_TO_AED:** 3.685 (hardcoded in code — requires redeploy to change)
+- **MARGIN:** 13% default (dynamic — configurable via `/settings` page, passed to Modal at selection time)
+- **QUOTE_THRESHOLD:** 2 default (dynamic — configurable via `/settings` page)
 - **Rounding:** `Math.ceil(total / 10) * 10` (nearest 10 AED up)
 
 ### Port-to-Port
@@ -156,10 +157,12 @@ Final Price      = ceil(With Margin / 10) × 10
 - Match delivery address against `Place` column (case-insensitive, substring match)
 - Apply per container × qty
 
-### Multi-Shipment
-- Fields submitted newline-separated (e.g., `"40HC\n20FT"`)
-- Parse with `value.split('\n').map(v => v.trim())`
-- Calculate each shipment independently, sum for grand total
+### Multi-Container / Multi-Shipment
+- All fields are newline-separated and **index-aligned** (e.g., `container_type: "40FT\n20FT"`, `qty: "2\n1"`, `pol: "SHENZHEN\nSHENZHEN"`)
+- Route fields (pol, pod, ready_date) are repeated per container entry so all fields have the same line count
+- A "shipment" = one route. Mixed container types on the same route produce multiple lines with the same pol/pod
+- Parse with `value.split('\n').map(v => v.trim())` — see `parseMultiValue()` in `lib/utils.ts`
+- Calculate each container entry independently, sum for grand total
 
 ---
 
@@ -176,11 +179,13 @@ Modal function `select_agent` in `automations/phase_3_select_and_quote.py` handl
   "selected_agent": "Agent Name",
   "selected_carrier": "COSCO",
   "shipment_number": "1",
-  "selected_by": "manager@company.com"
+  "selected_by": "manager@company.com",
+  "margin": 0.13,
+  "quote_threshold": 2
 }
 ```
 
-**Flow:** Receive → Update master_rfqs (status=Selected) → Get Selected Quote → Read Pricing Tables → Port or Door? → Cost calculation → Update master_rfqs (status=Quoted, prices) → Send Quotation Email → Notify Sales → Return pricing breakdown
+**Flow:** Receive → Update master_rfqs (status=Selected) → Get Selected Quote → Read Pricing Tables → Port or Door? → Cost calculation (using dynamic `margin` from dashboard settings) → Update master_rfqs (status=Quoted, prices) → Send Quotation Email → Notify Sales → Return pricing breakdown
 
 **Response:**
 ```json

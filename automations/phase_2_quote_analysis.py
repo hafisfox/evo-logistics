@@ -31,8 +31,8 @@ image = modal.Image.debian_slim(python_version="3.11").pip_install(
     "/root/token.json"
 )
 
-SPREADSHEET_ID = "1q3qSLQMvj_t7n_Iq2dM5CVL4gmWmAYWrVI55AMJNrog"
 ADMIN_EMAIL = "hafisjavad9@gmail.com"
+OWN_EMAIL = os.environ.get("OWN_EMAIL", "yunapink05@gmail.com")
 QUOTE_THRESHOLD = 2  # Minimum valid quotes before notifying manager
 
 # =====================================================================
@@ -561,7 +561,7 @@ def extract_agent_info(from_header: str) -> tuple:
 # =====================================================================
 @app.function(
     image=image,
-    secrets=[modal.Secret.from_dotenv(__file__)]
+    secrets=[modal.Secret.from_name("evo-logistics-env")]
 )
 @modal.fastapi_endpoint(method="POST")
 def gmail_push_phase2(_data: dict):
@@ -582,7 +582,7 @@ def gmail_push_phase2(_data: dict):
 @app.function(
     schedule=modal.Cron("0 0 */6 * *"),
     image=image,
-    secrets=[modal.Secret.from_dotenv(__file__)]
+    secrets=[modal.Secret.from_name("evo-logistics-env")]
 )
 def renew_gmail_watch():
     """Renews the Gmail push notification watch on INBOX."""
@@ -627,7 +627,6 @@ def _process_agent_quotes():
         received_at = headers_dict.get('date', '')
 
         # Self-sender guard: skip emails from our own address
-        OWN_EMAIL = "yunapink05@gmail.com"
         if OWN_EMAIL in sender.lower():
             print(f"Skipping self-sent email: {subject}")
             _gmail_call_with_backoff(

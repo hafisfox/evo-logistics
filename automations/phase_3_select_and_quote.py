@@ -225,6 +225,7 @@ def calculate_full_pricing(rfq, quote, do_charges, dest_charges, transp_charges,
     service_type = (rfq.get("service_type") or "port-to-port").lower().strip()
     is_port_only = service_type == "port-to-port"
     has_delivery = service_type in ("port-to-door", "door-to-door")
+    delivery_addrs = parse_multi_value(rfq.get("delivery_address")) if has_delivery else []
     shipment_count = max(len(container_types), len(quantities), len(prices))
 
     shipments = []
@@ -242,13 +243,15 @@ def calculate_full_pricing(rfq, quote, do_charges, dest_charges, transp_charges,
         price_str = prices[i] if i < len(prices) else prices[0]
         try:
             ocean_freight_usd = float(price_str)
-        except (ValueError, TypeError):
-            ocean_freight_usd = 0
+            if ocean_freight_usd <= 0:
+                raise ValueError(f"Ocean freight must be positive, got {price_str}")
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"Invalid ocean freight price '{price_str}' for shipment {i+1}: {e}")
 
         if is_port_only:
             result = calculate_port_price(ocean_freight_usd, qty, margin)
         else:
-            delivery_addr = rfq.get("delivery_address") if has_delivery else None
+            delivery_addr = (delivery_addrs[i] if i < len(delivery_addrs) else delivery_addrs[0]) if delivery_addrs else None
             result = calculate_door_price(
                 ocean_freight_usd, qty, ct, carrier,
                 delivery_addr, do_charges, dest_charges, transp_charges,
@@ -420,7 +423,7 @@ def _notify_sales(gmail_service, rfq_id, final_price_aed, final_price_usd, custo
 # =====================================================================
 @app.function(
     image=image,
-    secrets=[modal.Secret.from_dotenv(__file__)]
+    secrets=[modal.Secret.from_name("evo-logistics-env")]
 )
 @modal.fastapi_endpoint(method="POST")
 def select_agent(request: SelectAgentRequest) -> dict:
@@ -515,7 +518,7 @@ def _find_selected_quote(all_quotes: list, request: SelectAgentRequest) -> dict:
     for q in all_quotes:
         if q.get("rfq_id") != request.rfq_id:
             continue
-        if (q.get("agent_name") or "").strip() != request.selected_agent.strip():
+        if (q.get("agent_name") or "").strip().lower() != request.selected_agent.strip().lower():
             continue
         if (q.get("carrier") or "").upper().strip() != request.selected_carrier.upper().strip():
             continue

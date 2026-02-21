@@ -40,7 +40,9 @@
 |---------|-----------|-------|
 | Gmail | `token.json` (OAuth 2.0 via `authenticate_google.py`) | Push notifications (via Pub/Sub) + SMTP send + label management |
 | Supabase | `SUPABASE_SERVICE_ROLE_KEY` | RFQ logging, quote aggregation, pricing tables, status tracking |
-| OpenAI | `.env` (`OPENAI_API_KEY`) | Email classification, data extraction, rate parsing |
+| OpenAI | `OPENAI_API_KEY` | Email classification, data extraction, rate parsing |
+| Modal | `evo-logistics-env` (named secret) | All env vars for serverless automation functions |
+| System | `OWN_EMAIL` | System's Gmail address — used for self-reply guards and Gmail query filters |
 
 **Supabase Tables:**
 - **master_rfqs** — enquiry records with status
@@ -137,8 +139,7 @@ PRICING & QUOTATION
 
 **AI Extraction Targets:**
 - POL (Port of Loading) / POD (Port of Discharge)
-- Container type & quantity (see section 5 for valid types)
-- Cargo type and special requirements
+- Containers list: array of `{qty, type}` items per shipment (see section 5 for valid types)
 - Cargo readiness date and time
 - Incoterm requirements
 - Pickup address / Delivery address
@@ -160,9 +161,11 @@ PRICING & QUOTATION
 - Thread-level deduplication: known threads from `master_rfqs` are loaded at start of each run; threads in terminal states (Processing, Parse_Error, Quoted, Customer_Replied) are skipped without calling OpenAI; threads needing data (Missing_Port_Data, Missing_Door_Data) are still processed as followups using the existing RFQ ID
 - Customer replies to `Quoted` or `Followed_Up` RFQs automatically update status to `Customer_Replied` to prevent duplicate follow-ups
 - Recursive MIME tree extraction handles plain text, HTML tables, and nested multipart emails
-- AI extraction uses strict field definitions (qty = container count, type = container code only, service_type = one of 4 valid values)
-- Pydantic validators coerce OpenAI response types (string → list for pod_hint, string → int for qty)
-- Handles multi-shipment requests (different container types, same route)
+- AI extraction outputs `containers` array per shipment (each item has `qty` = int, `type` = container code). A shipment is defined by its route (origin→destination), not by container type.
+- Mixed container types on the same route → single shipment with multiple container items (e.g., "2x40FT + 1x20FT" = 1 shipment)
+- Different routes → separate shipments
+- Pydantic validators coerce OpenAI response types (string → list for pod_hint, string → int for container qty)
+- Containers are flattened to newline-separated `container_type` and `qty` fields in Supabase, with route fields repeated per container entry for index alignment
 - Port name conversion (see section 5 for mappings)
 
 ## 8. Agent RFQ Automation
