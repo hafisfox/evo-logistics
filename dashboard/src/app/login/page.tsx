@@ -17,9 +17,16 @@ const getURL = () => {
 };
 
 export default async function LoginPage(props: {
-    searchParams: Promise<{ callbackUrl?: string; error?: string }>;
+    searchParams: Promise<{ callbackUrl?: string; error?: string; code?: string; message?: string }>;
 }) {
     const searchParams = await props.searchParams;
+
+    // If Supabase falls back to the Site URL, middleware redirects /?code=... to /login?code=...
+    // We catch the code here and forward it to the proper callback route.
+    if (searchParams.code) {
+        redirect(`/auth/callback?code=${searchParams.code}&next=${searchParams.callbackUrl || "/"}`);
+    }
+
     const supabase = await createClient();
     const { data: { session } } = await supabase.auth.getSession();
 
@@ -89,6 +96,16 @@ export default async function LoginPage(props: {
                 </div>
 
                 <div className="grid gap-6">
+                    {searchParams.error && (
+                        <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-md text-red-400 text-sm text-center">
+                            {searchParams.error}
+                        </div>
+                    )}
+                    {searchParams.message && (
+                        <div className="p-3 bg-cyan-500/10 border border-cyan-500/50 rounded-md text-cyan-400 text-sm text-center">
+                            {searchParams.message}
+                        </div>
+                    )}
                     <form action={handleEmailSignIn}>
                         <div className="grid gap-4">
                             <div className="grid gap-2">
