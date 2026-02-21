@@ -135,13 +135,13 @@ def generate_rfq_id(thread_id: str = "") -> str:
 # =====================================================================
 # EMAIL CLASSIFICATION
 # =====================================================================
-def classify_email(openai_client, subject: str, sender: str, body_preview: str) -> str:
+def classify_email(modal_llm_client, subject: str, sender: str, body_preview: str) -> str:
     """Classify email into categories using AI. Returns category string."""
     input_text = f"Subject: {subject}\nFrom: {sender}\nBody: {body_preview[:800]}"
 
     try:
-        response = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+        response = modal_llm_client.chat.completions.create(
+            model="zai-org/GLM-5-FP8",
             messages=[
                 {"role": "system", "content": (
                     "Classify this email into exactly ONE category. Reply with ONLY the category name.\n\n"
@@ -865,7 +865,11 @@ def _process_incoming_rfqs():
     # Pre-load known RFQ threads for deduplication
     known_threads = _load_known_threads(supabase)
 
-    openai_client = openai.Client(api_key=os.environ["OPENAI_API_KEY"])
+    openai_client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    modal_llm_client = openai.OpenAI(
+        base_url="https://api.us-west-2.modal.direct/v1",
+        api_key=os.environ.get("MODAL_LLM_API_KEY", "missing_modal_key")
+    )
 
     processed_msg_ids = set()  # Guard against double-processing in same invocation
 
@@ -908,14 +912,15 @@ def _process_incoming_rfqs():
             print(f"WARNING: Body extraction empty, using snippet: {email_body[:200]}")
 
         print(f"Processing email: {subject} from {sender}")
-        print(f"Email body length: {len(email_body)} chars | Preview: {email_body[:300]}")
+        body_preview = email_body[:300] # Use a preview for logging
+        print(f"Email body length: {len(email_body)} chars | Preview: {body_preview}")
 
         # 2. CLASSIFY EMAIL
-        category = classify_email(openai_client, subject, sender, email_body)
-        print(f"Email classified as: {category}")
+        email_category = classify_email(modal_llm_client, subject, sender, body_preview)
+        print(f"[{msg_id}] Classification: {email_category}")
 
-        if category in ('agent_rate_reply', 'booking_confirmation', 'out_of_scope'):
-            print(f"Skipping email (category: {category}): {subject}")
+        if email_category in ('agent_rate_reply', 'booking_confirmation', 'out_of_scope'):
+            print(f"Skipping email (category: {email_category}): {subject}")
             # Mark non-RFQ emails as read so we don't process them again
             try:
                 _gmail_call_with_backoff(
