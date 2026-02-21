@@ -14,11 +14,11 @@ Browser  ──POST──> Next.js API Routes  ──>  Modal.com Webhooks (writ
 | Layer | Technology |
 |-------|-----------|
 | Framework | Next.js 14+ (App Router, TypeScript) |
-| Styling | Tailwind CSS + shadcn/ui |
+| Styling | Tailwind CSS + shadcn/ui + next-themes (Light/Dark mode) |
 | Data Fetching | TanStack Query v5 (polling + caching) |
 | Tables | TanStack Table v8 |
 | Charts | Recharts |
-| Auth | NextAuth.js (Google OAuth) |
+| Auth | Supabase Auth (`@supabase/ssr`) with Multi-Tenant RLS |
 | State | Zustand (UI state only) |
 | Deployment | Vercel |
 
@@ -62,6 +62,7 @@ Browser  ──POST──> Next.js API Routes  ──>  Modal.com Webhooks (writ
 | Column | Type | Description |
 |--------|------|-------------|
 | rfq_id | string | `RFQ-YYYYMMDD-XXX` |
+| user_id | uuid | References `auth.users(id)` for Row Level Security |
 | thread_id | string | Gmail thread ID |
 | customer_email | string | |
 | status | enum | Processing, Missing_Port_Data, Missing_Door_Data, Parse_Error, Selected, Quoted, Reminded, Followed_Up, Customer_Replied |
@@ -85,6 +86,7 @@ Browser  ──POST──> Next.js API Routes  ──>  Modal.com Webhooks (writ
 | Column | Type | Description |
 |--------|------|-------------|
 | rfq_id | string | Links to master_rfqs |
+| user_id | uuid | References `auth.users(id)` for Row Level Security |
 | match | string | `rfq_id_agentEmail_shipmentNumber` (upsert key — one row per agent per container entry) |
 | agent_name | string | |
 | agent_email | string | |
@@ -232,11 +234,11 @@ SUPABASE_SERVICE_ROLE_KEY=
 MODAL_WEBHOOK_SELECT_AGENT=
 MODAL_WEBHOOK_SECRET=
 
-# NextAuth
-NEXTAUTH_SECRET=
-NEXTAUTH_URL=
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
+# NextAuth (Legacy - Removed)
+# NEXTAUTH_SECRET=
+# NEXTAUTH_URL=
+# GOOGLE_CLIENT_ID=
+# GOOGLE_CLIENT_SECRET=
 ```
 
 ---

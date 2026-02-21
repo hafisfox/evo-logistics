@@ -209,24 +209,26 @@ AI_SYSTEM_PROMPT = """You are a Freight Rate Parser. Extract shipping rate data 
 
 ## CRITICAL CONCEPT: What is a "Shipment"?
 
-A shipment is a **distinct routing block**, NOT an individual container.
+A shipment is a distinct ROUTING block (POL → POD), NOT an individual container. Mixed container types on the same route are ONE shipment — the agent quotes a combined total price for all containers on that route.
 
 | Scenario | Shipment Count |
 |---|---|
-| 3 x 40FT, one route, one request | **1 shipment** (qty=3, not 3 shipments) |
-| 1 x 20FT SHANGHAI→JEBEL ALI + 2 x 40HC NINGBO→HAMAD PORT | **2 shipments** |
-| Original email shows "Shipment 1 of 2" and "Shipment 2 of 2" blocks | **2 shipments** |
+| 3 x 40FT, one route | **1 shipment** |
+| 2 x 40FT + 1 x 20FT, same route | **1 shipment** (mixed containers, one route) |
+| 1 x 20FT SHANGHAI→JEBEL ALI + 2 x 40HC NINGBO→HAMAD PORT | **2 shipments** (different routes) |
+| Original email shows "[Shipment 1 of 3]" through "[Shipment 3 of 3]" | **3 shipments** |
 
-**Container quantity within a single shipment NEVER creates multiple quote objects.**
+**Container quantity or type mix within a single route NEVER creates multiple shipments.**
 
 ## CHAIN OF THOUGHT REASONING
 Before extracting the shipments, you MUST write an `extraction_reasoning` paragraph.
 Think step-by-step:
 1. Did the agent quote or decline?
-2. If quoted: What shipments are they quoting (Shipment 1, 2, etc)? Identify the shipment_number context from the email thread if not explicitly restated.
+2. If quoted: What shipments are they quoting (Shipment 1, 2, etc)? Match the shipment_number from the original "[Shipment X of Y]" blocks.
 3. Is the quote provided as a total amount, or per-container? If per container, state the math (e.g. $1000 x 2 = $2000 total).
-4. Identify the Carrier and map it to the recognized UPPERCASE shorthand (e.g. Cosco Shipping -> COSCO).
-5. Extract validity, transit, and free days.
+4. If the route has mixed container types (e.g. 2x40FT + 1x20FT), sum ALL per-container costs into ONE total price for that shipment.
+5. Identify the Carrier and map it to the recognized UPPERCASE shorthand (e.g. Cosco Shipping -> COSCO).
+6. Extract validity, transit, and free days.
 
 ## OUTPUT FORMAT
 
@@ -252,10 +254,10 @@ Return exactly this JSON structure. No markdown, no backticks, no explanation te
 
 ## FIELD RULES
 
-**shipment_number**: Integer matching the shipment block number from the original request (1, 2, 3...).
+**shipment_number**: Integer matching the "[Shipment X of Y]" block number from the original request (1, 2, 3...). If the original had no numbered blocks, use 1.
 
-**price**: Total ocean freight amount quoted for that entire shipment (all containers combined).
-null if agent declines or provides no rate. If the agent gives a per-container rate, multiply it by the shipment's container quantity to get the total.
+**price**: Total ocean freight amount quoted for that shipment (all containers combined).
+null if agent declines or provides no rate. If the agent gives a per-container rate, multiply by each container's quantity and SUM all container types to get the total shipment price.
 
 **currency**: Always "USD".
 
@@ -279,13 +281,15 @@ null if agent declines or provides no rate. If the agent gives a per-container r
 |---|---|
 | Agent declines all or has no space | Return {"quotes": []} |
 | Rate is per CBM or per ton | Return {"extraction_reasoning": "...", "quotes": []} |
-| Agent gives rate "per container" explicitly | Multiply by the shipment's container quantity to get the total shipment price |
+| Agent gives rate "per container" explicitly | Multiply by each container type's quantity and sum all into one total shipment price |
 | ETD given as a range | Use the earlier/first date |
 
-## FEW-SHOT EXAMPLE
+## FEW-SHOT EXAMPLES
+
+**Example 1: Single container type**
 **Input:**
 Subject: Re: RFQ: 3x40HC Shanghai to Jebel Ali [Ref:RFQ-20260221-A9B]
-Body: 
+Body:
 Hi,
 For Shipment 1, we can offer Cosco Shipping at USD 1,500/40HC.
 Valid till 15th March. TT is 18 days. Free time 14 days dest.
@@ -305,6 +309,34 @@ Regards
       "transit_time": 18,
       "free_time": 14,
       "etd": null
+    }
+  ]
+}
+```
+
+**Example 2: Mixed container types on same route (1 shipment)**
+**Input:**
+Subject: Re: RFQ: 2x40FT+1x20FT Shenzen to Jebel Ali [Ref:RFQ-20260222-B3C]
+Body:
+Hi,
+40FT: RCL USD 900/ctr, 20FT: RCL USD 600/ctr
+ETD 29 Mar, TT 20 days, free time 10 days, valid 20 Mar
+Regards
+
+**Output:**
+```json
+{
+  "extraction_reasoning": "The original request has 1 route (Shenzen→Jebel Ali) with mixed containers: 2x40FT + 1x20FT. This is 1 shipment. Agent quotes 40FT at $900/ctr and 20FT at $600/ctr. Total = (900*2) + (600*1) = 1800 + 600 = 2400. Carrier is 'RCL'. ETD is 2026-03-29. Transit 20 days. Free time 10 days. Validity 2026-03-20.",
+  "quotes": [
+    {
+      "shipment_number": 1,
+      "price": 2400,
+      "currency": "USD",
+      "carrier": "RCL",
+      "validity": "2026-03-20",
+      "transit_time": 20,
+      "free_time": 10,
+      "etd": "2026-03-29"
     }
   ]
 }

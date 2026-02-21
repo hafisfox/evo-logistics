@@ -1119,8 +1119,8 @@ def _process_incoming_rfqs():
             # 4. Validate and normalize each shipment
             shipments = [validate_shipment(s.model_dump(), i) for i, s in enumerate(extracted.shipments)]
             is_multi = extracted.multi or len(shipments) > 1
-            # count = total container entries across all shipments (for Phase 2/3 compatibility)
-            count = sum(len(s['containers']) for s in shipments) or 1
+            # count = number of route-level shipments (1 row per route in agent_outbound_log)
+            count = len(shipments) or 1
 
             # 5. Determine routing action
             action = determine_routing_action(shipments)
@@ -1139,12 +1139,13 @@ def _process_incoming_rfqs():
                 return dates[0] if dates else None
 
             def _safe_text(val):
-                """Return None if value is TBD/empty."""
+                """Return value for DB, preserving newline-separated multi-values."""
                 if not val or not isinstance(val, str):
                     return None
-                # Take first non-TBD line for single-value columns stored in DB
-                first = val.split('\n')[0].strip()
-                return None if first.upper() in ('TBD', '', 'N/A') else first
+                stripped = val.strip()
+                if not stripped or stripped.upper() in ('TBD', 'N/A'):
+                    return None
+                return stripped
 
             # 6. Prepare common sheet data
             sheet_row = {

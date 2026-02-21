@@ -39,15 +39,17 @@
 | Service | Credential | Usage |
 |---------|-----------|-------|
 | Gmail | `token.json` (OAuth 2.0 via `authenticate_google.py`) | Push notifications (via Pub/Sub) + SMTP send + label management |
-| Supabase | `SUPABASE_SERVICE_ROLE_KEY` | RFQ logging, quote aggregation, pricing tables, status tracking |
+| Supabase | `SUPABASE_SERVICE_ROLE_KEY` / RLS Auth | RFQ logging, quote aggregation, pricing tables, status tracking, multi-tenant row-level security |
+| Auth | Supabase Auth (Email & Google) | Secure session management (`@supabase/ssr`), magic links, OAuth |
 | OpenAI | `OPENAI_API_KEY` | Email classification, data extraction, rate parsing |
 | Modal | `evo-logistics-env` (named secret) | All env vars for serverless automation functions |
 | System | `OWN_EMAIL` | System's Gmail address — used for self-reply guards and Gmail query filters |
 
-**Supabase Tables:**
-- **master_rfqs** — enquiry records with status
-- **agent_outbound_log** — all agent quotes (refId, agent, carrier, price, ETD, transit, validity)
-- **do_charges** — document and container charges lookup
+**Supabase Tables (RLS Enabled):**
+- **master_rfqs** — enquiry records with status (scoped by `user_id`)
+- **agent_outbound_log** — all agent quotes (scoped by `user_id`)
+- **agents** — agent directory (scoped by `user_id`)
+- **do_charges** — document and container charges lookup (globally readable)
 - **destination_charges** — UAE port fees
 - **transportation_charges** — distance-based transport costs
 
@@ -161,11 +163,11 @@ PRICING & QUOTATION
 - Thread-level deduplication: known threads from `master_rfqs` are loaded at start of each run; threads in terminal states (Processing, Parse_Error, Quoted, Customer_Replied) are skipped without calling OpenAI; threads needing data (Missing_Port_Data, Missing_Door_Data) are still processed as followups using the existing RFQ ID
 - Customer replies to `Quoted` or `Followed_Up` RFQs automatically update status to `Customer_Replied` to prevent duplicate follow-ups
 - Recursive MIME tree extraction handles plain text, HTML tables, and nested multipart emails
-- AI extraction outputs `containers` array per shipment (each item has `qty` = int, `type` = container code). A shipment is defined by its route (origin→destination), not by container type.
-- Mixed container types on the same route → single shipment with multiple container items (e.g., "2x40FT + 1x20FT" = 1 shipment)
-- Different routes → separate shipments
+- AI extraction outputs `containers` array per shipment (each item has `qty` = int, `type` = container code)
+- Mixed container types on the same route are flattened into separate shipment entries (e.g., "2x40FT + 1x20FT" = 2 entries). Each container type gets its own numbered "[Shipment X of Y]" block in agent outreach emails.
+- Different routes → separate shipments (also flattened per container type)
 - Pydantic validators coerce OpenAI response types (string → list for pod_hint, string → int for container qty)
-- Containers are flattened to newline-separated `container_type` and `qty` fields in Supabase, with route fields repeated per container entry for index alignment
+- Containers are flattened to newline-separated `container_type` and `qty` fields in Supabase, with route fields repeated per container entry for index alignment. Full multi-line values are preserved in the DB (not truncated to the first entry).
 - Port name conversion (see section 5 for mappings)
 
 ## 8. Agent RFQ Automation
@@ -207,10 +209,11 @@ PRICING & QUOTATION
 | Validity | Quote expiry date |
 
 **Multi-shipment handling:**
-- Parses multiple shipments per agent reply
+- Parses multiple shipments per agent reply (each container type = separate shipment)
 - Handles multiple carrier options per shipment
 - Outputs ONE item per carrier option per shipment for the database
 - Distinguishes bundled pricing (one price for all) vs per-shipment pricing
+- Mixed container types (e.g. 40FT + 20FT) generate separate quote objects per shipment number
 
 **Carrier name normalization:** see section 5 for full list
 
@@ -223,7 +226,7 @@ PRICING & QUOTATION
 - Manager has **final approval and override authority**
 - Reviews AI recommendations via email notification / dashboard
 - Selects which agent to use based on experience + AI ranking
-- System **locks selected rate** for all downstream calculation
+- System **locks selected rate** for all downstream calculation (collects all shipment quotes from the selected agent/carrier automatically)
 - All steps after selection are **fully automatic**
 - Complete audit trail maintained for every decision
 
@@ -269,7 +272,7 @@ PRICING & QUOTATION
   - Quotation validity period
 - **Automated follow-up** sent after 24 hours if no customer response (executed by `check_customer_followups` cron in `scheduled_tasks.py`, changing status to `Followed_Up`)
 - Customer replies stop further follow-ups by setting status to `Customer_Replied`
-- Internal sales team notified after quotation sent
+- Internal sales team notified after quotation sent (enriched with route, containers, agent, service type, and pricing breakdown)
 
 ## 15. AI Learning Engine (Phase 6 — Planned)
 

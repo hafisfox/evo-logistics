@@ -395,18 +395,54 @@ def _send_quotation_email(gmail_service, customer_email, thread_id, rfq_id, rfq_
     print(f"Quotation email sent to {customer_email} on thread {thread_id}")
 
 
-def _notify_sales(gmail_service, rfq_id, final_price_aed, final_price_usd, customer_email, carrier):
-    """Send notification email to sales team after quotation."""
+def _notify_sales(gmail_service, rfq_id, rfq_data, pricing, customer_email, carrier, agent_name):
+    """Send enriched notification email to sales team after quotation."""
     sales_email = "hafisjavad9@gmail.com"
-    subject = f"Quotation Sent - {rfq_id} - AED {final_price_aed:,.0f}"
-    body_html = (
-        f"<h3>Quotation Sent for {rfq_id}</h3>"
-        f"<ul>"
-        f"<li><strong>Customer:</strong> {customer_email}</li>"
-        f"<li><strong>Carrier:</strong> {carrier}</li>"
-        f"<li><strong>Final Price:</strong> AED {final_price_aed:,.0f} (USD {final_price_usd:,.2f})</li>"
-        f"</ul>"
-    )
+    total_aed = pricing["grand_total_aed"]
+    total_usd = pricing["grand_total_usd"]
+
+    # Build shipment rows for the breakdown table
+    rows_html = ""
+    for s in pricing["shipments"]:
+        rows_html += (
+            f"<tr>"
+            f"<td style='padding:6px 10px;border:1px solid #e0e0e0;'>{s.get('pol','N/A')} &rarr; {s.get('pod','N/A')}</td>"
+            f"<td style='padding:6px 10px;border:1px solid #e0e0e0;'>{s.get('qty',1)}x{s.get('container_type','N/A')}</td>"
+            f"<td style='padding:6px 10px;border:1px solid #e0e0e0;'>{s.get('carrier','N/A')}</td>"
+            f"<td style='padding:6px 10px;border:1px solid #e0e0e0;text-align:right;'>AED {s['final_price_aed']:,.0f}</td>"
+            f"</tr>"
+        )
+
+    service_type = rfq_data.get("service_type", "port-to-port")
+    ready_date = rfq_data.get("ready_date", "N/A")
+
+    subject = f"Quotation Sent - {rfq_id} - AED {total_aed:,.0f}"
+    body_html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;">
+        <h3 style="color:#1a56db;">Quotation Sent for {rfq_id}</h3>
+        <table style="border-collapse:collapse;margin:10px 0;">
+            <tr><td style="padding:4px 10px;color:#666;">Customer</td><td style="padding:4px 10px;font-weight:bold;">{customer_email}</td></tr>
+            <tr><td style="padding:4px 10px;color:#666;">Agent</td><td style="padding:4px 10px;font-weight:bold;">{agent_name}</td></tr>
+            <tr><td style="padding:4px 10px;color:#666;">Carrier</td><td style="padding:4px 10px;font-weight:bold;">{carrier}</td></tr>
+            <tr><td style="padding:4px 10px;color:#666;">Service</td><td style="padding:4px 10px;">{service_type}</td></tr>
+            <tr><td style="padding:4px 10px;color:#666;">Ready Date</td><td style="padding:4px 10px;">{ready_date}</td></tr>
+        </table>
+
+        <h4 style="margin-top:16px;">Shipment Breakdown</h4>
+        <table style="width:100%;border-collapse:collapse;margin:8px 0;">
+            <tr style="background:#f3f4f6;">
+                <th style="padding:6px 10px;border:1px solid #e0e0e0;text-align:left;">Route</th>
+                <th style="padding:6px 10px;border:1px solid #e0e0e0;text-align:left;">Containers</th>
+                <th style="padding:6px 10px;border:1px solid #e0e0e0;text-align:left;">Carrier</th>
+                <th style="padding:6px 10px;border:1px solid #e0e0e0;text-align:right;">Price</th>
+            </tr>
+            {rows_html}
+            <tr style="font-weight:bold;background:#f9fafb;">
+                <td colspan="3" style="padding:6px 10px;border:1px solid #e0e0e0;text-align:right;">Total</td>
+                <td style="padding:6px 10px;border:1px solid #e0e0e0;text-align:right;">AED {total_aed:,.0f} (USD {total_usd:,.2f})</td>
+            </tr>
+        </table>
+    </div>"""
 
     message = (
         f"To: {sales_email}\n"
@@ -458,10 +494,19 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
     }).eq("rfq_id", request.rfq_id).execute()
     print(f"Updated RFQ status to Selected, agent: {request.selected_agent}")
 
-    # 3. Find the selected quote in agent_outbound_log
+    # 3. Find ALL quotes from the selected agent/carrier across all shipments
     all_quotes = _get_by_filter(supabase, "agent_outbound_log", "rfq_id", request.rfq_id)
-    quote_data = _find_selected_quote(all_quotes, request)
-    print(f"Found quote: carrier={quote_data.get('carrier')}, price={quote_data.get('price')}")
+    selected_quotes = _find_all_selected_quotes(all_quotes, request)
+    primary_quote = selected_quotes[0]
+    print(f"Found {len(selected_quotes)} quote(s): carrier={primary_quote.get('carrier')}, "
+          f"prices={[q.get('price') for q in selected_quotes]}")
+
+    # Merge prices/carriers from all shipment quotes for the pricing engine
+    quote_for_pricing = {
+        **primary_quote,
+        "price": "\n".join(str(q.get("price", "0")) for q in selected_quotes),
+        "carrier": "\n".join(q.get("carrier", "N/A") for q in selected_quotes),
+    }
 
     # 4. Read pricing lookup tables directly as dicts
     do_charges = _get_table(supabase, "do_charges")
@@ -470,10 +515,10 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
 
     # 5. Calculate pricing
     pricing = calculate_full_pricing(
-        rfq_data, 
-        quote_data, 
-        do_charges, 
-        dest_charges, 
+        rfq_data,
+        quote_for_pricing,
+        do_charges,
+        dest_charges,
         transp_charges,
         request.margin
     )
@@ -496,14 +541,14 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
 
     if thread_id and customer_email:
         _send_quotation_email(gmail_service, customer_email, thread_id,
-                              request.rfq_id, rfq_data, pricing, quote_data)
+                              request.rfq_id, rfq_data, pricing, primary_quote)
     else:
         print(f"Warning: Missing thread_id or customer_email, skipping quotation email")
 
     # 8. Notify sales team
-    _notify_sales(gmail_service, request.rfq_id, pricing["grand_total_aed"],
-                  pricing["grand_total_usd"], customer_email or "N/A",
-                  request.selected_carrier)
+    _notify_sales(gmail_service, request.rfq_id, rfq_data, pricing,
+                  customer_email or "N/A", request.selected_carrier,
+                  request.selected_agent)
 
     return {
         "success": True,
@@ -513,23 +558,33 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
     }
 
 
-def _find_selected_quote(all_quotes: list, request: SelectAgentRequest) -> dict:
-    """Find the matching quote from agent_outbound_log (list of dicts from Supabase)."""
-    for q in all_quotes:
-        if q.get("rfq_id") != request.rfq_id:
-            continue
-        if (q.get("agent_name") or "").strip().lower() != request.selected_agent.strip().lower():
-            continue
-        if (q.get("carrier") or "").upper().strip() != request.selected_carrier.upper().strip():
-            continue
-        if str(q.get("shipment_number", "1")) != str(request.shipment_number):
-            continue
-        return q
+def _find_all_selected_quotes(all_quotes: list, request: SelectAgentRequest) -> list:
+    """Find ALL quotes from the selected agent/carrier across all shipment numbers.
 
-    raise Exception(
-        f"Quote not found for rfq_id={request.rfq_id}, agent={request.selected_agent}, "
-        f"carrier={request.selected_carrier}, shipment={request.shipment_number}"
-    )
+    For multi-container RFQs (e.g. 2x40FT + 1x20FT), each container type is a
+    separate shipment entry with its own quote. This collects all of them so the
+    pricing engine can price each container type correctly.
+    """
+    agent_lower = request.selected_agent.strip().lower()
+    carrier_upper = request.selected_carrier.upper().strip()
+
+    matches = [
+        q for q in all_quotes
+        if q.get("rfq_id") == request.rfq_id
+        and (q.get("agent_name") or "").strip().lower() == agent_lower
+        and (q.get("carrier") or "").upper().strip() == carrier_upper
+        and q.get("status") == "Received"
+    ]
+
+    if not matches:
+        raise Exception(
+            f"No quotes found for rfq_id={request.rfq_id}, agent={request.selected_agent}, "
+            f"carrier={request.selected_carrier}"
+        )
+
+    # Sort by shipment_number to maintain index alignment with container types
+    matches.sort(key=lambda q: int(q.get("shipment_number", "1")))
+    return matches
 
 
 if __name__ == "__main__":
