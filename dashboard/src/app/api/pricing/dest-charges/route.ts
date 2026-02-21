@@ -10,8 +10,7 @@ export async function GET() {
     if (error) throw error;
 
     // Map snake_case columns back to original Google Sheets format expected by frontend
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mappedData = ((data || []) as any[]).map(d => ({
+    const mappedData = ((data || []) as Record<string, unknown>[]).map(d => ({
       "Charge Type": d.charge_type,
       Basis: d.basis,
       "20FT": d["20FT"],

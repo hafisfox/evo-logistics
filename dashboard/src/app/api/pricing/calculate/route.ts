@@ -21,16 +21,14 @@ export async function POST(request: Request) {
     if (transpRes.error) throw transpRes.error;
 
     // Map snake_case columns back to original Google Sheets format expected by pricing engine
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mappedDestCharges = ((destRes.data || []) as any[]).map(d => ({
+    const mappedDestCharges = ((destRes.data || []) as Record<string, unknown>[]).map(d => ({
       "Charge Type": d.charge_type,
       Basis: d.basis,
       "20FT": d["20FT"],
       "40FT": d["40FT"]
     }));
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mappedTranspCharges = ((transpRes.data || []) as any[]).map(t => ({
+    const mappedTranspCharges = ((transpRes.data || []) as Record<string, unknown>[]).map(t => ({
       Place: t.place,
       Price: t.price
     }));

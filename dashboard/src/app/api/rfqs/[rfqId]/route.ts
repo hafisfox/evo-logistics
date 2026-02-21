@@ -21,9 +21,7 @@ export async function GET(
     const quotesRes = await supabase.from('agent_outbound_log').select('*').eq('rfq_id', rfqId);
     if (quotesRes.error) throw quotesRes.error;
 
-    // By casting the whole response from any, we bypass the never type error
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rfqData = rfqRes.data as any;
+    const rfqData = rfqRes.data as unknown as MasterRFQ;
 
     if (!rfqData) {
       return NextResponse.json({ error: "RFQ not found" }, { status: 404 });

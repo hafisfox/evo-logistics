@@ -980,18 +980,15 @@ def _process_incoming_rfqs():
         )
 
         try:
-            response = openai_client.chat.completions.create(
+            response = openai_client.beta.chat.completions.parse(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": AI_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt}
                 ],
-                response_format={"type": "json_object"}
+                response_format=ExtractedRFQs
             )
-            raw_content = response.choices[0].message.content
-            print(f"OpenAI response: {raw_content[:500]}")
-            raw_data = json.loads(raw_content)
-            extracted = ExtractedRFQs(**raw_data)
+            extracted = response.choices[0].message.parsed
 
             if not extracted.shipments:
                 print(f"No logistics data found in email: {subject}. Handling as fallback.")

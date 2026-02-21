@@ -629,20 +629,15 @@ def _process_agent_quotes():
         )
 
         try:
-            response = openai_client.chat.completions.create(
+            response = openai_client.beta.chat.completions.parse(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": AI_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt}
                 ],
-                response_format={"type": "json_object"}
+                response_format=ExtractedQuotes
             )
-            raw_content = response.choices[0].message.content
-            print(f"AI response: {raw_content[:500]}")
-
-            # Parse JSON
-            raw_data = json.loads(raw_content)
-            extracted = ExtractedQuotes(**raw_data)
+            extracted = response.choices[0].message.parsed
 
             now_str = datetime.now(UAE_TZ).strftime('%Y-%m-%d %I:%M %p')
 
