@@ -3,8 +3,10 @@ import re
 import json
 import base64
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional
+
+UAE_TZ = timezone(timedelta(hours=4))
 
 import modal
 from pydantic import BaseModel, Field, field_validator
@@ -17,20 +19,20 @@ from googleapiclient.discovery import build
 # =====================================================================
 app = modal.App("rfq-analyzer-phase-1")
 
-image = modal.Image.debian_slim().pip_install(
+image = modal.Image.debian_slim(python_version="3.11").pip_install(
     "google-api-python-client",
     "google-auth-httplib2",
     "google-auth-oauthlib",
     "openai",
     "pydantic",
-    "fastapi"
+    "fastapi",
+    "supabase"
 ).add_local_file(
     os.path.join(os.path.dirname(__file__), "token.json"),
     "/root/token.json"
 )
 
-SPREADSHEET_ID = "1q3qSLQMvj_t7n_Iq2dM5CVL4gmWmAYWrVI55AMJNrog"
-ADMIN_EMAIL = "pricingailog@gmail.com"
+ADMIN_EMAIL = "hafisjavad9@gmail.com"
 
 # =====================================================================
 # CONSTANTS
@@ -99,22 +101,26 @@ def get_google_services():
 
     credentials = Credentials.from_authorized_user_file(
         "/root/token.json",
-        scopes=[
-            "https://www.googleapis.com/auth/gmail.modify",
-            "https://www.googleapis.com/auth/spreadsheets"
-        ]
+        scopes=["https://www.googleapis.com/auth/gmail.modify"]
     )
 
     gmail_service = build('gmail', 'v1', credentials=credentials)
-    sheets_service = build('sheets', 'v4', credentials=credentials)
-    return gmail_service, sheets_service
+    return gmail_service
+
+def get_supabase_client():
+    from supabase import create_client
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not supabase_url or not supabase_key:
+        raise Exception("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.")
+    return create_client(supabase_url, supabase_key)
 
 # =====================================================================
 # RFQ ID GENERATION — Format: RFQ-YYYYMMDD-XXX
 # =====================================================================
 def generate_rfq_id(thread_id: str = "") -> str:
     """Generate unique RFQ ID from timestamp + thread hash."""
-    now = datetime.now()
+    now = datetime.now(UAE_TZ)
     date_part = now.strftime('%Y%m%d')
     seed = f"{now.timestamp()}-{thread_id}"
     h = hashlib.md5(seed.encode()).hexdigest()
@@ -156,10 +162,10 @@ def classify_email(openai_client, subject: str, sender: str, body_preview: str) 
         category = response.choices[0].message.content.strip().lower()
         valid_categories = ['agent_rate_reply', 'customer_rfq', 'customer_followup',
                            'booking_confirmation', 'out_of_scope']
-        return category if category in valid_categories else 'customer_rfq'
+        return category if category in valid_categories else 'out_of_scope'
     except Exception as e:
-        print(f"Classification error: {e}, defaulting to customer_rfq")
-        return 'customer_rfq'
+        print(f"Classification error: {e}, defaulting to out_of_scope")
+        return 'out_of_scope'
 
 # =====================================================================
 # DATA NORMALIZERS (ported from n8n Parse & Route)
@@ -577,95 +583,37 @@ def send_fallback_admin_notification(gmail_service, rfq_id, email_meta, email_bo
     send_email(gmail_service, ADMIN_EMAIL, subject, body_html, content_type="text/html")
 
 # =====================================================================
-# GOOGLE SHEETS HELPERS
+# SUPABASE HELPERS
 # =====================================================================
-def _col_letter(index):
-    """Convert 0-based column index to Excel-style letter."""
-    result = ""
-    while True:
-        result = chr(index % 26 + ord('A')) + result
-        index = index // 26 - 1
-        if index < 0:
-            break
-    return result
+def _read_table(supabase, table_name):
+    """Read all rows from a table and return (headers, data_rows) arrays."""
+    result = supabase.table(table_name).select("*").execute()
+    data = result.data
+    
+    if not data:
+        return [], []
+        
+    headers = list(data[0].keys())
+    rows = []
+    
+    for row_dict in data:
+        row_arr = [row_dict.get(h, "") for h in headers]
+        rows.append([str(v) if v is not None else "" for v in row_arr])
+        
+    return headers, rows
 
-def _read_sheet(sheets_service, sheet_name):
-    """Read all rows from a sheet and return (headers, data_rows)."""
-    result = sheets_service.spreadsheets().values().get(
-        spreadsheetId=SPREADSHEET_ID, range=f'{sheet_name}!A:Z'
-    ).execute()
-    rows = result.get('values', [])
-    headers = rows[0] if rows else []
-    return headers, rows[1:] if len(rows) > 1 else []
-
-def _upsert_row(sheets_service, sheet_name, match_column, match_value, row_data: dict):
-    """Upsert a row: update if match_column==match_value exists, else append."""
-    headers, data_rows = _read_sheet(sheets_service, sheet_name)
-
-    if not headers:
-        # Sheet is empty, create headers + data
-        all_keys = list(row_data.keys())
-        sheets_service.spreadsheets().values().append(
-            spreadsheetId=SPREADSHEET_ID, range=f'{sheet_name}!A:A',
-            valueInputOption="USER_ENTERED",
-            body={'values': [all_keys, [row_data.get(k, '') for k in all_keys]]}
-        ).execute()
-        return
-
-    # Find match column index
-    if match_column not in headers:
-        # Column doesn't exist, just append
-        row = [row_data.get(h, '') for h in headers]
-        sheets_service.spreadsheets().values().append(
-            spreadsheetId=SPREADSHEET_ID, range=f'{sheet_name}!A:A',
-            valueInputOption="USER_ENTERED", body={'values': [row]}
-        ).execute()
-        return
-
-    match_idx = headers.index(match_column)
-
-    # Search for existing row
-    for i, data_row in enumerate(data_rows):
-        if len(data_row) > match_idx and data_row[match_idx] == match_value:
-            # Found — update individual cells
-            sheet_row = i + 2  # +1 header, +1 for 1-based
-            for key, value in row_data.items():
-                if key in headers:
-                    col_idx = headers.index(key)
-                    cell_ref = f"{sheet_name}!{_col_letter(col_idx)}{sheet_row}"
-                    sheets_service.spreadsheets().values().update(
-                        spreadsheetId=SPREADSHEET_ID, range=cell_ref,
-                        valueInputOption="USER_ENTERED",
-                        body={'values': [[value if value is not None else '']]}
-                    ).execute()
-            return
-
-    # Not found — append
-    row = [row_data.get(h, '') for h in headers]
-    sheets_service.spreadsheets().values().append(
-        spreadsheetId=SPREADSHEET_ID, range=f'{sheet_name}!A:A',
-        valueInputOption="USER_ENTERED", body={'values': [row]}
-    ).execute()
-
-def _append_row(sheets_service, sheet_name, row_data: dict):
-    """Simple append a row to a sheet."""
-    headers, _ = _read_sheet(sheets_service, sheet_name)
-    if not headers:
-        return
-    row = [row_data.get(h, '') for h in headers]
-    sheets_service.spreadsheets().values().append(
-        spreadsheetId=SPREADSHEET_ID, range=f'{sheet_name}!A:A',
-        valueInputOption="USER_ENTERED", body={'values': [row]}
-    ).execute()
+def _upsert_row(supabase, table_name, row_data: dict):
+    """Upsert a row: insert or update via Supabase"""
+    supabase.table(table_name).upsert(row_data).execute()
 
 # =====================================================================
 # AGENT OUTREACH
 # =====================================================================
-def _send_agent_outreach(gmail_service, sheets_service, rfq_id, shipments, is_multi, count,
+def _send_agent_outreach(gmail_service, supabase, rfq_id, shipments, is_multi, count,
                          action, pricing_content, subject_line):
-    """Read active agents, send rate request emails, log to Agent_Outbound_Log."""
+    """Read active agents, send rate request emails, log to agent_outbound_log."""
     # 1. Read active agents from Agents sheet
-    headers, data_rows = _read_sheet(sheets_service, "Agents")
+    headers, data_rows = _read_table(supabase, "agents")
     if not headers:
         print("No Agents sheet or no headers found")
         return
@@ -684,7 +632,7 @@ def _send_agent_outreach(gmail_service, sheets_service, rfq_id, shipments, is_mu
         return
 
     print(f"Sending rate requests to {len(agents)} active agents")
-    now_str = datetime.now().strftime('%Y-%m-%d %I:%M %p')
+    now_str = datetime.now(UAE_TZ).strftime('%Y-%m-%d %I:%M %p')
 
     for agent in agents:
         agent_email = agent.get('email', '')
@@ -726,7 +674,7 @@ def _send_agent_outreach(gmail_service, sheets_service, rfq_id, shipments, is_mu
             'sent_at': now_str,
         }
         try:
-            _upsert_row(sheets_service, "Agent_Outbound_Log", "match", match_key, log_data)
+            _upsert_row(supabase, "agent_outbound_log", log_data)
         except Exception as e:
             print(f"Failed to log outreach for {agent_email}: {e}")
 
@@ -812,6 +760,24 @@ Must be one of: 20FT, 40FT, 40HC, 40HQ, 45FT, 20OT, 40OT
 - shipments array must always contain at least one object"""
 
 # =====================================================================
+# HELPERS
+# =====================================================================
+def _gmail_call_with_backoff(request, retries=4, base_delay=2):
+    """Execute a Gmail API request with exponential backoff on rate limit errors."""
+    import time
+    from googleapiclient.errors import HttpError
+    for attempt in range(retries):
+        try:
+            return request.execute()
+        except HttpError as e:
+            if e.resp.status in (429, 403) and attempt < retries - 1:
+                delay = base_delay * (2 ** attempt)
+                print(f"Gmail rate limit hit (attempt {attempt+1}), retrying in {delay}s...")
+                time.sleep(delay)
+            else:
+                raise
+
+# =====================================================================
 # GMAIL PUSH WEBHOOK
 # =====================================================================
 @app.function(
@@ -820,8 +786,17 @@ Must be one of: 20FT, 40FT, 40HC, 40HQ, 45FT, 20OT, 40OT
 )
 @modal.fastapi_endpoint(method="POST")
 def gmail_push_phase1(_data: dict):
-    """Triggered by Gmail push notification via Google Cloud Pub/Sub."""
-    _process_incoming_rfqs()
+    """Triggered by Gmail push notification via Google Cloud Pub/Sub.
+    
+    IMPORTANT: Always return 200 to Pub/Sub — retries cause rate limit storms.
+    Processing errors are caught internally.
+    """
+    try:
+        _process_incoming_rfqs()
+    except Exception as e:
+        # Log but don't re-raise: returning 200 prevents Pub/Sub from retrying
+        print(f"CRITICAL ERROR in _process_incoming_rfqs: {e}")
+        import traceback; traceback.print_exc()
     return {"status": "ok"}
 
 # =====================================================================
@@ -834,7 +809,7 @@ def gmail_push_phase1(_data: dict):
 )
 def renew_gmail_watch():
     """Renews the Gmail push notification watch on INBOX."""
-    gmail_service, _ = get_google_services()
+    gmail_service = get_google_services()
     topic = os.environ["GOOGLE_PUBSUB_TOPIC"]
     result = gmail_service.users().watch(userId='me', body={
         'topicName': topic,
@@ -845,10 +820,10 @@ def renew_gmail_watch():
 # =====================================================================
 # DEDUPLICATION: Load known threads to avoid reprocessing
 # =====================================================================
-def _load_known_threads(sheets_service):
-    """Load thread_id -> {rfq_id, status} from Master_RFQs for deduplication."""
+def _load_known_threads(supabase):
+    """Load thread_id -> {rfq_id, status} from master_rfqs for deduplication."""
     try:
-        headers, data_rows = _read_sheet(sheets_service, "Master_RFQs")
+        headers, data_rows = _read_table(supabase, "master_rfqs")
         if not headers:
             return {}
         tid_idx = headers.index('thread_id') if 'thread_id' in headers else -1
@@ -872,30 +847,37 @@ def _load_known_threads(sheets_service):
 # CORE EMAIL PROCESSING LOGIC
 # =====================================================================
 def _process_incoming_rfqs():
-    gmail_service, sheets_service = get_google_services()
+    gmail_service = get_google_services()
+    supabase = get_supabase_client()
 
-    # 1. Fetch unread emails
-    results = gmail_service.users().messages().list(userId='me', q='is:unread').execute()
+    # 1. Fetch unread inbox emails only
+    # BUG-4 Fix: Exclude agent rate replies (Phase 2 handles those) and our own sent auto-replies
+    results = gmail_service.users().messages().list(
+        userId='me',
+        q='is:unread -subject:"Ref: RFQ-" -from:yunapink05@gmail.com'
+    ).execute()
     messages = results.get('messages', [])
 
     if not messages:
-        print("No new emails to process.")
+        print("No new unread emails to process.")
         return
 
     # Pre-load known RFQ threads for deduplication
-    known_threads = _load_known_threads(sheets_service)
+    known_threads = _load_known_threads(supabase)
 
     openai_client = openai.Client(api_key=os.environ["OPENAI_API_KEY"])
 
+    processed_msg_ids = set()  # Guard against double-processing in same invocation
+
     for msg in messages:
         msg_id = msg['id']
-        email_data = gmail_service.users().messages().get(userId='me', id=msg_id, format='full').execute()
-        thread_id = email_data.get('threadId')
+        if msg_id in processed_msg_ids:
+            continue
 
-        # Mark as read IMMEDIATELY to prevent duplicate processing
-        gmail_service.users().messages().modify(
-            userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}
-        ).execute()
+        email_data = _gmail_call_with_backoff(
+            gmail_service.users().messages().get(userId='me', id=msg_id, format='full')
+        )
+        thread_id = email_data.get('threadId')
 
         # Extract metadata
         headers_dict = {h['name'].lower(): h['value'] for h in email_data['payload']['headers']}
@@ -903,6 +885,21 @@ def _process_incoming_rfqs():
         sender = headers_dict.get('from', '')
         # RFC 2822 Message-ID is needed for proper threading (not the Gmail internal ID)
         rfc_message_id = headers_dict.get('message-id', '')
+
+        # FIX-1: Hard guard — skip any email sent by our own address to prevent reply loops
+        OWN_EMAIL = "yunapink05@gmail.com"
+        if OWN_EMAIL in sender.lower():
+            print(f"Skipping self-sent email: {subject}")
+            try:
+                _gmail_call_with_backoff(
+                    gmail_service.users().messages().modify(
+                        userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}
+                    )
+                )
+            except Exception:
+                pass
+            processed_msg_ids.add(msg_id)
+            continue
 
         # Extract body text
         email_body = extract_email_body(email_data['payload'])
@@ -919,11 +916,16 @@ def _process_incoming_rfqs():
 
         if category in ('agent_rate_reply', 'booking_confirmation', 'out_of_scope'):
             print(f"Skipping email (category: {category}): {subject}")
-            # Re-mark agent rate replies as UNREAD so Phase 2 can pick them up
-            if category == 'agent_rate_reply':
-                gmail_service.users().messages().modify(
-                    userId='me', id=msg_id, body={'addLabelIds': ['UNREAD']}
-                ).execute()
+            # Mark non-RFQ emails as read so we don't process them again
+            try:
+                _gmail_call_with_backoff(
+                    gmail_service.users().messages().modify(
+                        userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}
+                    )
+                )
+            except Exception:
+                pass
+            processed_msg_ids.add(msg_id)
             continue
 
         # DEDUPLICATION: Check if this thread was already processed
@@ -933,9 +935,27 @@ def _process_incoming_rfqs():
             if existing_status in ('Missing_Port_Data', 'Missing_Door_Data'):
                 # Thread needs more data — allow processing as followup
                 print(f"Thread {thread_id} needs data ({existing_status}), processing as followup")
+            elif existing_status in ('Quoted', 'Followed_Up') and category == 'customer_followup':
+                print(f"Customer replied to quoted thread {thread_id}. Updating status.")
+                _upsert_row(
+                    supabase, 
+                    "master_rfqs", 
+                    {'thread_id': thread_id, 'status': 'Customer_Replied'}
+                )
+                continue
             else:
-                # Already processed (Processing, Parse_Error, Quoted, etc.) — skip
+                # Already processed (Processing, Parse_Error, etc.) — skip
                 print(f"Thread {thread_id} already processed (status: {existing_status}), skipping")
+                # Mark as read so it doesn't appear in future runs
+                try:
+                    _gmail_call_with_backoff(
+                        gmail_service.users().messages().modify(
+                            userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}
+                        )
+                    )
+                except Exception:
+                    pass
+                processed_msg_ids.add(msg_id)
                 continue
 
         # Only process customer_rfq and customer_followup
@@ -949,7 +969,7 @@ def _process_incoming_rfqs():
 
         # Use existing RFQ ID for followups, generate new for fresh threads
         rfq_id = existing['rfq_id'] if existing and existing['rfq_id'] else generate_rfq_id(thread_id)
-        now_str = datetime.now().strftime('%Y-%m-%d %I:%M %p')
+        now_str = datetime.now(UAE_TZ).strftime('%Y-%m-%d %I:%M %p')
 
         # 3. Ask OpenAI to extract structured data
         prompt = (
@@ -976,7 +996,7 @@ def _process_incoming_rfqs():
             if not extracted.shipments:
                 print(f"No logistics data found in email: {subject}. Handling as fallback.")
                 # Fallback: log + reply + notify admin
-                _handle_fallback(gmail_service, sheets_service, rfq_id, sender, thread_id,
+                _handle_fallback(gmail_service, supabase, rfq_id, sender, thread_id,
                                 rfc_message_id, subject, email_body, email_meta, now_str)
                 continue
 
@@ -992,20 +1012,38 @@ def _process_incoming_rfqs():
 
             print(f"Routing action: {action}, has_door: {has_door}")
 
+            def _safe_date(val):
+                """Return None if the value is missing, 'TBD', or contains 'TBD'."""
+                if not val or not isinstance(val, str):
+                    return None
+                # For multi-shipment: take the first valid YYYY-MM-DD date found
+                import re as _re
+                dates = _re.findall(r'\d{4}-\d{2}-\d{2}', val)
+                return dates[0] if dates else None
+
+            def _safe_text(val):
+                """Return None if value is TBD/empty."""
+                if not val or not isinstance(val, str):
+                    return None
+                # Take first non-TBD line for single-value columns stored in DB
+                first = val.split('\n')[0].strip()
+                return None if first.upper() in ('TBD', '', 'N/A') else first
+
             # 6. Prepare common sheet data
             sheet_row = {
                 'thread_id': thread_id,
                 'rfq_id': rfq_id,
                 'customer_email': sender,
                 'received_at': now_str,
-                'pol': sheets_data['pol'],
-                'pod': sheets_data['pod'],
-                'container_type': sheets_data['container_type'],
-                'qty': sheets_data['qty'],
-                'ready_date': sheets_data['ready_date'],
+                'pol': _safe_text(sheets_data['pol']),
+                'pod': _safe_text(sheets_data['pod']),
+                'container_type': _safe_text(sheets_data['container_type']),
+                'qty': _safe_text(sheets_data['qty']),
+                'ready_date': _safe_date(sheets_data['ready_date']),
+                'delivery_deadline': _safe_date(sheets_data.get('delivery_deadline')),
                 'service_type': sheets_data['service_type'],
-                'pickup_address': sheets_data['pickup_address'] or '',
-                'delivery_address': sheets_data['delivery_address'] or '',
+                'pickup_address': sheets_data['pickup_address'] or None,
+                'delivery_address': sheets_data['delivery_address'] or None,
             }
 
             # Build formatted content
@@ -1017,25 +1055,25 @@ def _process_incoming_rfqs():
             # 7. Route based on action
             if action == 'complete':
                 sheet_row['status'] = 'Processing'
-                _upsert_row(sheets_service, "Master_RFQs", "thread_id", thread_id, sheet_row)
+                _upsert_row(supabase, "master_rfqs", sheet_row)
                 print(f"RFQ {rfq_id} is complete. Sending agent outreach...")
 
                 # Send rate requests to agents
                 _send_agent_outreach(
-                    gmail_service, sheets_service, rfq_id, shipments,
+                    gmail_service, supabase, rfq_id, shipments,
                     is_multi, count, action, pricing_content, subject_line
                 )
 
             elif action == 'need_door_data':
                 sheet_row['status'] = 'Missing_Door_Data'
-                _upsert_row(sheets_service, "Master_RFQs", "thread_id", thread_id, sheet_row)
+                _upsert_row(supabase, "master_rfqs", sheet_row)
                 send_door_data_reply(gmail_service, sender, thread_id, rfc_message_id,
                                      subject, current_details, missing_formatted)
                 print(f"Door data reply sent for thread: {thread_id}")
 
             elif action == 'need_port_data':
                 sheet_row['status'] = 'Missing_Port_Data'
-                _upsert_row(sheets_service, "Master_RFQs", "thread_id", thread_id, sheet_row)
+                _upsert_row(supabase, "master_rfqs", sheet_row)
                 send_port_data_reply(gmail_service, sender, thread_id, rfc_message_id,
                                      subject, current_details, missing_formatted)
                 print(f"Port data reply sent for thread: {thread_id}")
@@ -1044,13 +1082,25 @@ def _process_incoming_rfqs():
             print(f"Error processing message {msg_id}: {e}")
             # Handle as fallback
             try:
-                _handle_fallback(gmail_service, sheets_service, rfq_id, sender, thread_id,
+                _handle_fallback(gmail_service, supabase, rfq_id, sender, thread_id,
                                 rfc_message_id, subject, email_body, email_meta, now_str)
             except Exception as e2:
                 print(f"Fallback handler also failed for {msg_id}: {e2}")
+        finally:
+            # Mark as read AFTER processing, regardless of outcome
+            # Doing this here (not at start) prevents an immediate Pub/Sub re-trigger
+            processed_msg_ids.add(msg_id)
+            try:
+                _gmail_call_with_backoff(
+                    gmail_service.users().messages().modify(
+                        userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}
+                    )
+                )
+            except Exception as mark_err:
+                print(f"Warning: could not mark msg {msg_id} as read: {mark_err}")
 
 
-def _handle_fallback(gmail_service, sheets_service, rfq_id, sender, thread_id,
+def _handle_fallback(gmail_service, supabase, rfq_id, sender, thread_id,
                      rfc_message_id, subject, email_body, email_meta, now_str):
     """Handle emails that couldn't be parsed: log, reply to customer, notify admin."""
     # Log to sheets with Parse_Error status
@@ -1059,12 +1109,14 @@ def _handle_fallback(gmail_service, sheets_service, rfq_id, sender, thread_id,
         'rfq_id': rfq_id,
         'customer_email': sender,
         'status': 'Parse_Error',
+        'pol': 'UNKNOWN',
+        'service_type': 'port-to-port',
         'received_at': now_str,
     }
     try:
-        _upsert_row(sheets_service, "Master_RFQs", "thread_id", thread_id, sheet_row)
+        _upsert_row(supabase, "master_rfqs", sheet_row)
     except Exception as e:
-        print(f"Failed to log fallback to sheets: {e}")
+        print(f"Failed to log fallback to Supabase: {e}")
 
     # Reply to customer with fallback template
     try:

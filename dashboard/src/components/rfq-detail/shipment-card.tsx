@@ -42,6 +42,15 @@ export function ShipmentCard({ rfq }: ShipmentCardProps) {
               <p className="text-sm font-medium">{formatDate(rfq.ready_date)}</p>
             </div>
           </div>
+          {rfq.delivery_deadline && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Delivery Deadline</p>
+              <div className="flex items-center gap-1">
+                <Calendar className="h-3.5 w-3.5 text-red-500" />
+                <p className="text-sm font-medium text-red-600">{formatDate(rfq.delivery_deadline)}</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {(rfq.pickup_address || rfq.delivery_address) && (

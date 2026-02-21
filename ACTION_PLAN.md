@@ -29,15 +29,16 @@
 
 | Layer | Technology |
 |-------|-----------|
-| Orchestration | Modal.com (serverless Python) |
+| Orchestration | Modal.com (serverless Python 3.11) |
 | AI/LLM | OpenAI GPT (Python SDK + Pydantic) |
 | Email | Gmail API (OAuth 2.0 Web Application flow) |
 | Email Trigger | Google Cloud Pub/Sub (Gmail push notifications) |
 | Database | Supabase PostgreSQL |
+| Background Jobs | Modal.com Cron (`scheduled_tasks.py`) |
 
 | Service | Credential | Usage |
 |---------|-----------|-------|
-| Gmail | `token.json` (OAuth 2.0 via `authenticate_google.py`, account: `yunapink05@gmail.com`) | Push notifications (via Pub/Sub) + SMTP send + label management |
+| Gmail | `token.json` (OAuth 2.0 via `authenticate_google.py`) | Push notifications (via Pub/Sub) + SMTP send + label management |
 | Supabase | `SUPABASE_SERVICE_ROLE_KEY` | RFQ logging, quote aggregation, pricing tables, status tracking |
 | OpenAI | `.env` (`OPENAI_API_KEY`) | Email classification, data extraction, rate parsing |
 
@@ -68,6 +69,7 @@ evo_logistics/
 │   ├── phase_1_request_analysis.py              # Webhook: RFQ parsing & validation (via Pub/Sub push)
 │   ├── phase_2_quote_analysis.py                # Webhook: Quote analysis & pricing (via Pub/Sub push)
 │   ├── phase_3_select_and_quote.py              # Webhook: Agent selection, pricing & quotation (via Dashboard)
+│   ├── scheduled_tasks.py                       # Cron: 3h Agent Reminders & 24h Customer Follow-ups
 │   └── authenticate_google.py                   # Generates OAuth 2.0 token.json
 ├── dashboard/                                   # Next.js pricing dashboard (frontend)
 │   └── src/
@@ -158,8 +160,10 @@ PRICING & QUOTATION
 
 **Key Logic:**
 - Emails marked as read immediately upon fetch to prevent duplicate Pub/Sub processing
-- Agent rate replies are re-marked as UNREAD after classification so Phase 2 can pick them up
-- Thread-level deduplication: known threads from `master_rfqs` are loaded at start of each run; threads in terminal states (Processing, Parse_Error, Quoted) are skipped without calling OpenAI; threads needing data (Missing_Port_Data, Missing_Door_Data) are still processed as followups using the existing RFQ ID
+- Self-reply guard: emails from the system's own address are silently skipped to prevent infinite processing loops
+- Agent rate replies are skipped completely and handled securely by Phase 2 (Inbox Partitioning)
+- Thread-level deduplication: known threads from `master_rfqs` are loaded at start of each run; threads in terminal states (Processing, Parse_Error, Quoted, Customer_Replied) are skipped without calling OpenAI; threads needing data (Missing_Port_Data, Missing_Door_Data) are still processed as followups using the existing RFQ ID
+- Customer replies to `Quoted` or `Followed_Up` RFQs automatically update status to `Customer_Replied` to prevent duplicate follow-ups
 - Recursive MIME tree extraction handles plain text, HTML tables, and nested multipart emails
 - AI extraction uses strict field definitions (qty = container count, type = container code only, service_type = one of 4 valid values)
 - Pydantic validators coerce OpenAI response types (string → list for pod_hint, string → int for qty)
@@ -175,16 +179,17 @@ PRICING & QUOTATION
 - Standardized RFQ format across all agents for easy comparison
 - System tracks delivery and read receipts
 
-## 9. China Time Logic (UTC+8)
+## 9. China Time Logic & Automated Reminders
 
 | Scenario | Wait Period | Automated Reminder |
 |----------|-------------|-------------------|
-| **Business hours** (Mon–Fri 09:00–17:00 CST) | 4 hours from RFQ send | At 3 hours mark, if <4 quotes received |
+| **Business hours** (Mon–Fri 09:00–17:00 CST) | 4 hours from RFQ send | At 3 hours mark, if <2 quotes received |
 | **After hours** (after 17:00 / weekends) | Until next business day 11:00 CST | At 10:00 next business day |
 
 - System converts all times to Shanghai timezone (UTC+8)
 - Calculates next available business day automatically
-- Handles public holidays awareness (planned)
+- Implemented as a 15-minute cron job (`check_agent_reminders` in `scheduled_tasks.py`)
+- Sends a quick "Any updates on this?" email mapped back to the original Thread ID, updating status to `Reminded`.
 
 ## 10. Agent Rate Analysis (Phase 2 Workflow)
 
@@ -264,8 +269,8 @@ PRICING & QUOTATION
   - Final price in AED (all-inclusive)
   - All exclusions and special conditions
   - Quotation validity period
-- **Automated follow-up** sent after 24 hours if no customer response
-- Customer response tracked and routed (acceptance / rejection / counter)
+- **Automated follow-up** sent after 24 hours if no customer response (executed by `check_customer_followups` cron in `scheduled_tasks.py`, changing status to `Followed_Up`)
+- Customer replies stop further follow-ups by setting status to `Customer_Replied`
 - Internal sales team notified after quotation sent
 
 ## 15. AI Learning Engine (Phase 6 — Planned)

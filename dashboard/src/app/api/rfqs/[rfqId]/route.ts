@@ -22,6 +22,7 @@ export async function GET(
     if (quotesRes.error) throw quotesRes.error;
 
     // By casting the whole response from any, we bypass the never type error
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rfqData = rfqRes.data as any;
 
     if (!rfqData) {

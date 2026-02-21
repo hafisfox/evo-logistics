@@ -1,8 +1,10 @@
 import os
 import math
 import base64
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional
+
+UAE_TZ = timezone(timedelta(hours=4))
 
 import modal
 from pydantic import BaseModel, Field
@@ -14,18 +16,17 @@ from googleapiclient.discovery import build
 # =====================================================================
 app = modal.App("select-and-quote-phase-3")
 
-image = modal.Image.debian_slim().pip_install(
+image = modal.Image.debian_slim(python_version="3.11").pip_install(
     "google-api-python-client",
     "google-auth-httplib2",
     "google-auth-oauthlib",
     "pydantic",
-    "fastapi"
+    "fastapi",
+    "supabase"
 ).add_local_file(
     os.path.join(os.path.dirname(__file__), "token.json"),
     "/root/token.json"
 )
-
-SPREADSHEET_ID = "1q3qSLQMvj_t7n_Iq2dM5CVL4gmWmAYWrVI55AMJNrog"
 
 # =====================================================================
 # REQUEST / RESPONSE MODELS
@@ -54,15 +55,19 @@ def get_google_services():
 
     credentials = Credentials.from_authorized_user_file(
         "/root/token.json",
-        scopes=[
-            "https://www.googleapis.com/auth/gmail.modify",
-            "https://www.googleapis.com/auth/spreadsheets"
-        ]
+        scopes=["https://www.googleapis.com/auth/gmail.modify"]
     )
 
     gmail_service = build('gmail', 'v1', credentials=credentials)
-    sheets_service = build('sheets', 'v4', credentials=credentials)
-    return gmail_service, sheets_service
+    return gmail_service
+
+def get_supabase_client():
+    from supabase import create_client
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not supabase_url or not supabase_key:
+        raise Exception("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.")
+    return create_client(supabase_url, supabase_key)
 
 # =====================================================================
 # PRICING ENGINE (Python port of dashboard/src/lib/pricing-engine.ts)
@@ -80,20 +85,6 @@ def parse_multi_value(value):
         return [v.strip() for v in value.split("\n")]
     return [value]
 
-
-def _parse_sheet_to_dicts(sheet_result):
-    """Convert raw sheet values to list of dicts using header row."""
-    rows = sheet_result.get('values', [])
-    if len(rows) < 2:
-        return []
-    headers = rows[0]
-    result = []
-    for row in rows[1:]:
-        d = {}
-        for i, h in enumerate(headers):
-            d[h] = row[i] if i < len(row) else None
-        result.append(d)
-    return result
 
 
 def get_do_col(container_type):
@@ -120,7 +111,10 @@ def get_do_charges_row(carrier, all_do):
     for row in all_do:
         if (row.get("carrier") or "").upper().strip() == c:
             return row
-    return all_do[0] if all_do else None
+    if all_do:
+        print(f"WARNING: Carrier '{c}' not found in DO Charges table, falling back to '{all_do[0].get('carrier', 'unknown')}'")
+        return all_do[0]
+    return None
 
 
 def calc_dest_charges(all_dest, col, qty):
@@ -279,55 +273,17 @@ def calculate_full_pricing(rfq, quote, do_charges, dest_charges, transp_charges)
 
 
 # =====================================================================
-# SHEETS HELPERS
+# SUPABASE HELPERS
 # =====================================================================
-def _col_letter(index):
-    """Convert 0-based column index to Excel-style letter (0=A, 25=Z, 26=AA)."""
-    result = ""
-    while True:
-        result = chr(index % 26 + ord('A')) + result
-        index = index // 26 - 1
-        if index < 0:
-            break
-    return result
+def _get_table(supabase, table_name):
+    """Fetch all rows from a Supabase table as a list of dicts."""
+    result = supabase.table(table_name).select("*").execute()
+    return result.data or []
 
-
-def _read_sheet(sheets_service, sheet_name):
-    """Read all rows from a sheet and return (headers, rows, raw_result)."""
-    result = sheets_service.spreadsheets().values().get(
-        spreadsheetId=SPREADSHEET_ID, range=f'{sheet_name}!A:Z'
-    ).execute()
-    rows = result.get('values', [])
-    headers = rows[0] if rows else []
-    return headers, rows[1:] if len(rows) > 1 else [], result
-
-
-def _find_rfq_row(headers, rows, rfq_id):
-    """Find the RFQ row index (0-based within data rows) and return it as a dict."""
-    try:
-        rfq_id_idx = headers.index("rfq_id")
-    except ValueError:
-        raise Exception("Column 'rfq_id' not found in Master_RFQs headers")
-
-    for i, row in enumerate(rows):
-        if len(row) > rfq_id_idx and row[rfq_id_idx] == rfq_id:
-            row_dict = {}
-            for j, h in enumerate(headers):
-                row_dict[h] = row[j] if j < len(row) else None
-            return i, row_dict
-
-    raise Exception(f"RFQ '{rfq_id}' not found in Master_RFQs")
-
-
-def _update_cell(sheets_service, sheet_name, row_index, col_index, value):
-    """Update a single cell. row_index is 1-based (header=1, first data=2)."""
-    cell_ref = f"{sheet_name}!{_col_letter(col_index)}{row_index}"
-    sheets_service.spreadsheets().values().update(
-        spreadsheetId=SPREADSHEET_ID,
-        range=cell_ref,
-        valueInputOption="USER_ENTERED",
-        body={'values': [[value]]}
-    ).execute()
+def _get_by_filter(supabase, table_name, column, value):
+    """Fetch rows matching a filter as a list of dicts."""
+    result = supabase.table(table_name).select("*").eq(column, value).execute()
+    return result.data or []
 
 
 # =====================================================================
@@ -350,6 +306,8 @@ def _build_quotation_html(rfq_id, rfq_data, pricing, quote_data):
     transit_time = quote_data.get("transit_time") or "TBC"
     free_time = quote_data.get("free_time") or "TBC"
     validity = quote_data.get("validity") or "TBC"
+    service_type = pricing["shipments"][0].get("service_type", "port-to-port") if pricing["shipments"] else "port-to-port"
+    service_label = service_type.replace("-", " to ").title()
 
     return f"""
     <div style="font-family:Arial,sans-serif;max-width:600px;">
@@ -374,6 +332,7 @@ def _build_quotation_html(rfq_id, rfq_data, pricing, quote_data):
 
         <h3 style="color:#374151;">Service Details</h3>
         <ul>
+            <li><strong>Service:</strong> {service_label}</li>
             <li><strong>ETD:</strong> {etd}</li>
             <li><strong>Transit Time:</strong> {transit_time} days</li>
             <li><strong>Free Time:</strong> {free_time} days</li>
@@ -382,7 +341,7 @@ def _build_quotation_html(rfq_id, rfq_data, pricing, quote_data):
 
         <h3 style="color:#374151;">Terms & Conditions</h3>
         <ul>
-            <li>Prices are all-inclusive (port-to-port) unless stated otherwise</li>
+            <li>Prices are all-inclusive ({service_label.lower()}) unless stated otherwise</li>
             <li>Subject to equipment and space availability at time of booking</li>
             <li>Customs clearance and documentation charges are excluded unless quoted</li>
             <li>Demurrage and detention charges apply beyond the free time period</li>
@@ -401,10 +360,16 @@ def _send_quotation_email(gmail_service, customer_email, thread_id, rfq_id, rfq_
     messages = thread.get('messages', [])
 
     reference_msg_id = ""
+    original_subject = ""
     if messages:
         last_msg = messages[-1]
         msg_headers = {h['name']: h['value'] for h in last_msg.get('payload', {}).get('headers', [])}
         reference_msg_id = msg_headers.get('Message-ID', '')
+        # Use the first message's subject for proper threading
+        first_msg_headers = {h['name']: h['value'] for h in messages[0].get('payload', {}).get('headers', [])}
+        original_subject = first_msg_headers.get('Subject', '')
+
+    reply_subject = f"Re: {original_subject}" if original_subject else f"Quotation - {rfq_id}"
 
     body_html = _build_quotation_html(rfq_id, rfq_data, pricing, quote_data)
 
@@ -412,7 +377,7 @@ def _send_quotation_email(gmail_service, customer_email, thread_id, rfq_id, rfq_
         f"To: {customer_email}\n"
         f"In-Reply-To: {reference_msg_id}\n"
         f"References: {reference_msg_id}\n"
-        f"Subject: Re: Quotation - {rfq_id}\n"
+        f"Subject: {reply_subject}\n"
         f"Content-Type: text/html; charset=utf-8\n\n{body_html}"
     )
 
@@ -435,7 +400,6 @@ def _notify_sales(gmail_service, rfq_id, final_price_aed, final_price_usd, custo
         f"<li><strong>Carrier:</strong> {carrier}</li>"
         f"<li><strong>Final Price:</strong> AED {final_price_aed:,.0f} (USD {final_price_usd:,.2f})</li>"
         f"</ul>"
-        f"<p><a href='https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit'>View in Sheets</a></p>"
     )
 
     message = (
@@ -470,51 +434,48 @@ def select_agent(request: SelectAgentRequest) -> dict:
 # CORE PROCESSING LOGIC
 # =====================================================================
 def _process_agent_selection(request: SelectAgentRequest) -> dict:
-    gmail_service, sheets_service = get_google_services()
+    gmail_service = get_google_services()
+    supabase = get_supabase_client()
 
-    # 1. Read Master_RFQs and find the RFQ
-    rfq_headers, rfq_rows, _ = _read_sheet(sheets_service, "Master_RFQs")
-    rfq_row_idx, rfq_data = _find_rfq_row(rfq_headers, rfq_rows, request.rfq_id)
-    rfq_sheet_row = rfq_row_idx + 2  # +1 for header, +1 for 1-based
+    # 1. Fetch the RFQ from Supabase
+    rfq_rows = _get_by_filter(supabase, "master_rfqs", "rfq_id", request.rfq_id)
+    if not rfq_rows:
+        raise Exception(f"RFQ '{request.rfq_id}' not found in master_rfqs")
+    rfq_data = rfq_rows[0]
 
-    print(f"Found RFQ {request.rfq_id} at sheet row {rfq_sheet_row}")
+    print(f"Found RFQ {request.rfq_id}")
 
     # 2. Update status to "Selected" and set selected_agent
-    status_col = rfq_headers.index("status")
-    agent_col = rfq_headers.index("selected_agent")
-    _update_cell(sheets_service, "Master_RFQs", rfq_sheet_row, status_col, "Selected")
-    _update_cell(sheets_service, "Master_RFQs", rfq_sheet_row, agent_col, request.selected_agent)
+    supabase.table("master_rfqs").update({
+        "status": "Selected",
+        "selected_agent": request.selected_agent
+    }).eq("rfq_id", request.rfq_id).execute()
     print(f"Updated RFQ status to Selected, agent: {request.selected_agent}")
 
-    # 3. Find the selected quote in Agent_Outbound_Log
-    quote_headers, quote_rows, _ = _read_sheet(sheets_service, "Agent_Outbound_Log")
-    quote_data = _find_selected_quote(quote_headers, quote_rows, request)
+    # 3. Find the selected quote in agent_outbound_log
+    all_quotes = _get_by_filter(supabase, "agent_outbound_log", "rfq_id", request.rfq_id)
+    quote_data = _find_selected_quote(all_quotes, request)
     print(f"Found quote: carrier={quote_data.get('carrier')}, price={quote_data.get('price')}")
 
-    # 4. Read pricing lookup tables
-    _, _, do_raw = _read_sheet(sheets_service, "DO Charges")
-    _, _, dest_raw = _read_sheet(sheets_service, "Destination Charges")
-    _, _, transp_raw = _read_sheet(sheets_service, "Transportation Charges")
-
-    do_charges = _parse_sheet_to_dicts(do_raw)
-    dest_charges = _parse_sheet_to_dicts(dest_raw)
-    transp_charges = _parse_sheet_to_dicts(transp_raw)
+    # 4. Read pricing lookup tables directly as dicts
+    do_charges = _get_table(supabase, "do_charges")
+    dest_charges = _get_table(supabase, "destination_charges")
+    transp_charges = _get_table(supabase, "transportation_charges")
 
     # 5. Calculate pricing
     pricing = calculate_full_pricing(rfq_data, quote_data, do_charges, dest_charges, transp_charges)
     print(f"Pricing calculated: AED {pricing['grand_total_aed']:,.0f} / USD {pricing['grand_total_usd']:,.2f}")
 
-    # 6. Update Master_RFQs with final pricing
-    now_str = datetime.now().strftime('%Y-%m-%d %I:%M %p')
-    price_aed_col = rfq_headers.index("final_price_aed")
-    price_usd_col = rfq_headers.index("final_price_usd")
-    quoted_at_col = rfq_headers.index("quoted_at")
+    # 6. Update master_rfqs with final pricing
+    now_str = datetime.now(UAE_TZ).strftime('%Y-%m-%d %I:%M %p')
 
-    _update_cell(sheets_service, "Master_RFQs", rfq_sheet_row, status_col, "Quoted")
-    _update_cell(sheets_service, "Master_RFQs", rfq_sheet_row, price_aed_col, pricing["grand_total_aed"])
-    _update_cell(sheets_service, "Master_RFQs", rfq_sheet_row, price_usd_col, pricing["grand_total_usd"])
-    _update_cell(sheets_service, "Master_RFQs", rfq_sheet_row, quoted_at_col, now_str)
-    print(f"Master_RFQs updated with pricing and status=Quoted")
+    supabase.table("master_rfqs").update({
+        "status": "Quoted",
+        "final_price_aed": pricing["grand_total_aed"],
+        "final_price_usd": pricing["grand_total_usd"],
+        "quoted_at": now_str
+    }).eq("rfq_id", request.rfq_id).execute()
+    print(f"master_rfqs updated with pricing and status=Quoted")
 
     # 7. Send quotation email on original thread
     thread_id = rfq_data.get("thread_id")
@@ -539,42 +500,21 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
     }
 
 
-def _find_selected_quote(headers, rows, request: SelectAgentRequest) -> dict:
-    """Find the matching quote from Agent_Outbound_Log."""
-    try:
-        rfq_id_idx = headers.index("rfq_id") if "rfq_id" in headers else None
-        match_idx = headers.index("match") if "match" in headers else None
-        carrier_idx = headers.index("carrier")
-        shipment_idx = headers.index("shipment_number") if "shipment_number" in headers else None
-    except ValueError as e:
-        raise Exception(f"Missing required column in Agent_Outbound_Log: {e}")
-
-    for row in rows:
-        # Match by rfq_id column if it exists, otherwise by match column prefix
-        rfq_match = False
-        if rfq_id_idx is not None and len(row) > rfq_id_idx:
-            rfq_match = row[rfq_id_idx] == request.rfq_id
-        elif match_idx is not None and len(row) > match_idx:
-            rfq_match = row[match_idx].startswith(request.rfq_id + "_")
-
-        if not rfq_match:
+def _find_selected_quote(all_quotes: list, request: SelectAgentRequest) -> dict:
+    """Find the matching quote from agent_outbound_log (list of dicts from Supabase)."""
+    for q in all_quotes:
+        if q.get("rfq_id") != request.rfq_id:
             continue
-
-        # Match carrier
-        if len(row) > carrier_idx and (row[carrier_idx] or "").upper().strip() == request.selected_carrier.upper().strip():
-            # Match shipment number if specified
-            if shipment_idx is not None and len(row) > shipment_idx:
-                if str(row[shipment_idx]) != str(request.shipment_number):
-                    continue
-
-            # Build dict from row
-            quote_dict = {}
-            for j, h in enumerate(headers):
-                quote_dict[h] = row[j] if j < len(row) else None
-            return quote_dict
+        if (q.get("agent_name") or "").strip() != request.selected_agent.strip():
+            continue
+        if (q.get("carrier") or "").upper().strip() != request.selected_carrier.upper().strip():
+            continue
+        if str(q.get("shipment_number", "1")) != str(request.shipment_number):
+            continue
+        return q
 
     raise Exception(
-        f"Quote not found for rfq_id={request.rfq_id}, "
+        f"Quote not found for rfq_id={request.rfq_id}, agent={request.selected_agent}, "
         f"carrier={request.selected_carrier}, shipment={request.shipment_number}"
     )
 

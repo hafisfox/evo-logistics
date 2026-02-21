@@ -1,0 +1,257 @@
+import os
+import base64
+from datetime import datetime, timezone, timedelta
+
+import modal
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+
+# =====================================================================
+# TIMEZONES
+# =====================================================================
+UAE_TZ = timezone(timedelta(hours=4))
+CHINA_TZ = timezone(timedelta(hours=8))
+
+# =====================================================================
+# MODAL APP DEFINITION
+# =====================================================================
+app = modal.App("scheduled-tasks")
+
+image = modal.Image.debian_slim(python_version="3.11").pip_install(
+    "google-api-python-client",
+    "google-auth-httplib2",
+    "google-auth-oauthlib",
+    "supabase"
+).add_local_file(
+    os.path.join(os.path.dirname(__file__), "token.json"),
+    "/root/token.json"
+)
+
+# =====================================================================
+# SECRETS
+# =====================================================================
+ADMIN_EMAIL = "hafisjavad9@gmail.com"
+
+# =====================================================================
+# GOOGLE APIS UTILITIES
+# =====================================================================
+def get_google_services():
+    """Initializes Google API clients securely via OAuth 2.0 token."""
+    if not os.path.exists("/root/token.json"):
+        raise Exception("Missing /root/token.json mount. Did you run authenticate_google.py?")
+
+    credentials = Credentials.from_authorized_user_file(
+        "/root/token.json",
+        scopes=["https://www.googleapis.com/auth/gmail.modify"]
+    )
+
+    gmail_service = build('gmail', 'v1', credentials=credentials)
+    return gmail_service
+
+def get_supabase_client():
+    from supabase import create_client
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not supabase_url or not supabase_key:
+        raise Exception("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.")
+    return create_client(supabase_url, supabase_key)
+
+# =====================================================================
+# SUPABASE HELPERS
+# =====================================================================
+def _get_table(supabase, table_name):
+    """Fetch all rows from a Supabase table as a list of dicts."""
+    result = supabase.table(table_name).select("*").execute()
+    return result.data or []
+
+def _get_by_filter(supabase, table_name, column, value):
+    """Fetch rows matching a filter as a list of dicts."""
+    result = supabase.table(table_name).select("*").eq(column, value).execute()
+    return result.data or []
+
+# =====================================================================
+# EMAIL SENDING HELPERS
+# =====================================================================
+def send_email(gmail_service, to_address: str, subject: str, body: str, content_type: str = "text/plain"):
+    ct_header = f"Content-Type: {content_type}; charset=utf-8\n" if content_type != "text/plain" else ""
+    raw_msg = f"To: {to_address}\n{ct_header}Subject: {subject}\n\n{body}"
+    b64_message = base64.urlsafe_b64encode(raw_msg.encode('utf-8')).decode('utf-8')
+    gmail_service.users().messages().send(userId='me', body={'raw': b64_message}).execute()
+
+def send_reply_email(gmail_service, to_address: str, thread_id: str, subject: str, body: str):
+    thread = gmail_service.users().threads().get(userId='me', id=thread_id).execute()
+    messages = thread.get('messages', [])
+
+    reference_msg_id = ""
+    if messages:
+        last_msg = messages[-1]
+        msg_headers = {h['name']: h['value'] for h in last_msg.get('payload', {}).get('headers', [])}
+        reference_msg_id = msg_headers.get('Message-ID', '')
+        
+    raw_msg = (
+        f"To: {to_address}\n"
+        f"In-Reply-To: {reference_msg_id}\n"
+        f"References: {reference_msg_id}\n"
+        f"Subject: Re: {subject}\n"
+        f"Content-Type: text/plain; charset=utf-8\n\n{body}"
+    )
+    b64_message = base64.urlsafe_b64encode(raw_msg.encode('utf-8')).decode('utf-8')
+    gmail_service.users().messages().send(userId='me', body={
+        'raw': b64_message,
+        'threadId': thread_id
+    }).execute()
+
+
+# =====================================================================
+# BUG-7: CHINA TIME LOGIC REMINDERS (Every 15 mins)
+# =====================================================================
+def _is_china_business_hours(dt: datetime) -> bool:
+    """Check if given datetime (in China timezone) is within Mon-Fri 09:00-17:00."""
+    return dt.weekday() < 5 and 9 <= dt.hour < 17
+
+def _get_reminder_target_time(sent_at_utc: datetime) -> datetime:
+    """
+    Given the time the RFQ was sent, calculate when the reminder should run.
+    - If sent during business hours: 3 hours later (if still in business hours)
+    - If sending after hours or 3 hours lands after 17:00: next business day at 10:00 AM
+    """
+    sent_at_cn = sent_at_utc.astimezone(CHINA_TZ)
+    
+    # Calculate initial 3 hour mark
+    target_cn = sent_at_cn + timedelta(hours=3)
+    
+    # If the target is during business hours, return it
+    if _is_china_business_hours(target_cn):
+        return target_cn
+    
+    # Target is out of hours. Move to next business day at 10:00 AM CST
+    next_day = sent_at_cn + timedelta(days=1)
+    
+    # If next_day is Saturday (5) or Sunday (6), advance to Monday
+    while next_day.weekday() >= 5:
+        next_day += timedelta(days=1)
+        
+    return next_day.replace(hour=10, minute=0, second=0, microsecond=0)
+
+@app.function(
+    schedule=modal.Cron("*/15 * * * *"),
+    image=image,
+    secrets=[modal.Secret.from_dotenv(__file__)]
+)
+def check_agent_reminders():
+    """Send agent reminders based on China business hours."""
+    gmail_service = get_google_services()
+    supabase = get_supabase_client()
+    
+    now_utc = datetime.now(timezone.utc)
+    
+    # Get all 'Processing' RFQ IDs
+    all_rfqs = _get_table(supabase, "master_rfqs")
+    processing_rfq_ids = {
+        row['rfq_id'] for row in all_rfqs
+        if row.get('status') == 'Processing' and row.get('rfq_id')
+    }
+                
+    if not processing_rfq_ids:
+        print("No active RFQs to process for reminders.")
+        return
+        
+    # Get all outbound log rows for those RFQs
+    all_agent_rows = _get_table(supabase, "agent_outbound_log")
+    reminders_sent = 0
+    
+    for row in all_agent_rows:
+        rfq_id = row.get('rfq_id', '')
+        status = row.get('status', '')
+        sent_at_str = row.get('sent_at', '')
+        agent_email = row.get('agent_email', '')
+        agent_name = row.get('agent_name', 'Agent')
+        
+        if rfq_id not in processing_rfq_ids or status != "Requested" or not sent_at_str or not agent_email:
+            continue
+            
+        try:
+            # Parse sent_at_str (UAE TIME: "%Y-%m-%d %I:%M %p")
+            sent_at_uae_naive = datetime.strptime(sent_at_str, "%Y-%m-%d %I:%M %p")
+            sent_at_uae = sent_at_uae_naive.replace(tzinfo=UAE_TZ)
+            sent_at_utc = sent_at_uae.astimezone(timezone.utc)
+            
+            target_time_utc = _get_reminder_target_time(sent_at_utc).astimezone(timezone.utc)
+            
+            if now_utc >= target_time_utc:
+                subject = f"REMINDER: Quote Request [Ref:{rfq_id}]"
+                body = (
+                    f"Dear {agent_name},\n\n"
+                    f"This is a gentle reminder regarding our rate request for RFQ {rfq_id}.\n"
+                    f"If you have already responded, please disregard this email. If not, we "
+                    f"would appreciate receiving your quotation as soon as possible.\n\n"
+                    f"Regards,\nPricing Team"
+                )
+                send_email(gmail_service, agent_email, subject, body)
+                
+                match_key = f"{rfq_id}_{agent_email}"
+                supabase.table("agent_outbound_log").update({"status": "Reminded"}).eq("match", match_key).execute()
+                print(f"Sent reminder for RFQ {rfq_id} to {agent_email}")
+                reminders_sent += 1
+                
+        except Exception as e:
+            print(f"Error processing reminder for RFQ {rfq_id} to {agent_email}: {e}")
+
+    print(f"Processed agent reminders. Sent {reminders_sent} reminders.")
+
+# =====================================================================
+# BUG-8: 24-HOUR CUSTOMER FOLLOW-UP (Hourly)
+# =====================================================================
+@app.function(
+    schedule=modal.Cron("0 * * * *"),
+    image=image,
+    secrets=[modal.Secret.from_dotenv(__file__)]
+)
+def check_customer_followups():
+    """Send follow-ups to customers 24 hours after quotation if no response."""
+    gmail_service = get_google_services()
+    supabase = get_supabase_client()
+    
+    now_uae = datetime.now(UAE_TZ)
+    
+    # Get all 'Quoted' RFQs
+    all_rfqs = _get_table(supabase, "master_rfqs")
+    followups_sent = 0
+    
+    for row in all_rfqs:
+        if row.get('status') != 'Quoted':
+            continue
+
+        quoted_at_str = row.get('quoted_at', '')
+        if not quoted_at_str:
+            continue
+
+        try:
+            quoted_at_naive = datetime.strptime(str(quoted_at_str)[:16], "%Y-%m-%d %H:%M")
+            quoted_at_uae = quoted_at_naive.replace(tzinfo=UAE_TZ)
+            
+            if now_uae >= quoted_at_uae + timedelta(hours=24):
+                rfq_id = row.get('rfq_id', '')
+                customer_email = row.get('customer_email', '')
+                thread_id = row.get('thread_id', '')
+                
+                subject = f"Quotation Status - {rfq_id}"
+                body = (
+                    f"Dear Customer,\n\n"
+                    f"We hope this email finds you well. This is a quick follow-up returning to our quotation for RFQ {rfq_id}.\n\n"
+                    f"Please feel free to reach out if you have any questions or if you want to proceed with the booking.\n\n"
+                    f"Best regards,\nPricing Team"
+                )
+                send_reply_email(gmail_service, customer_email, thread_id, subject, body)
+                
+                supabase.table("master_rfqs").update({"status": "Followed_Up"}).eq("rfq_id", rfq_id).execute()
+                print(f"Sent 24-hour follow-up for RFQ {rfq_id} to {customer_email}")
+                followups_sent += 1
+        except Exception as e:
+            rfq_id = row.get('rfq_id', 'Unknown')
+            print(f"Error processing follow-up for RFQ {rfq_id}: {e}")
+
+    print(f"Processed customer follow-ups. Sent {followups_sent} follow-ups.")
+
+if __name__ == "__main__":
+    app.serve()

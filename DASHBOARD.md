@@ -64,12 +64,13 @@ Browser  ──POST──> Next.js API Routes  ──>  Modal.com Webhooks (writ
 | rfq_id | string | `RFQ-YYYYMMDD-XXX` |
 | thread_id | string | Gmail thread ID |
 | customer_email | string | |
-| status | enum | Processing, Missing_Port_Data, Missing_Door_Data, Parse_Error, Selected, Quoted |
+| status | enum | Processing, Missing_Port_Data, Missing_Door_Data, Parse_Error, Selected, Quoted, Reminded, Followed_Up, Customer_Replied |
 | pol | string | Port of Loading (newline-separated for multi-shipment) |
 | pod | string | Port of Discharge |
 | container_type | string | 20FT, 40FT, 40HC, 40HQ, 45FT |
 | qty | string | Quantity per shipment |
 | ready_date | string | YYYY-MM-DD |
+| delivery_deadline | string? | Required delivery date YYYY-MM-DD |
 | service_type | string | port-to-port, door-to-port, port-to-door, door-to-door |
 | pickup_address | string? | For door-to-* services |
 | delivery_address | string? | For *-to-door services |
@@ -199,28 +200,28 @@ The deployed URL (e.g. `https://user--select-and-quote-phase-3-select-agent.moda
 
 ---
 
-## 7. Google Sheets
+## 7. Supabase Database
 
-**Spreadsheet ID:** `1q3qSLQMvj_t7n_Iq2dM5CVL4gmWmAYWrVI55AMJNrog`
+The backend and frontend both interact natively with Supabase PostgreSQL. 
 
-| Sheet | GID | Purpose |
-|-------|-----|---------|
-| Master_RFQs | 552411421 | RFQ tracking |
-| Agent_Outbound_Log | 694174897 | Agent quotes |
-| Agents | 490285936 | Agent directory |
-| DO Charges | 2082062872 | DO charges by carrier |
-| Destination Charges | 1086243676 | Terminal/handling fees |
-| Transportation Charges | 940645597 | Trucking by location |
+| Table | Purpose |
+|-------|---------|
+| `master_rfqs` | RFQ tracking and customer interactions |
+| `agent_outbound_log` | Agent quotes and reminders |
+| `agents` | Agent directory |
+| `do_charges` | DO charges by carrier |
+| `destination_charges` | Terminal/handling fees |
+| `transportation_charges` | Trucking by location |
 
 ---
 
 ## 8. Environment Variables
 
 ```env
-# Google Sheets (Service Account)
-GOOGLE_SERVICE_ACCOUNT_EMAIL=
-GOOGLE_SERVICE_ACCOUNT_KEY=
-GOOGLE_SPREADSHEET_ID=1q3qSLQMvj_t7n_Iq2dM5CVL4gmWmAYWrVI55AMJNrog
+# Supabase Database
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 
 # Modal Webhooks
 MODAL_WEBHOOK_SELECT_AGENT=
@@ -253,6 +254,9 @@ GOOGLE_CLIENT_SECRET=
 | Parse_Error | Red | `#EF4444` |
 | Selected | Purple | `#8B5CF6` |
 | Quoted | Green | `#22C55E` |
+| Reminded | Yellow | `#EAB308` |
+| Followed_Up | Teal | `#14B8A6` |
+| Customer_Replied | Indigo | `#6366F1` |
 | Requested | Slate | `#64748B` |
 | Received | Emerald | `#10B981` |
 | Invalid_Quote | Red | `#EF4444` |
@@ -348,7 +352,7 @@ dashboard/
 │   │   ├── pricing/
 │   │   └── ui/
 │   ├── lib/
-│   │   ├── google-sheets.ts
+│   │   ├── supabase.ts
 │   │   ├── modal-client.ts
 │   │   ├── pricing-engine.ts
 │   │   ├── constants.ts

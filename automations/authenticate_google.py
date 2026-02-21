@@ -36,8 +36,8 @@ def main():
             flow = InstalledAppFlow.from_client_secrets_file(
                 "credentials.json", SCOPES
             )
-            # This opens a web server on a random port and waits for the browser redirect
-            creds = flow.run_local_server(port=0)
+            # This opens a web server on a fixed port so the redirect URI is deterministic
+            creds = flow.run_local_server(port=8080)
             
         # Save the credentials for the next run
         with open("token.json", "w") as token:

@@ -4,7 +4,7 @@ import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Settings, DollarSign, Percent, Hash, Link2 } from "lucide-react";
+import { Settings, DollarSign, Link2 } from "lucide-react";
 
 export default function SettingsPage() {
   return (

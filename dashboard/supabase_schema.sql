@@ -7,11 +7,15 @@ CREATE TYPE rfq_status AS ENUM (
   'Missing_Door_Data',
   'Parse_Error',
   'Selected',
-  'Quoted'
+  'Quoted',
+  'Reminded',
+  'Followed_Up',
+  'Customer_Replied'
 );
 
 CREATE TYPE quote_status AS ENUM (
   'Requested',
+  'Reminded',
   'Received',
   'Invalid_Quote'
 );
@@ -37,11 +41,12 @@ CREATE TABLE master_rfqs (
   thread_id TEXT NOT NULL,
   customer_email TEXT NOT NULL,
   status rfq_status NOT NULL DEFAULT 'Processing',
-  pol TEXT NOT NULL,
-  pod TEXT NOT NULL,
-  container_type TEXT NOT NULL,
-  qty TEXT NOT NULL,
-  ready_date DATE NOT NULL,
+  pol TEXT,                           -- nullable: partial RFQs accepted
+  pod TEXT,                           -- nullable
+  container_type TEXT,                -- nullable
+  qty TEXT,                           -- nullable
+  ready_date DATE,                    -- nullable
+  delivery_deadline DATE,             -- nullable: customer's required delivery date
   service_type service_type NOT NULL,
   pickup_address TEXT,
   delivery_address TEXT,

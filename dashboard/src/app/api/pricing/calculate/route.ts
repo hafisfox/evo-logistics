@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServiceRoleClient } from "@/lib/supabase";
 import { calculateFullPricing } from "@/lib/pricing-engine";
-import type { DOCharge, DestinationCharge, TransportCharge } from "@/types/pricing";
+import type { DestinationCharge, TransportCharge } from "@/types/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +21,7 @@ export async function POST(request: Request) {
     if (transpRes.error) throw transpRes.error;
 
     // Map snake_case columns back to original Google Sheets format expected by pricing engine
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mappedDestCharges = ((destRes.data || []) as any[]).map(d => ({
       "Charge Type": d.charge_type,
       Basis: d.basis,
@@ -28,6 +29,7 @@ export async function POST(request: Request) {
       "40FT": d["40FT"]
     }));
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mappedTranspCharges = ((transpRes.data || []) as any[]).map(t => ({
       Place: t.place,
       Price: t.price

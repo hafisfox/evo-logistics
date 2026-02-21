@@ -4,9 +4,12 @@ export type RFQStatus =
   | "Missing_Door_Data"
   | "Parse_Error"
   | "Selected"
-  | "Quoted";
+  | "Quoted"
+  | "Reminded"
+  | "Followed_Up"
+  | "Customer_Replied";
 
-export type QuoteStatus = "Requested" | "Received" | "Invalid_Quote";
+export type QuoteStatus = "Requested" | "Reminded" | "Received" | "Invalid_Quote";
 
 export type ServiceType =
   | "port-to-port"
@@ -24,6 +27,7 @@ export interface MasterRFQ {
   container_type: string;
   qty: string;
   ready_date: string;
+  delivery_deadline: string | null;
   service_type: ServiceType;
   pickup_address: string | null;
   delivery_address: string | null;
@@ -69,4 +73,5 @@ export interface SelectAgentResponse {
   rfq_id: string;
   final_price_aed: number;
   final_price_usd: number;
+  error?: string;
 }

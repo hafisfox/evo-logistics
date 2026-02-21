@@ -40,7 +40,7 @@ export async function GET() {
       return rfqQuotes.length >= 2;
     }).length;
     const quotedToday = rfqs.filter(
-      (r) => r.status === "Quoted" && r.quoted_at && r.quoted_at.startsWith(today)
+      (r) => ["Quoted", "Followed_Up", "Customer_Replied"].includes(r.status as string) && r.quoted_at && r.quoted_at.startsWith(today)
     ).length;
 
     // Average response time

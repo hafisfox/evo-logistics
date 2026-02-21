@@ -21,13 +21,17 @@ Modal allows you to write standard Python scripts and execute them securely in t
 
 To run these automations safely, we utilize a local `.env` file for API keys, and an OAuth 2.0 `token.json` for Google Authentication (required for standard `@gmail.com` accounts).
 
-### 1. Configure the `.env` file
 1. Create a `.env` file in the `automations/` folder:
    ```bash
    cp automations/.env.example automations/.env
    ```
 2. Open `automations/.env` and paste your actual `OPENAI_API_KEY`.
-3. Add the Pub/Sub topic (see Gmail Push Notifications section below):
+3. Add your Supabase credentials so the backend can sync with the dashboard database:
+   ```
+   SUPABASE_URL=https://your-project.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY=your-secret-service-key
+   ```
+4. Add the Pub/Sub topic (see Gmail Push Notifications section below):
    ```
    GOOGLE_PUBSUB_TOPIC=projects/YOUR_PROJECT_ID/topics/gmail-push-notifications
    ```
@@ -45,7 +49,7 @@ Because Service Accounts cannot read free Gmail inboxes natively, you must autho
 
 The Modal scripts use `.add_local_file()` in the image definition to bundle `token.json` into the container at `/root/token.json`.
 
-> **Important:** The `token.json` must be generated for the **monitored Gmail account** (currently `yunapink05@gmail.com`). If you re-authenticate, you must redeploy all 3 phases to pick up the new token.
+> **Important:** The `token.json` must be generated for the **monitored Gmail account**. If you re-authenticate, you must redeploy all phases to pick up the new token.
 
 ## Gmail Push Notifications (Pub/Sub)
 
@@ -106,8 +110,10 @@ Before processing, every incoming email is classified by AI (GPT-4o-mini) into:
 - `booking_confirmation` — B/L or booking notice → skipped
 - `out_of_scope` — Spam, newsletters → skipped
 
+If classification fails (OpenAI error or unrecognized category), the default is `out_of_scope` to prevent spam from triggering agent outreach.
+
 ### RFQ ID Generation
-Unique IDs are generated in format `RFQ-YYYYMMDD-XXX` using a hash of timestamp + threadId.
+Unique IDs are generated in format `RFQ-YYYYMMDD-XXX` using a hash of timestamp + threadId. All timestamps and date stamps use UAE timezone (UTC+4).
 
 ### Data Normalization (Phase 1)
 AI-extracted data is normalized before routing:
@@ -117,18 +123,40 @@ AI-extracted data is normalized before routing:
 - **Service types**: Validated against `port-to-port`, `door-to-port`, `port-to-door`, `door-to-door`
 - **Addresses**: Trimmed, null/N/A filtered
 
+### Data Fields Extracted by AI (Phase 1)
+The `master_rfqs` table stores the following AI-extracted fields. All are nullable except `thread_id`, `customer_email`, `rfq_id`, and `status`:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `pol` | TEXT | Port of Loading (nullable — incomplete RFQs accepted) |
+| `pod` | TEXT | Port of Discharge (nullable) |
+| `container_type` | TEXT | e.g. 40HC, 20FT (nullable) |
+| `qty` | TEXT | Container count (nullable) |
+| `ready_date` | DATE | Cargo ready date (nullable) |
+| `delivery_deadline` | DATE | Customer's required delivery date (nullable) |
+| `service_type` | service_type enum | port-to-port, door-to-port, port-to-door, door-to-door |
+| `pickup_address` | TEXT | For door-from services |
+| `delivery_address` | TEXT | For door-to services |
+
+Null-safe helpers `_safe_date()` and `_safe_text()` convert "TBD"/empty/N/A values to `None` before upserting, preventing NOT NULL constraint violations for partial RFQs.
+
 ### Routing Logic (Phase 1)
 After normalization, shipments are routed based on data completeness:
-- `complete` → Log to Master_RFQs → Send rate requests to all active agents
+- `complete` → Log to `master_rfqs` → Send rate requests to all active agents
 - `need_port_data` → Reply requesting missing port/container info
 - `need_door_data` → Reply requesting delivery/pickup addresses
 - `fallback` → Reply with format example + notify admin via HTML email
 
+### Gmail Query Filter (Phase 1)
+Phase 1 fetches only emails matching: `is:unread -subject:"Ref: RFQ-" -from:<system_email>`
+- Excludes agent rate replies (handled by Phase 2 which looks for `subject:"Ref: RFQ-"`)
+- Excludes auto-replies sent by the system itself (`-from:<system_email>`)
+
 ### Agent Outreach (Phase 1)
 When data is complete, the system:
-1. Reads active agents from the `Agents` Google Sheet
+1. Reads active agents from the `agents` Supabase table
 2. Sends personalized rate request emails with subject `RFQ: [details] [Ref:RFQ-ID]`
-3. Logs each outreach to `Agent_Outbound_Log` with status `Requested`
+3. Logs each outreach to `agent_outbound_log` with status `Requested`
 
 ### Carrier Normalization (Phase 2)
 Agent carrier names are normalized: COSCO SHIPPING→COSCO, Evergreen Marine→EVERGREEN, Mediterranean Shipping→MSC, Ocean Network Express→ONE, etc.
@@ -141,17 +169,31 @@ After each quote is logged, the system checks if ≥2 valid quotes exist for the
 - Link to Google Sheets
 
 ### Duplicate Processing Prevention
-Google Pub/Sub sends multiple push notifications per email event (retries, history updates). Two layers prevent duplicate processing:
-1. **Mark-as-read**: Emails are marked as read **immediately** after fetching, before any AI processing. Subsequent Pub/Sub retries find no unread emails and return instantly.
-2. **Thread-level deduplication**: At the start of each run, Phase 1 loads all known `thread_id → {rfq_id, status}` from `Master_RFQs`. If a thread is already in a terminal state (`Processing`, `Parse_Error`, `Quoted`), the email is skipped without calling OpenAI. Threads with `Missing_Port_Data` or `Missing_Door_Data` status are still processed as followups, and reuse the existing RFQ ID.
+Google Pub/Sub sends multiple push notifications per email event (retries, label changes). Multiple layers prevent duplicate processing:
+1. **Mark-as-read in `finally` block (Phase 1 & 2)**: Emails are marked as read **after** processing completes (in a `finally` block), not before. This prevents the mark-as-read call itself from triggering a new Pub/Sub notification before deduplication has a chance to run.
+2. **In-flight deduplication (Phase 1)**: A `processed_msg_ids` set tracks message IDs within a single invocation so they are never processed twice in the same run.
+3. **Thread-level deduplication (Phase 1)**: At the start of each run, Phase 1 loads all known `thread_id → {rfq_id, status}` from `master_rfqs`. If a thread is already in a terminal state (`Processing`, `Parse_Error`, `Quoted`, `Customer_Replied`), the email is skipped without calling OpenAI. Threads with `Missing_Port_Data` or `Missing_Door_Data` status are still processed as followups, and reuse the existing RFQ ID.
+4. **Always-200 webhook response**: Both Phase 1 and Phase 2 webhooks wrap `_process_*` in a try/except and always return `{status: ok}` to Pub/Sub. Returning a non-200 causes Pub/Sub to retry, which can cascade into a rate limit storm.
 
 ### Gmail Thread Threading
 Reply emails use the RFC 2822 `Message-ID` header (e.g., `<CABxyz@mail.gmail.com>`) for `In-Reply-To` and `References` headers, ensuring replies appear in the same Gmail thread as the original email.
 
-### Google Sheets Upsert Logic
-Both Phase 1 and Phase 2 use `appendOrUpdate` (upsert) instead of simple append:
-- Phase 1: Upserts by `thread_id` in `Master_RFQs`
-- Phase 2: Upserts by `match` key (`{rfq_id}_{agent_email}`) in `Agent_Outbound_Log` — each agent gets one row per RFQ that is updated when new quotes arrive
+### Supabase Upsert Logic
+All phases read and write exclusively to Supabase PostgreSQL. Google Sheets is not used anywhere in the pipeline.
+- Phase 1: Upserts by `thread_id` (Primary Key) in `master_rfqs`
+- Phase 2: Upserts by `match` key (`{rfq_id}_{agent_email}_{carrier}_{shipment_number}`) in `agent_outbound_log` — each agent/carrier/shipment combo gets its own row
+- Phase 3, Scheduled Tasks: Use direct `.select().eq()` Supabase queries (dict-based, no Sheets shims)
+
+**Pricing lookup tables** (`do_charges`, `destination_charges`, `transportation_charges`) are read from Supabase and returned as plain Python dicts.
+
+### Gmail API Rate Limit Handling
+All Gmail API calls in Phase 1 and Phase 2 go through `_gmail_call_with_backoff()`, which retries up to 4 times with exponential backoff (2s, 4s, 8s, 16s) on HTTP 429 or 403 quota errors. This prevents transient rate limit spikes (caused by Pub/Sub bursts) from crashing processing runs.
+
+### Self-Reply Prevention
+Both Phase 1 and Phase 2 include a self-reply guard that checks the `From` header of each email against the system's own sending address. If the email was sent by the system itself (e.g., automated RFQ requests, quotation replies), it is silently skipped. This prevents infinite processing loops where Pub/Sub notifications for outgoing emails trigger re-processing.
+
+### Python Runtime
+All Modal apps use `modal.Image.debian_slim(python_version="3.11")` to run on Python 3.11. This avoids `FutureWarning` deprecation notices from Google's `google-auth`, `google-api-core`, and `google-auth-oauthlib` libraries which dropped support for Python 3.9.
 
 ### Email Body Extraction
 Both Phase 1 and Phase 2 use a recursive MIME tree walker (`extract_email_body()`) that:
@@ -195,6 +237,7 @@ modal run automations/phase_1_request_analysis.py
 modal deploy automations/phase_1_request_analysis.py
 modal deploy automations/phase_2_quote_analysis.py
 modal deploy automations/phase_3_select_and_quote.py
+modal deploy automations/scheduled_tasks.py
 ```
 
 Once deployed, Modal will automatically spin up identical Python environments in the cloud. It will output a confirmation message along with the live URL for your webhooks:
@@ -214,6 +257,7 @@ automations/
 ├── phase_1_request_analysis.py      # Webhook: processes incoming Gmail RFQs (via Pub/Sub push)
 ├── phase_2_quote_analysis.py        # Webhook: processes agent quote replies (via Pub/Sub push)
 ├── phase_3_select_and_quote.py      # Webhook: agent selection, pricing & quotation (via Dashboard POST)
+├── scheduled_tasks.py               # Cron Jobs: Handles 3h China Time reminders and 24h follow-ups
 └── authenticate_google.py           # Generates OAuth 2.0 token.json
 ```
 
@@ -225,11 +269,11 @@ Unlike Phase 1 and 2 which are triggered by Gmail Pub/Sub push notifications, Ph
 
 **Flow:**
 1. Receives selection payload (rfq_id, agent, carrier, shipment)
-2. Updates Master_RFQs status to "Selected"
-3. Looks up the selected quote from Agent_Outbound_Log
-4. Reads pricing tables (DO Charges, Destination Charges, Transportation Charges)
+2. Updates `master_rfqs` status to "Selected"
+3. Looks up the selected quote from `agent_outbound_log`
+4. Reads pricing tables (`do_charges`, `destination_charges`, `transportation_charges`)
 5. Calculates full pricing with 13% margin, rounded to nearest 10 AED
-6. Updates Master_RFQs with final prices and status "Quoted"
+6. Updates `master_rfqs` with final prices and status "Quoted"
 7. Sends quotation email on original Gmail thread
 8. Notifies sales team
 

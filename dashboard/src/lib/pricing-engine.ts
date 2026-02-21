@@ -61,8 +61,7 @@ function getTransportCharge(
 }
 
 export function calculatePortPrice(
-  oceanFreightUSD: number,
-  qty: number
+  oceanFreightUSD: number
 ): { finalPriceAED: number; finalPriceUSD: number; marginAmount: number; oceanFreightAED: number } {
   const oceanFreightAED = oceanFreightUSD * USD_TO_AED;
   const withMargin = oceanFreightAED * (1 + MARGIN);
@@ -196,7 +195,7 @@ export function calculateFullPricing(params: {
     const pod = pods[i] || pods[0] || "N/A";
 
     if (isPortOnly) {
-      const portResult = calculatePortPrice(oceanFreightUSD, qty);
+      const portResult = calculatePortPrice(oceanFreightUSD);
       const shipment: ShipmentCost = {
         shipmentNumber: i + 1,
         serviceType: "port-to-port",

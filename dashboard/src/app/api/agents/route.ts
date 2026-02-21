@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServiceRoleClient } from "@/lib/supabase";
-import type { Agent } from "@/types/agent";
+
 
 export const dynamic = "force-dynamic";
 

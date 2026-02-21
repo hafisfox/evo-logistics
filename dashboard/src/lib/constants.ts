@@ -2,17 +2,7 @@ export const USD_TO_AED = 3.685;
 export const MARGIN = 0.13;
 export const QUOTE_THRESHOLD = 2;
 
-export const SPREADSHEET_ID =
-  "1q3qSLQMvj_t7n_Iq2dM5CVL4gmWmAYWrVI55AMJNrog";
 
-export const SHEET_GIDS = {
-  Master_RFQs: 552411421,
-  Agent_Outbound_Log: 694174897,
-  Agents: 490285936,
-  "DO Charges": 2082062872,
-  Destination_Charges: 1086243676,
-  Transportation_Charges: 940645597,
-} as const;
 
 export const CARRIERS = [
   "COSCO",
@@ -78,11 +68,29 @@ export const STATUS_CONFIG: Record<
     bgClass: "bg-green-100",
     textClass: "text-green-800",
   },
+  Followed_Up: {
+    label: "Followed Up",
+    color: "#14B8A6",
+    bgClass: "bg-teal-100",
+    textClass: "text-teal-800",
+  },
+  Customer_Replied: {
+    label: "Customer Replied",
+    color: "#6366F1",
+    bgClass: "bg-indigo-100",
+    textClass: "text-indigo-800",
+  },
   Requested: {
     label: "Requested",
     color: "#64748B",
     bgClass: "bg-slate-100",
     textClass: "text-slate-800",
+  },
+  Reminded: {
+    label: "Reminded",
+    color: "#EAB308",
+    bgClass: "bg-yellow-100",
+    textClass: "text-yellow-800",
   },
   Received: {
     label: "Received",
@@ -103,6 +111,9 @@ export const KANBAN_COLUMNS = [
   "Missing_Port_Data",
   "Missing_Door_Data",
   "Parse_Error",
+  "Reminded",
   "Selected",
   "Quoted",
+  "Followed_Up",
+  "Customer_Replied",
 ] as const;

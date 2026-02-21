@@ -2,8 +2,10 @@ import os
 import re
 import json
 import base64
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional
+
+UAE_TZ = timezone(timedelta(hours=4))
 
 import modal
 from pydantic import BaseModel, Field, field_validator
@@ -16,20 +18,21 @@ from googleapiclient.discovery import build
 # =====================================================================
 app = modal.App("quote-analysis-phase-2")
 
-image = modal.Image.debian_slim().pip_install(
+image = modal.Image.debian_slim(python_version="3.11").pip_install(
     "google-api-python-client",
     "google-auth-httplib2",
     "google-auth-oauthlib",
     "openai",
     "pydantic",
-    "fastapi"
+    "fastapi",
+    "supabase"
 ).add_local_file(
     os.path.join(os.path.dirname(__file__), "token.json"),
     "/root/token.json"
 )
 
 SPREADSHEET_ID = "1q3qSLQMvj_t7n_Iq2dM5CVL4gmWmAYWrVI55AMJNrog"
-ADMIN_EMAIL = "pricingailog@gmail.com"
+ADMIN_EMAIL = "hafisjavad9@gmail.com"
 QUOTE_THRESHOLD = 2  # Minimum valid quotes before notifying manager
 
 # =====================================================================
@@ -82,7 +85,7 @@ def normalize_carrier(carrier: str) -> str:
         return 'EVERGREEN'
     if 'MEDITERRANEAN' in c or c == 'MSC':
         return 'MSC'
-    if ('ONE' in c and len(c) <= 10) or 'OCEAN NETWORK' in c:
+    if c == 'ONE' or 'OCEAN NETWORK' in c:
         return 'ONE'
     if 'MAERSK' in c:
         return 'MAERSK'
@@ -94,7 +97,7 @@ def normalize_carrier(carrier: str) -> str:
         return 'YANG MING'
     if 'HMM' in c or 'HYUNDAI' in c:
         return 'HMM'
-    if 'PIL' in c and len(c) <= 5:
+    if c == 'PIL' or c == 'PACIFIC INTERNATIONAL LINES':
         return 'PIL'
     if 'ZIM' in c:
         return 'ZIM'
@@ -108,92 +111,42 @@ def get_google_services():
         raise Exception("Missing /root/token.json mount. Did you run authenticate_google.py?")
     credentials = Credentials.from_authorized_user_file(
         "/root/token.json",
-        scopes=[
-            "https://www.googleapis.com/auth/gmail.modify",
-            "https://www.googleapis.com/auth/spreadsheets"
-        ]
+        scopes=["https://www.googleapis.com/auth/gmail.modify"]
     )
     gmail_service = build('gmail', 'v1', credentials=credentials)
-    sheets_service = build('sheets', 'v4', credentials=credentials)
-    return gmail_service, sheets_service
+    return gmail_service
+
+def get_supabase_client():
+    from supabase import create_client
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not supabase_url or not supabase_key:
+        raise Exception("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.")
+    return create_client(supabase_url, supabase_key)
 
 # =====================================================================
-# GOOGLE SHEETS HELPERS
+# SUPABASE HELPERS
 # =====================================================================
-def _col_letter(index):
-    result = ""
-    while True:
-        result = chr(index % 26 + ord('A')) + result
-        index = index // 26 - 1
-        if index < 0:
-            break
-    return result
+def _read_table(supabase, table_name):
+    result = supabase.table(table_name).select("*").execute()
+    data = result.data
+    if not data:
+        return [], []
+    headers = list(data[0].keys())
+    rows = []
+    for row_dict in data:
+        row_arr = [row_dict.get(h, "") for h in headers]
+        rows.append([str(v) if v is not None else "" for v in row_arr])
+    return headers, rows
 
-def _read_sheet(sheets_service, sheet_name):
-    result = sheets_service.spreadsheets().values().get(
-        spreadsheetId=SPREADSHEET_ID, range=f'{sheet_name}!A:Z'
-    ).execute()
-    rows = result.get('values', [])
-    headers = rows[0] if rows else []
-    return headers, rows[1:] if len(rows) > 1 else []
+def _upsert_row(supabase, table_name, row_data: dict):
+    """Upsert a row via Supabase"""
+    supabase.table(table_name).upsert(row_data).execute()
 
-def _upsert_row(sheets_service, sheet_name, match_column, match_value, row_data: dict):
-    """Upsert a row: update if match found, else append."""
-    headers, data_rows = _read_sheet(sheets_service, sheet_name)
-
-    if not headers:
-        all_keys = list(row_data.keys())
-        sheets_service.spreadsheets().values().append(
-            spreadsheetId=SPREADSHEET_ID, range=f'{sheet_name}!A:A',
-            valueInputOption="USER_ENTERED",
-            body={'values': [all_keys, [row_data.get(k, '') for k in all_keys]]}
-        ).execute()
-        return
-
-    if match_column not in headers:
-        row = [row_data.get(h, '') for h in headers]
-        sheets_service.spreadsheets().values().append(
-            spreadsheetId=SPREADSHEET_ID, range=f'{sheet_name}!A:A',
-            valueInputOption="USER_ENTERED", body={'values': [row]}
-        ).execute()
-        return
-
-    match_idx = headers.index(match_column)
-
-    for i, data_row in enumerate(data_rows):
-        if len(data_row) > match_idx and data_row[match_idx] == match_value:
-            sheet_row = i + 2
-            for key, value in row_data.items():
-                if key in headers:
-                    col_idx = headers.index(key)
-                    cell_ref = f"{sheet_name}!{_col_letter(col_idx)}{sheet_row}"
-                    sheets_service.spreadsheets().values().update(
-                        spreadsheetId=SPREADSHEET_ID, range=cell_ref,
-                        valueInputOption="USER_ENTERED",
-                        body={'values': [[value if value is not None else '']]}
-                    ).execute()
-            return
-
-    row = [row_data.get(h, '') for h in headers]
-    sheets_service.spreadsheets().values().append(
-        spreadsheetId=SPREADSHEET_ID, range=f'{sheet_name}!A:A',
-        valueInputOption="USER_ENTERED", body={'values': [row]}
-    ).execute()
-
-def _get_rows_by_filter(sheets_service, sheet_name, filter_column, filter_value):
+def _get_rows_by_filter(supabase, table_name, filter_column, filter_value):
     """Get all rows where filter_column == filter_value."""
-    headers, data_rows = _read_sheet(sheets_service, sheet_name)
-    if not headers or filter_column not in headers:
-        return []
-    idx = headers.index(filter_column)
-    results = []
-    for row in data_rows:
-        if len(row) > idx and row[idx] == filter_value:
-            d = {}
-            for j, h in enumerate(headers):
-                d[h] = row[j] if j < len(row) else ''
-            results.append(d)
-    return results
+    result = supabase.table(table_name).select("*").eq(filter_column, filter_value).execute()
+    return result.data
 
 # =====================================================================
 # EMAIL HELPERS
@@ -232,6 +185,21 @@ def send_email(gmail_service, to_address, subject, body, content_type="text/plai
     raw_msg = f"To: {to_address}\n{ct_header}Subject: {subject}\n\n{body}"
     b64_message = base64.urlsafe_b64encode(raw_msg.encode('utf-8')).decode('utf-8')
     gmail_service.users().messages().send(userId='me', body={'raw': b64_message}).execute()
+
+def _gmail_call_with_backoff(request, retries=4, base_delay=2):
+    """Execute a Gmail API request with exponential backoff on rate limit errors."""
+    import time
+    from googleapiclient.errors import HttpError
+    for attempt in range(retries):
+        try:
+            return request.execute()
+        except HttpError as e:
+            if e.resp.status in (429, 403) and attempt < retries - 1:
+                delay = base_delay * (2 ** attempt)
+                print(f"Gmail rate limit hit (attempt {attempt+1}), retrying in {delay}s...")
+                time.sleep(delay)
+            else:
+                raise
 
 # =====================================================================
 # AI SYSTEM PROMPT (ported from n8n)
@@ -275,8 +243,8 @@ Return exactly this JSON structure. No markdown, no backticks, no explanation te
 
 **shipment_number**: Integer matching the shipment block number from the original request (1, 2, 3...).
 
-**price**: Total ocean freight amount quoted for that entire shipment.
-null if agent declines or provides no rate. Do NOT multiply by container quantity.
+**price**: Total ocean freight amount quoted for that entire shipment (all containers combined).
+null if agent declines or provides no rate. If the agent gives a per-container rate, multiply it by the shipment's container quantity to get the total.
 
 **currency**: Always "USD".
 
@@ -300,7 +268,7 @@ null if agent declines or provides no rate. Do NOT multiply by container quantit
 |---|---|
 | Agent declines all or has no space | Return {"quotes": []} |
 | Rate is per CBM or per ton | Return {"quotes": []} |
-| Agent gives rate "per container" explicitly | Use that price as stated |
+| Agent gives rate "per container" explicitly | Multiply by the shipment's container quantity to get the total shipment price |
 | ETD given as a range | Use the earlier/first date |
 
 CRITICAL: Return ONLY the raw JSON object. No markdown, no backticks, no explanation text."""
@@ -518,10 +486,7 @@ def send_manager_notification(gmail_service, summary: dict):
 
   <!-- Action Button -->
   <div style="text-align: center; margin: 30px 0;">
-    <a href="https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit"
-       style="display: inline-block; background: #667eea; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 15px;">
-      📊 View Full Data in Google Sheets
-    </a>
+    <p style="color: #666; font-size: 14px;">Review in the Evo Logistics Dashboard to proceed.</p>
   </div>
 
   <!-- Footer -->
@@ -561,8 +526,15 @@ def extract_agent_info(from_header: str) -> tuple:
 )
 @modal.fastapi_endpoint(method="POST")
 def gmail_push_phase2(_data: dict):
-    """Triggered by Gmail push notification via Google Cloud Pub/Sub."""
-    _process_agent_quotes()
+    """Triggered by Gmail push notification via Google Cloud Pub/Sub.
+    
+    IMPORTANT: Always return 200 to Pub/Sub — retries cause rate limit storms.
+    """
+    try:
+        _process_agent_quotes()
+    except Exception as e:
+        print(f"CRITICAL ERROR in _process_agent_quotes: {e}")
+        import traceback; traceback.print_exc()
     return {"status": "ok"}
 
 # =====================================================================
@@ -575,7 +547,7 @@ def gmail_push_phase2(_data: dict):
 )
 def renew_gmail_watch():
     """Renews the Gmail push notification watch on INBOX."""
-    gmail_service, _ = get_google_services()
+    gmail_service = get_google_services()
     topic = os.environ["GOOGLE_PUBSUB_TOPIC"]
     result = gmail_service.users().watch(userId='me', body={
         'topicName': topic,
@@ -587,10 +559,13 @@ def renew_gmail_watch():
 # CORE QUOTE PROCESSING LOGIC
 # =====================================================================
 def _process_agent_quotes():
-    gmail_service, sheets_service = get_google_services()
+    gmail_service = get_google_services()
+    supabase = get_supabase_client()
 
-    # Fetch unread emails
-    results = gmail_service.users().messages().list(userId='me', q='is:unread').execute()
+    # BUG-4 Fix: Only fetch agent rate replies to prevent race condition with Phase 1
+    results = _gmail_call_with_backoff(
+        gmail_service.users().messages().list(userId='me', q='is:unread subject:"Ref: RFQ-"')
+    )
     messages = results.get('messages', [])
 
     if not messages:
@@ -601,7 +576,9 @@ def _process_agent_quotes():
 
     for msg in messages:
         msg_id = msg['id']
-        email_data = gmail_service.users().messages().get(userId='me', id=msg_id, format='full').execute()
+        email_data = _gmail_call_with_backoff(
+            gmail_service.users().messages().get(userId='me', id=msg_id, format='full')
+        )
         thread_id = email_data.get('threadId')
 
         # Extract metadata
@@ -610,16 +587,29 @@ def _process_agent_quotes():
         sender = headers_dict.get('from', '')
         received_at = headers_dict.get('date', '')
 
+        # Self-sender guard: skip emails from our own address
+        OWN_EMAIL = "yunapink05@gmail.com"
+        if OWN_EMAIL in sender.lower():
+            print(f"Skipping self-sent email: {subject}")
+            _gmail_call_with_backoff(
+                gmail_service.users().messages().modify(
+                    userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}
+                )
+            )
+            continue
+
+        # Mark as read immediately to prevent re-processing
+        _gmail_call_with_backoff(
+            gmail_service.users().messages().modify(
+                userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}
+            )
+        )
+
         # Extract Ref ID — only process emails that have one
         ref_id = extract_ref_id(subject)
         if not ref_id:
             print(f"No Ref ID in subject, skipping: {subject}")
             continue
-
-        # Mark as read
-        gmail_service.users().messages().modify(
-            userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}
-        ).execute()
 
         agent_name, agent_email = extract_agent_info(sender)
 
@@ -635,7 +625,7 @@ def _process_agent_quotes():
             f"AGENT EMAIL:\n"
             f"Agent: {agent_name}\n"
             f"\"\"\"\n{email_body}\n\"\"\"\n\n"
-            f"Today is: {datetime.now().strftime('%Y-%m-%d')}"
+            f"Today is: {datetime.now(UAE_TZ).strftime('%Y-%m-%d')}"
         )
 
         try:
@@ -654,7 +644,7 @@ def _process_agent_quotes():
             raw_data = json.loads(raw_content)
             extracted = ExtractedQuotes(**raw_data)
 
-            now_str = datetime.now().strftime('%Y-%m-%d %I:%M %p')
+            now_str = datetime.now(UAE_TZ).strftime('%Y-%m-%d %I:%M %p')
 
             if not extracted.quotes:
                 # Agent declined or no quotes — log as invalid
@@ -674,7 +664,7 @@ def _process_agent_quotes():
                     'validity': 'N/A',
                     'received_at': now_str,
                 }
-                _upsert_row(sheets_service, "Agent_Outbound_Log", "match", match_key, log_data)
+                _upsert_row(supabase, "agent_outbound_log", log_data)
                 print(f"No valid quotes from {agent_name}, logged as Invalid_Quote")
                 continue
 
@@ -688,7 +678,7 @@ def _process_agent_quotes():
                     price > 0
                 )
 
-                match_key = f"{ref_id}_{agent_email}"
+                match_key = f"{ref_id}_{agent_email}_{carrier}_{quote.shipment_number}"
                 log_data = {
                     'rfq_id': ref_id,
                     'match': match_key,
@@ -706,42 +696,43 @@ def _process_agent_quotes():
                     'received_at': now_str,
                 }
 
-                _upsert_row(sheets_service, "Agent_Outbound_Log", "match",
-                           match_key, log_data)
+                _upsert_row(supabase, "agent_outbound_log", log_data)
                 print(f"Quote logged: {agent_name} / {carrier} / ${price} (shipment {quote.shipment_number})")
 
             # After logging all quotes, check threshold
-            _check_threshold_and_notify(gmail_service, sheets_service, ref_id)
+            _check_threshold_and_notify(gmail_service, supabase, ref_id)
 
         except Exception as e:
             print(f"Error processing quote from {agent_name}: {e}")
             # Log error but continue processing other messages
             try:
                 match_key = f"{ref_id}_{agent_email}"
-                _upsert_row(sheets_service, "Agent_Outbound_Log", "match", match_key, {
+                _upsert_row(supabase, "agent_outbound_log", {
                     'rfq_id': ref_id,
                     'match': match_key,
                     'status': 'Invalid_Quote',
                     'agent_name': agent_name,
                     'agent_email': agent_email,
-                    'received_at': datetime.now().strftime('%Y-%m-%d %I:%M %p'),
+                    'carrier': 'N/A',
+                    'shipment_number': '1',
+                    'received_at': datetime.now(UAE_TZ).strftime('%Y-%m-%d %I:%M %p'),
                 })
             except Exception:
                 pass
 
 
-def _check_threshold_and_notify(gmail_service, sheets_service, ref_id: str):
+def _check_threshold_and_notify(gmail_service, supabase, ref_id: str):
     """Check if enough valid quotes received and notify manager."""
     # Get the master RFQ
-    master_rows = _get_rows_by_filter(sheets_service, "Master_RFQs", "rfq_id", ref_id)
+    master_rows = _get_rows_by_filter(supabase, "master_rfqs", "rfq_id", ref_id)
     if not master_rows:
-        print(f"No Master_RFQs row found for {ref_id}")
+        print(f"No master_rfqs row found for {ref_id}")
         return
 
     rfq = master_rows[0]
 
     # Get all quotes for this RFQ
-    all_quote_rows = _get_rows_by_filter(sheets_service, "Agent_Outbound_Log", "rfq_id", ref_id)
+    all_quote_rows = _get_rows_by_filter(supabase, "agent_outbound_log", "rfq_id", ref_id)
 
     # Build summary
     summary = build_quote_summary(rfq, all_quote_rows)
