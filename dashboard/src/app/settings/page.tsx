@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { DollarSign, Save } from "lucide-react";
 import { toast } from "sonner";
@@ -78,43 +79,56 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-muted-foreground">
-                  Exchange Rate (USD to AED)
-                </label>
-                <Input
-                  value={settings.exchangeRate}
-                  onChange={e => setSettings({ ...settings, exchangeRate: parseFloat(e.target.value) || 0 })}
+                <div className="flex justify-between items-center mb-2 mt-1">
+                  <label className="text-sm text-muted-foreground">
+                    Exchange Rate (USD to AED)
+                  </label>
+                  <span className="font-mono text-sm border px-2 py-1 rounded-md min-w-[4rem] text-center">{settings.exchangeRate.toFixed(3)}</span>
+                </div>
+                <Slider
+                  value={[settings.exchangeRate]}
+                  min={3.0}
+                  max={4.5}
+                  step={0.001}
+                  onValueChange={([val]) => setSettings({ ...settings, exchangeRate: val })}
                   disabled={loading}
-                  type="number"
-                  step="0.001"
-                  className="mt-1 font-mono"
+                  className="py-2"
                 />
               </div>
               <div>
-                <label className="text-sm text-muted-foreground">
-                  Profit Margin (%)
-                </label>
-                <Input
-                  value={settings.profitMargin}
-                  onChange={e => setSettings({ ...settings, profitMargin: parseFloat(e.target.value) || 0 })}
+                <div className="flex justify-between items-center mb-2 mt-1">
+                  <label className="text-sm text-muted-foreground">
+                    Profit Margin (%)
+                  </label>
+                  <span className="font-mono text-sm border px-2 py-1 rounded-md min-w-[3rem] text-center">{settings.profitMargin}</span>
+                </div>
+                <Slider
+                  value={[settings.profitMargin]}
+                  min={0}
+                  max={50}
+                  step={0.1}
+                  onValueChange={([val]) => setSettings({ ...settings, profitMargin: val })}
                   disabled={loading}
-                  type="number"
-                  step="0.1"
-                  className="mt-1 font-mono"
+                  className="py-2"
                 />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-muted-foreground">
-                  Quote Threshold
-                </label>
-                <Input
-                  value={settings.quoteThreshold}
-                  onChange={e => setSettings({ ...settings, quoteThreshold: parseInt(e.target.value) || 0 })}
+                <div className="flex justify-between items-center mb-2 mt-1">
+                  <label className="text-sm text-muted-foreground">
+                    Quote Threshold
+                  </label>
+                  <span className="font-mono text-sm border px-2 py-1 rounded-md min-w-[2.5rem] text-center">{settings.quoteThreshold}</span>
+                </div>
+                <Slider
+                  value={[settings.quoteThreshold]}
+                  min={1}
+                  max={10}
+                  step={1}
+                  onValueChange={([val]) => setSettings({ ...settings, quoteThreshold: val })}
                   disabled={loading}
-                  type="number"
-                  className="mt-1 font-mono"
+                  className="py-2"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
                   Minimum quotes before manager notification
