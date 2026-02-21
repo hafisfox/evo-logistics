@@ -1,0 +1,21 @@
+{
+  "version": "1.0.0",
+  "lockfileVersion": 1,
+  "packages": {
+    "@sanjeed5/react#agents.md": {
+      "version": "1.0.0",
+      "resolved": "https://registry.prpm.dev/api/v1/packages/%40sanjeed5%2Freact/1.0.0.tar.gz",
+      "integrity": "sha256-e7ad227f1b03782b83cf44d572c0c769aabecba664d24a190f57190c7a3ccdd0",
+      "format": "agents.md",
+      "subtype": "rule",
+      "sourceFormat": "cursor",
+      "sourceSubtype": "rule",
+      "installedPath": "AGENTS.md",
+      "fromCollection": {
+        "name_slug": "nextjs-pro",
+        "version": "1.0.0"
+      }
+    }
+  },
+  "generated": "2026-02-21T04:40:27.650Z"
+}
