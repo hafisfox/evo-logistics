@@ -1,7 +1,7 @@
 # ACTION_PLAN.md — Pricing AI Automation System
 
 > Full business blueprint for the automated FCL pricing engine.
-> Source: `action_plan/action_plan.html` + n8n workflow definitions.
+> Source: `action_plan/action_plan.html` + Modal workflow definitions.
 
 ---
 
@@ -54,10 +54,8 @@
 ```
 evo_logistics/
 ├── .agents/
-│   └── skills/                                  # AI agent specialized skills (n8n, prompt engg)
 ├── .claude/
 │   └── skills/                                  # Claude environment specialized skills
-├── AGENTS.md                                    # Antigravity n8n-MCP system instructions
 ├── CLAUDE.md                                    # Development guidelines
 ├── ACTION_PLAN.md                               # This file — full business & technical reference
 ├── DASHBOARD.md                                 # Dashboard architecture & documentation
@@ -78,9 +76,6 @@ evo_logistics/
 │       ├── lib/                                 # Supabase client, pricing engine, utils
 │       ├── hooks/                               # TanStack Query hooks
 │       └── types/                               # TypeScript interfaces
-└── workflows/
-    ├── Phase 1 - Request Analysis.json          # (Legacy) n8n RFQ parsing & validation
-    └── Phase 2 - Quote Analysis.json            # (Legacy) n8n Quote analysis & pricing
 ```
 
 ## 5. Data Standards
@@ -287,7 +282,7 @@ PRICING & QUOTATION
 
 | Phase | Name | Focus | Status |
 |-------|------|-------|--------|
-| 1 | Workflow Design | n8n workflow mapping & process automation setup | Done (migrated to Modal) |
+| 1 | Workflow Design | Process automation setup | Done (migrated to Modal) |
 | 2 | AI Enquiry Parsing | AI email classification, extraction, normalization & routing | Done (`phase_1_request_analysis.py`) |
 | 3 | Agent RFQ Automation | Agent outreach, quote collection & threshold notification | Done (`phase_1_request_analysis.py` + `phase_2_quote_analysis.py`) |
 | 4 | Pricing Engine | Cost calculation & margin application system | Done (`phase_3_select_and_quote.py`) |
