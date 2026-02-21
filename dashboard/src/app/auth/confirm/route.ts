@@ -8,6 +8,16 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type') as EmailOtpType | null
     const next = searchParams.get('next') ?? '/'
 
+    const getURL = () => {
+        let url =
+            process?.env?.NEXT_PUBLIC_SITE_URL ??
+            process?.env?.NEXT_PUBLIC_VERCEL_URL ??
+            'http://localhost:3000/';
+        url = url.includes('http') ? url : `https://${url}`;
+        url = url.endsWith('/') ? url : `${url}/`;
+        return url;
+    };
+
     if (token_hash && type) {
         const supabase = await createClient()
 
@@ -18,10 +28,13 @@ export async function GET(request: NextRequest) {
 
         if (!error) {
             // redirect user to specified redirect URL or root of app
-            return NextResponse.redirect(new URL(`/${next.slice(1)}`, request.url))
+            return NextResponse.redirect(`${getURL()}${next.replace(/^\//, '')}`)
         }
+
+        console.error("Auth confirm error:", error.message);
+        return NextResponse.redirect(`${getURL()}login?error=${encodeURIComponent(error.message)}`)
     }
 
     // redirect the user to an error page with some instructions
-    return NextResponse.redirect(new URL('/login?error=Invalid%20magic%20link', request.url))
+    return NextResponse.redirect(`${getURL()}login?error=Invalid%20magic%20link`)
 }

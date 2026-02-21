@@ -6,23 +6,27 @@ export async function GET(request: Request) {
     const code = searchParams.get('code')
     const next = searchParams.get('next') ?? '/'
 
+    const getURL = () => {
+        let url =
+            process?.env?.NEXT_PUBLIC_SITE_URL ??
+            process?.env?.NEXT_PUBLIC_VERCEL_URL ??
+            'http://localhost:3000/';
+        url = url.includes('http') ? url : `https://${url}`;
+        url = url.endsWith('/') ? url : `${url}/`;
+        return url;
+    };
+
     if (code) {
         const supabase = await createClient()
         const { error } = await supabase.auth.exchangeCodeForSession(code)
         if (!error) {
-            const forwardedHost = request.headers.get('x-forwarded-host')
-            const isLocalEnv = process.env.NODE_ENV === 'development'
-            if (isLocalEnv) {
-                // we can be sure that there is no load balancer in between, so no need to watch for X-Forwarded-Host
-                return NextResponse.redirect(`${origin}${next}`)
-            } else if (forwardedHost) {
-                return NextResponse.redirect(`https://${forwardedHost}${next}`)
-            } else {
-                return NextResponse.redirect(`${origin}${next}`)
-            }
+            return NextResponse.redirect(`${getURL()}${next.replace(/^\//, '')}`)
         }
+
+        console.error("Auth callback error:", error.message);
+        return NextResponse.redirect(`${getURL()}login?error=${encodeURIComponent(error.message)}`)
     }
 
     // return the user to an error page with instructions
-    return NextResponse.redirect(`${origin}/login?error=Authentication%20failed`)
+    return NextResponse.redirect(`${getURL()}login?error=Authentication%20failed`)
 }
