@@ -5,57 +5,101 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
-  LayoutDashboard,
-  ClipboardList,
-  Users,
-  DollarSign,
+  PieChart,
+  Truck,
+  BarChart2,
+  HelpCircle,
   Settings,
-  Ship,
+  LogOut,
+  LayoutGrid,
 } from "lucide-react";
 
-const navItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/rfqs", label: "RFQ Pipeline", icon: ClipboardList },
-  { href: "/agents", label: "Agents", icon: Users },
-  { href: "/pricing", label: "Pricing Tables", icon: DollarSign },
-  { href: "/settings", label: "Settings", icon: Settings },
+const menuItems = [
+  { href: "/", label: "Dashboard", icon: LayoutGrid },
+  { href: "/statistics", label: "Statistics", icon: PieChart },
+  { href: "/shipments", label: "Shipments", icon: Truck },
+  { href: "/reports", label: "Reports", icon: BarChart2 },
+];
+
+const accountItems = [
+  { href: "/help", label: "Help", icon: HelpCircle },
+  { href: "/settings/account", label: "Settings", icon: Settings },
+  { href: "/logout", label: "Log out", icon: LogOut, action: "logout" },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
 
+  const handleLogout = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/login";
+  };
+
+  const NavItem = ({ item }: { item: any }) => {
+    const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+
+    if (item.action === "logout") {
+      return (
+        <button
+          onClick={handleLogout}
+          className="flex w-full items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-300 text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5"
+        >
+          <item.icon className="h-5 w-5" />
+          {item.label}
+        </button>
+      );
+    }
+
+    return (
+      <Link
+        href={item.href}
+        className={cn(
+          "flex items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-300",
+          isActive
+            ? "bg-[#2A2B2F] text-white shadow-md dark:bg-white dark:text-black"
+            : "text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5"
+        )}
+      >
+        <item.icon className={cn("h-5 w-5", isActive ? "text-white dark:text-black" : "")} />
+        {item.label}
+      </Link>
+    );
+  };
+
   return (
-    <aside className="hidden md:flex flex-col w-64 m-4 mr-0 rounded-3xl bg-card/60 dark:bg-card/40 backdrop-blur-2xl border border-white/20 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] h-[calc(100vh-2rem)] overflow-hidden transition-all duration-500 z-40">
-      <div className="flex h-16 items-center gap-2 border-b border-sidebar-border/50 px-6 bg-transparent">
-        <Ship className="h-6 w-6 text-primary" />
-        <span className="text-lg font-semibold">Evo Logistics</span>
+    <aside className="hidden md:flex flex-col w-[260px] bg-transparent border-r border-[#E5E7EB] dark:border-white/10 h-screen overflow-hidden z-40">
+      <div className="flex h-24 items-center gap-3 px-8 mt-2">
+        <Truck className="h-7 w-7 text-black dark:text-white fill-current" />
+        <span className="text-xl font-bold tracking-tight text-black dark:text-white">Atlas</span>
       </div>
-      <nav className="flex-1 space-y-1 p-3">
-        {navItems.map((item) => {
-          const isActive =
-            item.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-medium transition-all duration-300",
-                isActive
-                  ? "bg-primary/10 text-primary shadow-sm hover:scale-[1.02]"
-                  : "text-sidebar-foreground hover:bg-white/40 dark:hover:bg-sidebar-accent/50 hover:scale-[1.01]"
-              )}
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-      <div className="border-t p-4 text-xs text-muted-foreground flex items-center justify-between">
-        <span>FCL Pricing Engine v1.0</span>
-        <ThemeToggle />
+
+      <div className="flex-1 overflow-y-auto px-6 py-2 pb-24 space-y-8 scrollbar-hide">
+        {/* Menu Section */}
+        <div className="space-y-2">
+          <h3 className="px-4 text-xs font-semibold tracking-wider text-muted-foreground/50 uppercase mb-4">Menu</h3>
+          <nav className="space-y-1">
+            {menuItems.map((item) => (
+              <NavItem key={item.href} item={item} />
+            ))}
+          </nav>
+        </div>
+
+        {/* Account Section */}
+        <div className="space-y-2">
+          <h3 className="px-4 text-xs font-semibold tracking-wider text-muted-foreground/50 uppercase mb-4">Account</h3>
+          <nav className="space-y-1">
+            {accountItems.map((item) => (
+              <NavItem key={item.href} item={item} />
+            ))}
+          </nav>
+        </div>
+      </div>
+
+      <div className="p-6 mt-auto">
+        <div className="bg-[#E5E7EB]/50 dark:bg-white/5 rounded-full p-1 inline-flex items-center">
+          <ThemeToggle />
+        </div>
       </div>
     </aside>
   );
