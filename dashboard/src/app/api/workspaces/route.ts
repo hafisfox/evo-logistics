@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 import { createClient } from "@/lib/supabase/server";
-import { listUserWorkspaces } from "@/lib/workspaces";
+import { listUserWorkspaces, setUserDefaultWorkspace } from "@/lib/workspaces";
 
 function slugify(input: string) {
   return input
@@ -92,7 +92,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to create workspace membership" }, { status: 500 });
   }
 
-  return NextResponse.json({
+  try {
+    await setUserDefaultWorkspace(user.id, workspace.id);
+  } catch (error) {
+    console.error("Failed to set default workspace:", error);
+  }
+
+  const response = NextResponse.json({
     success: true,
     workspace: {
       workspace_id: workspace.id,
@@ -102,5 +108,13 @@ export async function POST(request: Request) {
       kind: workspace.kind,
     },
   });
-}
+  response.cookies.set("workspace_id", workspace.id, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+  });
 
+  return response;
+}

@@ -1,15 +1,28 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Settings } from "@/lib/settings";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DollarSign, Save } from "lucide-react";
+import { DollarSign, Mail, Save } from "lucide-react";
 import { toast } from "sonner";
 import { useSettings, useUpdateSettings } from "@/hooks/use-settings";
+import {
+  useUpdateWorkspaceMailbox,
+  useWorkspaceMailbox,
+} from "@/hooks/use-workspace-mailbox";
 
 function formatSliderValue(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
@@ -19,6 +32,10 @@ export default function WorkspaceSettingsPage() {
   const { data: savedSettings, isLoading } = useSettings();
   const { mutate: save, isPending: saving } = useUpdateSettings();
   const [draftSettings, setDraftSettings] = useState<Settings | null>(null);
+  const { data: mailbox, isLoading: mailboxLoading } = useWorkspaceMailbox();
+  const { mutate: updateMailbox, isPending: mailboxSaving } = useUpdateWorkspaceMailbox();
+  const [mailboxEmail, setMailboxEmail] = useState("");
+  const [mailboxStatus, setMailboxStatus] = useState<"connected" | "disconnected">("connected");
 
   const persistedSettings = useMemo<Settings>(
     () => ({
@@ -30,6 +47,16 @@ export default function WorkspaceSettingsPage() {
 
   const formSettings = draftSettings ?? persistedSettings;
   const hasUnsavedChanges = draftSettings !== null;
+
+  useEffect(() => {
+    if (!mailbox) return;
+    setMailboxEmail(mailbox.email || "");
+    if (mailbox.status === "disconnected") {
+      setMailboxStatus("disconnected");
+      return;
+    }
+    setMailboxStatus("connected");
+  }, [mailbox]);
 
   const updateDraft = <K extends keyof Settings>(key: K, value: Settings[K]) => {
     setDraftSettings((current) => ({
@@ -52,6 +79,28 @@ export default function WorkspaceSettingsPage() {
         });
       },
     });
+  };
+
+  const handleMailboxSave = () => {
+    if (!mailboxEmail.trim()) {
+      toast.error("Mailbox email is required");
+      return;
+    }
+
+    updateMailbox(
+      {
+        email: mailboxEmail.trim(),
+        status: mailboxStatus,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Mailbox settings updated");
+        },
+        onError: () => {
+          toast.error("Failed to update mailbox settings");
+        },
+      }
+    );
   };
 
   return (
@@ -161,6 +210,69 @@ export default function WorkspaceSettingsPage() {
             <p className="border-t pt-4 text-xs text-muted-foreground">
               These values are passed automatically to the serverless automations and pricing engine calculations.
             </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-base">Automation Mailbox</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {mailboxLoading ? (
+              <Skeleton className="h-24" />
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="mailbox-email">Mailbox Email</Label>
+                  <Input
+                    id="mailbox-email"
+                    value={mailboxEmail}
+                    onChange={(event) => setMailboxEmail(event.target.value)}
+                    placeholder="ops@company.com"
+                  />
+                </div>
+
+                <div className="max-w-xs space-y-2">
+                  <Label>Status</Label>
+                  <Select
+                    value={mailboxStatus}
+                    onValueChange={(value) =>
+                      setMailboxStatus(value as "connected" | "disconnected")
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="connected">Connected</SelectItem>
+                      <SelectItem value="disconnected">Disconnected</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {mailbox?.watch_expiration ? (
+                  <p className="text-xs text-muted-foreground">
+                    Watch expiration:{" "}
+                    {new Date(mailbox.watch_expiration).toLocaleString()}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Watch expiration: not set yet
+                  </p>
+                )}
+
+                {mailbox?.last_error && (
+                  <p className="text-xs text-destructive">Last error: {mailbox.last_error}</p>
+                )}
+
+                <Button onClick={handleMailboxSave} disabled={mailboxSaving}>
+                  {mailboxSaving ? "Saving..." : "Save Mailbox"}
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

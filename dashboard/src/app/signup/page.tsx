@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LoginHashSessionHandler } from "../login/hash-session-handler";
 
 const getURL = () => {
   let url =
@@ -95,6 +96,7 @@ export default async function SignupPage(props: {
 
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-black">
+      <LoginHashSessionHandler callbackUrl={callbackTarget} />
       <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[370px]">
         <div className="flex flex-col space-y-2 text-center">
           <div className="mb-4 flex justify-center">
