@@ -20,6 +20,7 @@ Browser -> Next.js App Router/API -> Supabase (RLS)
 - `/login` (sign-in focused)
 - `/signup` (new account creation)
 - `/auth/callback` and `/auth/confirm` handle auth returns
+- login/signup include hash-token session fallback handling for provider redirect edge cases
 
 ### Post-auth bootstrap
 After first successful auth, backend ensures:
@@ -51,7 +52,7 @@ File: `dashboard/src/lib/supabase/middleware.ts`
 
 ### Settings and account
 - `/settings` -> redirects to `/settings/workspace`
-- `/settings/workspace` (workspace-level pricing/settings)
+- `/settings/workspace` (workspace-level pricing/settings + mailbox configuration)
 - `/settings/account` (profile, session revoke, MFA flag, soft delete request)
 - `/settings/members` (members + invites)
 
@@ -64,6 +65,7 @@ File: `dashboard/src/lib/supabase/middleware.ts`
 File: `dashboard/src/components/layout/header.tsx`
 
 - Workspace switcher (`/api/workspaces/current`)
+- Create workspace action (modal -> `/api/workspaces` -> auto-switch)
 - Account/workspace/members shortcuts
 - Sign out action via `/api/auth/logout`
 
@@ -83,6 +85,8 @@ Context resolver: `dashboard/src/lib/workspace-context.ts`
 - `POST /api/workspaces`
 - `GET /api/workspaces/current`
 - `POST /api/workspaces/current`
+- `GET /api/workspaces/current/mailbox`
+- `POST /api/workspaces/current/mailbox`
 - `GET /api/workspaces/[workspaceId]/members`
 - `PATCH /api/workspaces/[workspaceId]/members`
 - `GET /api/workspaces/[workspaceId]/invites`

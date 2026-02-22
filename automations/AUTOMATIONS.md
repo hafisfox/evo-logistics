@@ -136,13 +136,30 @@ modal deploy automations/phase_3_select_and_quote.py
 modal deploy automations/scheduled_tasks.py
 ```
 
-## 10. Verification
+## 10. Current Live Endpoints
+
+- Phase 1 webhook:
+  - `https://hafisjavad--rfq-analyzer-phase-1-gmail-push-phase1.modal.run`
+- Phase 2 webhook:
+  - `https://hafisjavad--quote-analysis-phase-2-gmail-push-phase2.modal.run`
+- Phase 3 select endpoint:
+  - `https://hafisjavad--select-and-quote-phase-3-select-agent.modal.run`
+
+## 11. Post-Deploy Operations
+
+- Renew phase 1 watch:
+  - `python3 -m modal run automations/phase_1_request_analysis.py::renew_gmail_watch`
+- Renew phase 2 watch:
+  - `python3 -m modal run automations/phase_2_quote_analysis.py::renew_gmail_watch`
+
+## 12. Verification
 
 From repo root:
 
 ```bash
 PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m py_compile automations/*.py
-pytest automations/tests -q
+python3 -m pytest automations/tests -q
 ```
 
-If `pytest` is not available in the environment, install it before running the second command.
+Operational note:
+- keep `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK=false` in production.

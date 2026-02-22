@@ -47,6 +47,9 @@ Implemented in `dashboard/supabase/migrations/20260222_001_multitenant_workspace
 - Auth pages:
   - `dashboard/src/app/login/page.tsx`
   - `dashboard/src/app/signup/page.tsx`
+- Hash-fragment session fallback handler (for provider/site-url edge cases):
+  - `dashboard/src/app/login/hash-session-handler.tsx`
+  - reused by login and signup pages
 - Post-auth bootstrap (personal workspace + owner membership + profile default workspace):
   - `dashboard/src/app/auth/callback/route.ts`
   - `dashboard/src/app/auth/confirm/route.ts`
@@ -64,10 +67,12 @@ Implemented in `dashboard/supabase/migrations/20260222_001_multitenant_workspace
   - profile updates, MFA flag toggle, global session revoke, soft-delete request.
 - Workspace settings:
   - `dashboard/src/app/settings/workspace/page.tsx`
+  - pricing constants and workspace mailbox configuration UI.
 - Members/invites UI:
   - `dashboard/src/app/settings/members/page.tsx`
 - Header workspace switcher + user menu + sign out:
   - `dashboard/src/components/layout/header.tsx`
+  - includes in-app workspace creation modal and auto-switch to new workspace.
 - Logout API:
   - `dashboard/src/app/api/auth/logout/route.ts`
 
@@ -77,6 +82,7 @@ Implemented routes:
 
 - `GET/POST /api/workspaces`
 - `GET/POST /api/workspaces/current`
+- `GET/POST /api/workspaces/current/mailbox`
 - `GET/PATCH /api/workspaces/[workspaceId]/members`
 - `GET/POST /api/workspaces/[workspaceId]/invites`
 - `POST /api/workspaces/invites/accept`
@@ -138,7 +144,23 @@ Executed from this workspace branch:
 - `cd dashboard && npm run test:e2e` ✅
 - `cd dashboard && npm run build` ✅ (webpack mode)
 - `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m py_compile automations/*.py` ✅
-- `pytest automations/tests -q` ⚠️ `pytest` not installed in current environment
+- `python3 -m pytest automations/tests -q` ✅
+
+## Production Validation (2026-02-22)
+
+- Dashboard deployed and aliased to:
+  - `https://evo-logistics.vercel.app`
+- Modal apps deployed:
+  - phase 1: `https://hafisjavad--rfq-analyzer-phase-1-gmail-push-phase1.modal.run`
+  - phase 2: `https://hafisjavad--quote-analysis-phase-2-gmail-push-phase2.modal.run`
+  - phase 3: `https://hafisjavad--select-and-quote-phase-3-select-agent.modal.run`
+- Gmail watch renewed successfully for active mailbox.
+- Automated production smoke passed:
+  - login/signup reachable
+  - auth confirm session bootstrap works
+  - workspace create + switch works
+  - mailbox set/get works
+  - logout and post-logout `401` behavior works
 
 ## Source of Truth Files
 
@@ -146,4 +168,6 @@ Executed from this workspace branch:
 - `dashboard/supabase_schema.sql`
 - `dashboard/src/lib/workspace-context.ts`
 - `dashboard/src/lib/workspaces.ts`
+- `dashboard/src/app/api/workspaces/current/mailbox/route.ts`
+- `dashboard/src/hooks/use-workspace-mailbox.ts`
 - `automations/tenant_context.py`
