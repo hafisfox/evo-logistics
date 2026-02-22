@@ -13,12 +13,15 @@ export async function GET(
     const supabase = await createClient();
 
     // Splitting queries to avoid Promise.all never inference issues with .single()
-    const rfqRes = await supabase.from('master_rfqs').select('*').eq('rfq_id', rfqId).single();
+    const [rfqRes, quotesRes] = await Promise.all([
+      supabase.from('master_rfqs').select('*').eq('rfq_id', rfqId).single(),
+      supabase.from('agent_outbound_log').select('*').eq('rfq_id', rfqId)
+    ]);
+
     if (rfqRes.error && rfqRes.error.code !== 'PGRST116') {
       throw rfqRes.error;
     }
 
-    const quotesRes = await supabase.from('agent_outbound_log').select('*').eq('rfq_id', rfqId);
     if (quotesRes.error) throw quotesRes.error;
 
     const rfqData = rfqRes.data as unknown as MasterRFQ;

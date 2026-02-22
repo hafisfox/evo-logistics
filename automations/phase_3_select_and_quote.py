@@ -7,7 +7,7 @@ from typing import Optional
 UAE_TZ = timezone(timedelta(hours=4))
 
 import modal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
@@ -213,33 +213,117 @@ def calculate_door_price(ocean_freight_usd, qty, container_type, carrier,
     }
 
 
+def _group_containers_by_route(pols, pods, all_cts, all_qtys):
+    """Group flattened container entries back into per-route lists.
+
+    DB stores newline-separated values with route fields repeated for index
+    alignment (e.g. pol="SHENZEN\\nSHENZEN", pod="JEBEL ALI\\nJEBEL ALI",
+    container_type="40FT\\n20FT", qty="2\\n1"). This groups them back by
+    consecutive pol|pod key into route-level groups.
+    """
+    groups = []
+    prev_key = None
+    for idx in range(len(all_cts)):
+        pol = pols[idx] if idx < len(pols) else (pols[-1] if pols else "N/A")
+        pod = pods[idx] if idx < len(pods) else (pods[-1] if pods else "N/A")
+        key = f"{pol}|{pod}"
+        if key != prev_key:
+            groups.append({"pol": pol, "pod": pod, "cts": [], "qtys": []})
+            prev_key = key
+        groups[-1]["cts"].append(all_cts[idx])
+        try:
+            groups[-1]["qtys"].append(int(all_qtys[idx]) if idx < len(all_qtys) else 1)
+        except (ValueError, TypeError):
+            groups[-1]["qtys"].append(1)
+    return groups
+
+
+def calculate_door_price_multi(ocean_freight_usd, container_types, quantities, carrier,
+                               delivery_address, do_charges, dest_charges, transp_charges, margin):
+    """Door service pricing for mixed container types on a single route.
+
+    Sums per-type DO and destination charges across all container types,
+    then applies margin to the combined total.
+    """
+    ocean_freight_aed = ocean_freight_usd * EXCHANGE_RATE
+    total_qty = sum(quantities)
+
+    # DO Charges — document fee once, per-container charge per type
+    do_row = get_do_charges_row(carrier, do_charges)
+    do_document = 0
+    do_per_container_total = 0
+    if do_row:
+        try:
+            do_document = float(do_row.get("document") or 0)
+        except (ValueError, TypeError):
+            pass
+        for ct, qty in zip(container_types, quantities):
+            do_col = get_do_col(ct)
+            try:
+                do_per_container_total += float(do_row.get(do_col) or 0) * qty
+            except (ValueError, TypeError):
+                pass
+    do_total = do_document + do_per_container_total
+
+    # Destination Charges — sum per type
+    dest_total = 0
+    for ct, qty in zip(container_types, quantities):
+        dest_col = get_dest_col(ct)
+        dest_total += calc_dest_charges(dest_charges, dest_col, qty)
+
+    # Transport — per container regardless of type
+    transp_per_container = get_transport_charge(delivery_address, transp_charges)
+    transp_total = transp_per_container * total_qty
+
+    # Totals
+    subtotal_aed = ocean_freight_aed + do_total + dest_total + transp_total
+    with_margin = subtotal_aed * (1 + margin)
+    final_price_aed = math.ceil(with_margin / 10) * 10
+    final_price_usd = math.ceil(final_price_aed / EXCHANGE_RATE)
+
+    return {
+        "final_price_aed": final_price_aed,
+        "final_price_usd": final_price_usd,
+        "ocean_freight_aed": round(ocean_freight_aed, 2),
+        "do_total": round(do_total, 2),
+        "dest_total": round(dest_total, 2),
+        "transp_total": round(transp_total, 2),
+        "subtotal_aed": round(subtotal_aed, 2),
+        "margin_amount": round(with_margin - subtotal_aed, 2),
+    }
+
+
 def calculate_full_pricing(rfq, quote, do_charges, dest_charges, transp_charges, margin):
-    """Master pricing function. Handles single and multi-shipment RFQs."""
-    container_types = parse_multi_value(rfq.get("container_type"))
-    quantities = parse_multi_value(rfq.get("qty"))
+    """Master pricing function. Handles single and multi-shipment RFQs.
+
+    Key: shipment_count = len(prices), i.e. 1 price per route.
+    Container types within a route are display metadata grouped by _group_containers_by_route.
+    """
+    all_cts = parse_multi_value(rfq.get("container_type"))
+    all_qtys = parse_multi_value(rfq.get("qty"))
     pols = parse_multi_value(rfq.get("pol"))
     pods = parse_multi_value(rfq.get("pod"))
-    carriers = parse_multi_value(quote.get("carrier"))
     prices = parse_multi_value(quote.get("price"))
+    carrier = (quote.get("carrier") or "N/A").strip()
 
     service_type = (rfq.get("service_type") or "port-to-port").lower().strip()
     is_port_only = service_type == "port-to-port"
     has_delivery = service_type in ("port-to-door", "door-to-door")
     delivery_addrs = parse_multi_value(rfq.get("delivery_address")) if has_delivery else []
-    shipment_count = max(len(container_types), len(quantities), len(prices))
+
+    # Group containers by route (consecutive pol|pod)
+    route_groups = _group_containers_by_route(pols, pods, all_cts, all_qtys)
+    shipment_count = len(prices)
+
+    # If route grouping produces fewer groups than prices, pad; if more, cap
+    while len(route_groups) < shipment_count:
+        route_groups.append(route_groups[-1] if route_groups else {"pol": "N/A", "pod": "N/A", "cts": ["N/A"], "qtys": [1]})
 
     shipments = []
     grand_total_aed = 0
     grand_total_usd = 0
 
     for i in range(shipment_count):
-        ct = container_types[i] if i < len(container_types) else container_types[0]
-        qty_str = quantities[i] if i < len(quantities) else quantities[0]
-        try:
-            qty = int(qty_str)
-        except (ValueError, TypeError):
-            qty = 1
-        carrier = carriers[i] if i < len(carriers) else carriers[0]
         price_str = prices[i] if i < len(prices) else prices[0]
         try:
             ocean_freight_usd = float(price_str)
@@ -248,22 +332,33 @@ def calculate_full_pricing(rfq, quote, do_charges, dest_charges, transp_charges,
         except (ValueError, TypeError) as e:
             raise ValueError(f"Invalid ocean freight price '{price_str}' for shipment {i+1}: {e}")
 
+        rg = route_groups[i]
+        total_qty = sum(rg["qtys"])
+        container_display = ", ".join(f"{q}\u00d7{ct}" for ct, q in zip(rg["cts"], rg["qtys"]))
+
         if is_port_only:
-            result = calculate_port_price(ocean_freight_usd, qty, margin)
+            result = calculate_port_price(ocean_freight_usd, total_qty, margin)
         else:
             delivery_addr = (delivery_addrs[i] if i < len(delivery_addrs) else delivery_addrs[0]) if delivery_addrs else None
-            result = calculate_door_price(
-                ocean_freight_usd, qty, ct, carrier,
-                delivery_addr, do_charges, dest_charges, transp_charges,
-                margin
-            )
+            if len(rg["cts"]) > 1:
+                result = calculate_door_price_multi(
+                    ocean_freight_usd, rg["cts"], rg["qtys"], carrier,
+                    delivery_addr, do_charges, dest_charges, transp_charges, margin
+                )
+            else:
+                result = calculate_door_price(
+                    ocean_freight_usd, total_qty, rg["cts"][0], carrier,
+                    delivery_addr, do_charges, dest_charges, transp_charges, margin
+                )
 
         result["shipment_number"] = i + 1
         result["service_type"] = service_type
-        result["pol"] = pols[i] if i < len(pols) else pols[0]
-        result["pod"] = pods[i] if i < len(pods) else pods[0]
-        result["container_type"] = ct
-        result["qty"] = qty
+        result["pol"] = rg["pol"]
+        result["pod"] = rg["pod"]
+        result["container_display"] = container_display
+        result["container_types"] = rg["cts"]
+        result["quantities"] = rg["qtys"]
+        result["total_qty"] = total_qty
         result["carrier"] = carrier
         result["ocean_freight_usd"] = ocean_freight_usd
 
@@ -299,11 +394,11 @@ def _build_quotation_html(rfq_id, rfq_data, pricing, quote_data):
     """Build HTML email body for the customer quotation."""
     shipments_html = ""
     for s in pricing["shipments"]:
+        container_display = s.get('container_display', 'N/A')
         shipments_html += f"""
         <tr>
-            <td style="padding:8px;border:1px solid #ddd;">{s.get('pol','N/A')} → {s.get('pod','N/A')}</td>
-            <td style="padding:8px;border:1px solid #ddd;">{s.get('container_type','N/A')}</td>
-            <td style="padding:8px;border:1px solid #ddd;">{s.get('qty',1)}</td>
+            <td style="padding:8px;border:1px solid #ddd;">{s.get('pol','N/A')} &rarr; {s.get('pod','N/A')}</td>
+            <td style="padding:8px;border:1px solid #ddd;">{container_display}</td>
             <td style="padding:8px;border:1px solid #ddd;">{s.get('carrier','N/A')}</td>
             <td style="padding:8px;border:1px solid #ddd;font-weight:bold;">AED {s['final_price_aed']:,.0f}</td>
         </tr>"""
@@ -324,14 +419,13 @@ def _build_quotation_html(rfq_id, rfq_data, pricing, quote_data):
         <table style="width:100%;border-collapse:collapse;margin:16px 0;">
             <tr style="background:#f3f4f6;">
                 <th style="padding:8px;border:1px solid #ddd;text-align:left;">Route</th>
-                <th style="padding:8px;border:1px solid #ddd;text-align:left;">Container</th>
-                <th style="padding:8px;border:1px solid #ddd;text-align:left;">Qty</th>
+                <th style="padding:8px;border:1px solid #ddd;text-align:left;">Containers</th>
                 <th style="padding:8px;border:1px solid #ddd;text-align:left;">Carrier</th>
                 <th style="padding:8px;border:1px solid #ddd;text-align:left;">Price (AED)</th>
             </tr>
             {shipments_html}
             <tr style="background:#f9fafb;font-weight:bold;">
-                <td colspan="4" style="padding:8px;border:1px solid #ddd;text-align:right;">Total</td>
+                <td colspan="3" style="padding:8px;border:1px solid #ddd;text-align:right;">Total</td>
                 <td style="padding:8px;border:1px solid #ddd;">AED {pricing['grand_total_aed']:,.0f}</td>
             </tr>
         </table>
@@ -404,10 +498,11 @@ def _notify_sales(gmail_service, rfq_id, rfq_data, pricing, customer_email, carr
     # Build shipment rows for the breakdown table
     rows_html = ""
     for s in pricing["shipments"]:
+        container_display = s.get('container_display', 'N/A')
         rows_html += (
             f"<tr>"
             f"<td style='padding:6px 10px;border:1px solid #e0e0e0;'>{s.get('pol','N/A')} &rarr; {s.get('pod','N/A')}</td>"
-            f"<td style='padding:6px 10px;border:1px solid #e0e0e0;'>{s.get('qty',1)}x{s.get('container_type','N/A')}</td>"
+            f"<td style='padding:6px 10px;border:1px solid #e0e0e0;'>{container_display}</td>"
             f"<td style='padding:6px 10px;border:1px solid #e0e0e0;'>{s.get('carrier','N/A')}</td>"
             f"<td style='padding:6px 10px;border:1px solid #e0e0e0;text-align:right;'>AED {s['final_price_aed']:,.0f}</td>"
             f"</tr>"
@@ -494,19 +589,10 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
     }).eq("rfq_id", request.rfq_id).execute()
     print(f"Updated RFQ status to Selected, agent: {request.selected_agent}")
 
-    # 3. Find ALL quotes from the selected agent/carrier across all shipments
+    # 3. Find the selected quote
     all_quotes = _get_by_filter(supabase, "agent_outbound_log", "rfq_id", request.rfq_id)
-    selected_quotes = _find_all_selected_quotes(all_quotes, request)
-    primary_quote = selected_quotes[0]
-    print(f"Found {len(selected_quotes)} quote(s): carrier={primary_quote.get('carrier')}, "
-          f"prices={[q.get('price') for q in selected_quotes]}")
-
-    # Merge prices/carriers from all shipment quotes for the pricing engine
-    quote_for_pricing = {
-        **primary_quote,
-        "price": "\n".join(str(q.get("price", "0")) for q in selected_quotes),
-        "carrier": "\n".join(q.get("carrier", "N/A") for q in selected_quotes),
-    }
+    quote_data = _find_selected_quote(all_quotes, request)
+    print(f"Found quote: carrier={quote_data.get('carrier')}, price={quote_data.get('price')}")
 
     # 4. Read pricing lookup tables directly as dicts
     do_charges = _get_table(supabase, "do_charges")
@@ -516,7 +602,7 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
     # 5. Calculate pricing
     pricing = calculate_full_pricing(
         rfq_data,
-        quote_for_pricing,
+        quote_data,
         do_charges,
         dest_charges,
         transp_charges,
@@ -541,7 +627,7 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
 
     if thread_id and customer_email:
         _send_quotation_email(gmail_service, customer_email, thread_id,
-                              request.rfq_id, rfq_data, pricing, primary_quote)
+                              request.rfq_id, rfq_data, pricing, quote_data)
     else:
         print(f"Warning: Missing thread_id or customer_email, skipping quotation email")
 
@@ -558,33 +644,22 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
     }
 
 
-def _find_all_selected_quotes(all_quotes: list, request: SelectAgentRequest) -> list:
-    """Find ALL quotes from the selected agent/carrier across all shipment numbers.
-
-    For multi-container RFQs (e.g. 2x40FT + 1x20FT), each container type is a
-    separate shipment entry with its own quote. This collects all of them so the
-    pricing engine can price each container type correctly.
-    """
-    agent_lower = request.selected_agent.strip().lower()
-    carrier_upper = request.selected_carrier.upper().strip()
-
-    matches = [
-        q for q in all_quotes
-        if q.get("rfq_id") == request.rfq_id
-        and (q.get("agent_name") or "").strip().lower() == agent_lower
-        and (q.get("carrier") or "").upper().strip() == carrier_upper
-        and q.get("status") == "Received"
-    ]
-
-    if not matches:
-        raise Exception(
-            f"No quotes found for rfq_id={request.rfq_id}, agent={request.selected_agent}, "
-            f"carrier={request.selected_carrier}"
-        )
-
-    # Sort by shipment_number to maintain index alignment with container types
-    matches.sort(key=lambda q: int(q.get("shipment_number", "1")))
-    return matches
+def _find_selected_quote(all_quotes: list, request: SelectAgentRequest) -> dict:
+    """Find the single selected quote matching agent/carrier/shipment."""
+    for q in all_quotes:
+        if q.get("rfq_id") != request.rfq_id:
+            continue
+        if (q.get("agent_name") or "").strip().lower() != request.selected_agent.strip().lower():
+            continue
+        if (q.get("carrier") or "").upper().strip() != request.selected_carrier.upper().strip():
+            continue
+        if str(q.get("shipment_number", "1")) != str(request.shipment_number):
+            continue
+        return q
+    raise Exception(
+        f"No quote found for rfq_id={request.rfq_id}, agent={request.selected_agent}, "
+        f"carrier={request.selected_carrier}, shipment={request.shipment_number}"
+    )
 
 
 if __name__ == "__main__":

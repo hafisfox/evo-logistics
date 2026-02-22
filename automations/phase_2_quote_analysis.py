@@ -364,7 +364,21 @@ def build_quote_summary(rfq, all_quote_rows: list) -> dict:
     qtys = parse_multi_value(rfq.get('qty'))
     ready_dates = parse_multi_value(rfq.get('ready_date'))
 
-    shipment_count = max(len(pols), len(pods), len(container_types))
+    # Group containers by route (consecutive pol|pod pairs)
+    route_groups = []
+    prev_key = None
+    for idx in range(len(container_types)):
+        pol = pols[idx] if idx < len(pols) else (pols[-1] if pols else 'N/A')
+        pod = pods[idx] if idx < len(pods) else (pods[-1] if pods else 'N/A')
+        key = f"{pol}|{pod}"
+        if key != prev_key:
+            rd = ready_dates[idx] if idx < len(ready_dates) else (ready_dates[-1] if ready_dates else 'N/A')
+            route_groups.append({"pol": pol, "pod": pod, "cts": [], "qtys": [], "ready_date": rd})
+            prev_key = key
+        route_groups[-1]["cts"].append(container_types[idx])
+        route_groups[-1]["qtys"].append(qtys[idx] if idx < len(qtys) else '1')
+
+    shipment_count = len(route_groups) or 1
 
     # Filter valid quotes
     valid_quotes = []
@@ -378,16 +392,17 @@ def build_quote_summary(rfq, all_quote_rows: list) -> dict:
             except (ValueError, TypeError):
                 pass
 
-    # Build shipments structure
+    # Build shipments structure (1 per route)
     shipment_quotes = []
     for i in range(shipment_count):
+        rg = route_groups[i] if i < len(route_groups) else route_groups[0]
+        container_display = ", ".join(f"{q} x {ct}" for ct, q in zip(rg["cts"], rg["qtys"]))
         shipment = {
             'number': i + 1,
-            'pol': pols[i] if i < len(pols) else 'N/A',
-            'pod': pods[i] if i < len(pods) else 'N/A',
-            'container_type': container_types[i] if i < len(container_types) else 'N/A',
-            'qty': qtys[i] if i < len(qtys) else 'N/A',
-            'ready_date': ready_dates[i] if i < len(ready_dates) else 'N/A',
+            'pol': rg['pol'],
+            'pod': rg['pod'],
+            'container_display': container_display,
+            'ready_date': rg['ready_date'],
             'quotes': []
         }
 
@@ -466,7 +481,7 @@ def build_quote_summary(rfq, all_quote_rows: list) -> dict:
   <div style="background: #f5f5f5; padding: 12px 15px; border-bottom: 2px solid #667eea;">
     <strong style="color: #333;">SHIPMENT {shipment['number']}</strong> {service_label}
     <div style="font-size: 13px; color: #666; margin-top: 4px;">
-      {shipment['pol']} → {shipment['pod']} | {shipment['qty']} x {shipment['container_type']} | Ready: {shipment['ready_date']}
+      {shipment['pol']} → {shipment['pod']} | {shipment['container_display']} | Ready: {shipment['ready_date']}
     </div>
   </div>
   <table style="width: 100%; border-collapse: collapse;">
@@ -643,7 +658,7 @@ def _process_agent_quotes():
         print("No new emails to process.")
         return
 
-    openai_client = openai.Client(api_key=os.environ["OPENAI_API_KEY"])
+    openai_client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
     for msg in messages:
         msg_id = msg['id']

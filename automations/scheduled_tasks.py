@@ -227,7 +227,7 @@ def check_customer_followups():
             continue
 
         try:
-            quoted_at_naive = datetime.strptime(str(quoted_at_str)[:16], "%Y-%m-%d %H:%M")
+            quoted_at_naive = datetime.strptime(str(quoted_at_str).strip(), "%Y-%m-%d %I:%M %p")
             quoted_at_uae = quoted_at_naive.replace(tzinfo=UAE_TZ)
             
             if now_uae >= quoted_at_uae + timedelta(hours=24):

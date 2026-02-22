@@ -164,10 +164,10 @@ PRICING & QUOTATION
 - Customer replies to `Quoted` or `Followed_Up` RFQs automatically update status to `Customer_Replied` to prevent duplicate follow-ups
 - Recursive MIME tree extraction handles plain text, HTML tables, and nested multipart emails
 - AI extraction outputs `containers` array per shipment (each item has `qty` = int, `type` = container code)
-- Mixed container types on the same route are flattened into separate shipment entries (e.g., "2x40FT + 1x20FT" = 2 entries). Each container type gets its own numbered "[Shipment X of Y]" block in agent outreach emails.
-- Different routes → separate shipments (also flattened per container type)
+- **1 route = 1 shipment**: Mixed container types on the same route are ONE shipment (e.g., "2x40FT + 1x20FT, SHENZEN→JEBEL ALI" = 1 shipment). Container types are display metadata, not separate shipments.
+- Different routes → separate shipments (e.g., SHANGHAI→JEBEL ALI + NINGBO→HAMAD PORT = 2 shipments)
 - Pydantic validators coerce OpenAI response types (string → list for pod_hint, string → int for container qty)
-- Containers are flattened to newline-separated `container_type` and `qty` fields in Supabase, with route fields repeated per container entry for index alignment. Full multi-line values are preserved in the DB (not truncated to the first entry).
+- Containers are stored as newline-separated `container_type` and `qty` fields in Supabase, with route fields (`pol`, `pod`) repeated per container entry for index alignment. Full multi-line values are preserved in the DB (not truncated to the first entry).
 - Port name conversion (see section 5 for mappings)
 
 ## 8. Agent RFQ Automation
@@ -209,11 +209,11 @@ PRICING & QUOTATION
 | Validity | Quote expiry date |
 
 **Multi-shipment handling:**
-- Parses multiple shipments per agent reply (each container type = separate shipment)
+- 1 route = 1 shipment: mixed container types on the same route produce ONE quote with a combined total price
+- Parses multiple shipments per agent reply (each distinct route = separate shipment)
 - Handles multiple carrier options per shipment
 - Outputs ONE item per carrier option per shipment for the database
-- Distinguishes bundled pricing (one price for all) vs per-shipment pricing
-- Mixed container types (e.g. 40FT + 20FT) generate separate quote objects per shipment number
+- Distinguishes bundled pricing (one price for all routes) vs per-shipment pricing
 
 **Carrier name normalization:** see section 5 for full list
 
@@ -226,7 +226,7 @@ PRICING & QUOTATION
 - Manager has **final approval and override authority**
 - Reviews AI recommendations via email notification / dashboard
 - Selects which agent to use based on experience + AI ranking
-- System **locks selected rate** for all downstream calculation (collects all shipment quotes from the selected agent/carrier automatically)
+- System **locks selected rate** for all downstream calculation
 - All steps after selection are **fully automatic**
 - Complete audit trail maintained for every decision
 

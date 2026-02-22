@@ -16,7 +16,7 @@
 ## On-Demand Skill Loading
 
 To keep the context window clean and avoid token bloat, **skills must be loaded dynamically only when needed**.
-1. **Identify**: When starting a task, review `SKILLS.md` to see if a relevant skill exists for the technology you are working with (e.g., `nextjs-pro` for dashboard work, `startup-mvp` for Prisma/PostgreSQL).
+1. **Identify**: When starting a task, review `SKILLS.md` to see if a relevant skill exists for the technology you are working with (e.g., `vercel-react-best-practices` for dashboard UI work, `supabase-postgres-best-practices` for database queries/RLS).
 2. **Fetch**: Use your file reading tools (like `list_dir` and `view_file`) to inspect the relevant skill folder in `.agents/skills/` or `.claude/skills/`.
 3. **Read**: View the specific `.md` or `.mdc` files that apply to your exact task (e.g., `react.mdc` when writing React components).
 4. **Apply**: Follow the best practices outlined in the skill document. Do not guess or assume the rules—read the file and apply them.

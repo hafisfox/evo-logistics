@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { selectAgent } from "@/lib/modal-client";
+import { getSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -11,11 +12,7 @@ export async function POST(
     const { rfqId } = await params;
     const body = await request.json();
 
-    // Fetch dynamic settings to use in Modal Serverless Action
-    const host = request.headers.get("host") || "localhost:3000";
-    const protocol = process.env.NODE_ENV === "development" ? "http" : "https";
-    const settingsResponse = await fetch(`${protocol}://${host}/api/settings`);
-    const settings = await settingsResponse.json();
+    const settings = await getSettings();
 
     const result = await selectAgent({
       rfq_id: rfqId,
