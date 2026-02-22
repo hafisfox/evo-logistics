@@ -5,25 +5,24 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
-  PieChart,
-  Truck,
-  BarChart2,
-  HelpCircle,
+  LayoutGrid,
+  ClipboardList,
+  Users,
+  DollarSign,
   Settings,
   LogOut,
-  LayoutGrid,
+  Ship,
 } from "lucide-react";
 
 const menuItems = [
   { href: "/", label: "Dashboard", icon: LayoutGrid },
-  { href: "/statistics", label: "Statistics", icon: PieChart },
-  { href: "/shipments", label: "Shipments", icon: Truck },
-  { href: "/reports", label: "Reports", icon: BarChart2 },
+  { href: "/rfqs", label: "RFQ Pipeline", icon: ClipboardList },
+  { href: "/agents", label: "Agents", icon: Users },
+  { href: "/pricing", label: "Pricing Tables", icon: DollarSign },
 ];
 
 const accountItems = [
-  { href: "/help", label: "Help", icon: HelpCircle },
-  { href: "/settings/account", label: "Settings", icon: Settings },
+  { href: "/settings", label: "Settings", icon: Settings },
   { href: "/logout", label: "Log out", icon: LogOut, action: "logout" },
 ];
 
@@ -36,7 +35,7 @@ export function Sidebar() {
     window.location.href = "/login";
   };
 
-  const NavItem = ({ item }: { item: any }) => {
+  const NavItem = ({ item }: { item: { href: string; label: string; icon: React.ElementType; action?: string } }) => {
     const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
 
     if (item.action === "logout") {
@@ -70,8 +69,8 @@ export function Sidebar() {
   return (
     <aside className="hidden md:flex flex-col w-[260px] bg-transparent border-r border-[#E5E7EB] dark:border-white/10 h-screen overflow-hidden z-40">
       <div className="flex h-24 items-center gap-3 px-8 mt-2">
-        <Truck className="h-7 w-7 text-black dark:text-white fill-current" />
-        <span className="text-xl font-bold tracking-tight text-black dark:text-white">Atlas</span>
+        <Ship className="h-7 w-7 text-black dark:text-white" />
+        <span className="text-xl font-bold tracking-tight text-black dark:text-white">Evo Logistics</span>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-2 pb-24 space-y-8 scrollbar-hide">

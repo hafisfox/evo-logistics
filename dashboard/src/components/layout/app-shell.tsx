@@ -14,13 +14,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Determine title based on pathname
   const getTitle = () => {
-    switch (pathname) {
-      case "/": return "Dashboard Overview";
-      case "/statistics": return "Statistics";
-      case "/shipments": return "Shipments";
-      case "/reports": return "Reports";
-      default: return "Dashboard Overview";
-    }
+    if (pathname === "/") return "Dashboard";
+    if (pathname.startsWith("/rfqs")) return "RFQ Pipeline";
+    if (pathname.startsWith("/agents")) return "Agents";
+    if (pathname.startsWith("/pricing")) return "Pricing Tables";
+    if (pathname.startsWith("/settings")) return "Settings";
+    return "Dashboard";
   };
 
   return (
