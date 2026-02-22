@@ -66,6 +66,7 @@ File: `dashboard/src/components/layout/header.tsx`
 
 - Workspace switcher (`/api/workspaces/current`)
 - Create workspace action (modal -> `/api/workspaces` -> auto-switch)
+- Clears React Query cache before refresh on workspace switch/create to avoid stale data from previous workspace context.
 - Account/workspace/members shortcuts
 - Sign out action via `/api/auth/logout`
 
@@ -140,6 +141,13 @@ Workspace/meta tables:
 - `user_profiles`
 
 Migration: `dashboard/supabase/migrations/20260222_001_multitenant_workspaces.sql`
+
+Legacy-constraint hardening:
+- `dashboard/supabase/migrations/20260222_010_fix_agents_workspace_scoping.sql`
+- Drops old global agent constraints and enforces:
+  - `primary key (workspace_id, agent_name)`
+  - `unique (workspace_id, email)`
+This prevents "Agent already exists" conflicts across different workspaces.
 
 ## 8. Modal Integration
 

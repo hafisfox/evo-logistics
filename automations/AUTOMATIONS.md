@@ -54,6 +54,10 @@ The following are treated as tenant-scoped in automation helpers:
 - `workspace_members`
 - `audit_events`
 
+Constraint note:
+- `agents` must be keyed per workspace (`workspace_id + agent_name`) with per-workspace email uniqueness (`workspace_id + email`).
+- Legacy global constraints are fixed by migration `dashboard/supabase/migrations/20260222_010_fix_agents_workspace_scoping.sql`.
+
 ### Unknown mailbox handling
 If mailbox->workspace resolution fails, phase webhooks are ignored by default and an audit row is written.
 

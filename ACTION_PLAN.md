@@ -22,6 +22,7 @@ Ship a workspace-based logistics dashboard + automation system where each authen
 
 ### 1. Multi-tenant data model and RLS
 Implemented in `dashboard/supabase/migrations/20260222_001_multitenant_workspaces.sql` and reflected in `dashboard/supabase_schema.sql`.
+Legacy tenant-hardening patch is in `dashboard/supabase/migrations/20260222_010_fix_agents_workspace_scoping.sql`.
 
 - New tables:
   - `workspaces`
@@ -39,6 +40,9 @@ Implemented in `dashboard/supabase/migrations/20260222_001_multitenant_workspace
   - `transportation_charges`
   - `app_settings`
 - Workspace-scoped constraints/indexes are in place.
+- Agents table explicitly re-hardened for workspace isolation:
+  - `primary key (workspace_id, agent_name)`
+  - `unique (workspace_id, email)`
 - Legacy public-read policies removed.
 - Force RLS enabled and role-aware policy checks implemented via `public.has_workspace_role(...)`.
 
@@ -73,6 +77,7 @@ Implemented in `dashboard/supabase/migrations/20260222_001_multitenant_workspace
 - Header workspace switcher + user menu + sign out:
   - `dashboard/src/components/layout/header.tsx`
   - includes in-app workspace creation modal and auto-switch to new workspace.
+  - clears client query cache on workspace switch/create to avoid stale cross-workspace table data.
 - Logout API:
   - `dashboard/src/app/api/auth/logout/route.ts`
 
@@ -150,11 +155,14 @@ Executed from this workspace branch:
 
 - Dashboard deployed and aliased to:
   - `https://evo-logistics.vercel.app`
+- Latest production deployment from `main`:
+  - commit `8584cb29c8f3a2997e8755ca6c0a69438ac82c9b`
 - Modal apps deployed:
   - phase 1: `https://hafisjavad--rfq-analyzer-phase-1-gmail-push-phase1.modal.run`
   - phase 2: `https://hafisjavad--quote-analysis-phase-2-gmail-push-phase2.modal.run`
   - phase 3: `https://hafisjavad--select-and-quote-phase-3-select-agent.modal.run`
 - Gmail watch renewed successfully for active mailbox.
+- Gmail watch renewed successfully for both active workspace mailboxes.
 - Automated production smoke passed:
   - login/signup reachable
   - auth confirm session bootstrap works
@@ -165,6 +173,7 @@ Executed from this workspace branch:
 ## Source of Truth Files
 
 - `dashboard/supabase/migrations/20260222_001_multitenant_workspaces.sql`
+- `dashboard/supabase/migrations/20260222_010_fix_agents_workspace_scoping.sql`
 - `dashboard/supabase_schema.sql`
 - `dashboard/src/lib/workspace-context.ts`
 - `dashboard/src/lib/workspaces.ts`

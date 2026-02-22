@@ -13,11 +13,13 @@ Workspace-centric Next.js control plane for RFQ operations, pricing, and automat
 - In-app workspace creation from header user menu.
 - Role-aware API guards for `owner`, `admin`, and `member`.
 - Workspace-scoped RFQ/pricing/settings APIs.
+- Workspace-scoped agent uniqueness (`workspace_id + agent_name`, `workspace_id + email`) via migration `20260222_010_fix_agents_workspace_scoping.sql`.
 - Workspace mailbox management API + UI in workspace settings.
 - Invite links that carry token through auth callback and auto-accept membership.
 - Account settings (`/settings/account`) with profile update, session revoke, MFA flag toggle, and soft-delete request.
 - Workspace member/invite management (`/settings/members`).
 - Workspace settings (`/settings/workspace`).
+- Workspace switch/create now clears client query cache before refresh to prevent stale cross-workspace rows in UI tables.
 
 ## Main Routes
 
@@ -62,10 +64,17 @@ Notes:
 - `src/lib/workspace-context.ts` — active workspace/role resolution helpers.
 - `src/lib/workspaces.ts` — user workspace bootstrap + defaults seeding.
 - `src/lib/supabase/middleware.ts` — auth/onboarding gate behavior.
+- `src/components/layout/header.tsx` — workspace switch/create flow + query cache reset on workspace change.
 - `src/app/api/workspaces/**` — workspace/member/invite APIs.
 - `src/app/api/workspaces/current/mailbox/route.ts` — workspace mailbox get/update endpoint.
 - `src/hooks/use-workspace-mailbox.ts` — mailbox query/mutation hooks.
 - `src/app/api/rfqs/[rfqId]/select/route.ts` — workspace-aware Modal handoff.
+
+## Migration Notes
+
+- Multi-tenant baseline: `../dashboard/supabase/migrations/20260222_001_multitenant_workspaces.sql`
+- RFQ soft delete + index: `../dashboard/supabase/migrations/20260222_009_dashboard_crud_rfq_soft_delete.sql`
+- Legacy agent global-constraint fix: `../dashboard/supabase/migrations/20260222_010_fix_agents_workspace_scoping.sql`
 
 ## Related Docs
 
