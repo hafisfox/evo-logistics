@@ -159,6 +159,7 @@ alter table public.transportation_charges alter column workspace_id set not null
 alter table public.app_settings alter column workspace_id set not null;
 
 alter table public.agent_outbound_log drop constraint if exists agent_outbound_log_rfq_id_fkey;
+alter table public.agent_outbound_log drop constraint if exists agent_outbound_log_workspace_rfq_id_fkey;
 alter table public.master_rfqs drop constraint if exists master_rfqs_pkey;
 alter table public.master_rfqs add constraint master_rfqs_pkey primary key (workspace_id, rfq_id);
 alter table public.agent_outbound_log drop constraint if exists agent_outbound_log_pkey;
@@ -313,7 +314,10 @@ drop policy if exists "Allow public read access" on public.transportation_charge
 drop policy if exists workspaces_select on public.workspaces;
 create policy workspaces_select on public.workspaces
   for select to authenticated
-  using ((select public.has_workspace_role(id, array['owner', 'admin', 'member'])));
+  using (
+    created_by = (select auth.uid())
+    or (select public.has_workspace_role(id, array['owner', 'admin', 'member']))
+  );
 
 drop policy if exists workspaces_insert on public.workspaces;
 create policy workspaces_insert on public.workspaces
@@ -453,4 +457,3 @@ create policy app_settings_write on public.app_settings
   with check ((select public.has_workspace_role(workspace_id, array['owner', 'admin'])));
 
 commit;
-

@@ -32,10 +32,10 @@ create policy workspace_members_insert on public.workspace_members
       and exists (
         select 1
         from public.workspace_invites wi
-        where wi.workspace_id = workspace_id
+        where wi.workspace_id = workspace_members.workspace_id
           and lower(wi.email) = lower(coalesce((select auth.jwt() ->> 'email'), ''))
           and wi.status = 'pending'
-          and wi.role = role
+          and wi.role = workspace_members.role
           and wi.expires_at > now()
       )
     )
