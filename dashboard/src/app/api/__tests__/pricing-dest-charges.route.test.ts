@@ -9,10 +9,6 @@ const {
   fromMock,
   selectEqMock,
   mutationEqMock,
-  insertMock,
-  updateMock,
-  deleteMock,
-  selectMock,
   mutationSelectMock,
   singleMock,
 } = vi.hoisted(() => {
@@ -37,10 +33,6 @@ const {
     fromMock,
     selectEqMock,
     mutationEqMock,
-    insertMock,
-    updateMock,
-    deleteMock,
-    selectMock,
     mutationSelectMock,
     singleMock,
   };

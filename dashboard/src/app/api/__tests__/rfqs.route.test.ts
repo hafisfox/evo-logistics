@@ -7,8 +7,6 @@ const { requireWorkspaceApiContextMock } = vi.hoisted(() => ({
 const {
   createClientMock,
   fromMock,
-  selectMock,
-  eqMock,
   isMock,
   orderMock,
 } = vi.hoisted(() => {
@@ -22,8 +20,6 @@ const {
   return {
     createClientMock,
     fromMock,
-    selectMock,
-    eqMock,
     isMock,
     orderMock,
   };
