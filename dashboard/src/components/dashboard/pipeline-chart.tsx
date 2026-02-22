@@ -13,11 +13,11 @@ export function PipelineChart({ data }: PipelineChartProps) {
   const total = data.reduce((sum, d) => sum + d.count, 0);
 
   return (
-    <Card className="hover:shadow-md transition-all duration-300">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Pipeline Overview</CardTitle>
+    <Card className="rounded-3xl border-white/20 dark:border-white/5 bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.02)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] transition-all duration-500 overflow-hidden flex flex-col h-full">
+      <CardHeader className="p-6 pb-4">
+        <CardTitle className="text-lg font-semibold tracking-tight">Pipeline Overview</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-6 pb-6 flex-1 flex flex-col justify-center">
         {total === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-4">
             No data yet
@@ -25,7 +25,7 @@ export function PipelineChart({ data }: PipelineChartProps) {
         ) : (
           <div className="space-y-3">
             {/* Stacked bar */}
-            <div className="flex h-8 rounded-full overflow-hidden border border-muted/20">
+            <div className="flex h-12 rounded-2xl overflow-hidden border border-white/10 dark:border-white/5 shadow-inner">
               {data.map((d, i) => {
                 const config = STATUS_CONFIG[d.status];
                 const pct = (d.count / total) * 100;
@@ -33,8 +33,8 @@ export function PipelineChart({ data }: PipelineChartProps) {
                   <div
                     key={d.status}
                     className={cn(
-                      "transition-all duration-300 hover:opacity-80 cursor-pointer",
-                      i < data.length - 1 && "border-r-2 border-background"
+                      "transition-all duration-500 hover:opacity-90 hover:brightness-110 cursor-pointer relative",
+                      i < data.length - 1 && "border-r-[3px] border-card/40"
                     )}
                     style={{
                       width: `${pct}%`,
@@ -46,19 +46,19 @@ export function PipelineChart({ data }: PipelineChartProps) {
               })}
             </div>
             {/* Legend */}
-            <div className="flex flex-wrap gap-x-4 gap-y-1">
+            <div className="flex flex-wrap gap-x-5 gap-y-2 pt-2">
               {data.map((d) => {
                 const config = STATUS_CONFIG[d.status];
                 return (
-                  <div key={d.status} className="flex items-center gap-1.5">
+                  <div key={d.status} className="flex items-center gap-2 group cursor-pointer">
                     <div
-                      className="h-2.5 w-2.5 rounded-full"
+                      className="h-3 w-3 rounded-full shadow-sm group-hover:scale-110 transition-transform"
                       style={{
                         backgroundColor: config?.color || "#94a3b8",
                       }}
                     />
-                    <span className="text-xs text-muted-foreground">
-                      {config?.label || d.status}: {d.count}
+                    <span className="text-sm text-foreground/80 font-medium tracking-tight">
+                      {config?.label || d.status}: <span className="font-semibold text-foreground">{d.count}</span>
                     </span>
                   </div>
                 );

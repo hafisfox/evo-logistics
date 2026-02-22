@@ -160,13 +160,13 @@ export function Header({ title, description }: HeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b px-6 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 transition-all duration-300">
-      <div className="flex items-center">
+    <header className="sticky top-4 z-50 mx-4 md:mx-6 flex h-16 items-center justify-between px-6 bg-card/60 dark:bg-card/40 backdrop-blur-2xl border border-white/20 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] rounded-3xl transition-all duration-500">
+      <div className="flex items-center gap-3">
         <MobileNav />
-        <div>
-          <h1 className="text-lg font-semibold">{title}</h1>
+        <div className="pl-1">
+          <h1 className="text-base md:text-lg font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">{title}</h1>
           {description && (
-            <p className="text-sm text-muted-foreground hidden sm:block">{description}</p>
+            <p className="text-xs md:text-sm text-muted-foreground/80 font-medium hidden sm:block">{description}</p>
           )}
         </div>
       </div>
