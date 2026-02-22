@@ -1,12 +1,19 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { requireWorkspaceApiContext } from "@/lib/workspace-context";
 import { createClient } from "@/lib/supabase/server";
+import { ensureUserWorkspaceBootstrap } from "@/lib/workspaces";
 
-export default async function OnboardingPage() {
+interface OnboardingPageProps {
+  searchParams: Promise<{ error?: string }>;
+}
+
+export default async function OnboardingPage({ searchParams }: OnboardingPageProps) {
+  const params = await searchParams;
   const scope = await requireWorkspaceApiContext({ allowNoWorkspace: true });
   if (scope.response?.status === 401) {
     redirect("/login");
@@ -16,6 +23,34 @@ export default async function OnboardingPage() {
   let mailboxStatus = "disconnected";
   let mailboxEmail: string | null = null;
   let mailboxError: string | null = null;
+
+  const createWorkspaceAction = async () => {
+    "use server";
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error || !user) {
+      redirect("/login");
+    }
+
+    const createdWorkspaceId = await ensureUserWorkspaceBootstrap(user);
+    if (!createdWorkspaceId) {
+      redirect("/onboarding?error=workspace_bootstrap_failed");
+    }
+
+    (await cookies()).set("workspace_id", createdWorkspaceId, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30,
+    });
+
+    redirect("/");
+  };
 
   if (workspaceId) {
     const supabase = await createClient();
@@ -37,6 +72,12 @@ export default async function OnboardingPage() {
           <CardTitle>Workspace Setup</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {params.error && (
+            <div className="rounded border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              We could not create your workspace yet. Click <strong>Create Workspace</strong>{" "}
+              again after applying the latest database migration.
+            </div>
+          )}
           <p className="text-sm text-muted-foreground">
             Your account is ready. Continue with these setup steps before enabling full
             automation.
@@ -51,14 +92,20 @@ export default async function OnboardingPage() {
             {mailboxEmail && <p className="text-muted-foreground">{mailboxEmail}</p>}
             {mailboxError && <p className="text-destructive">{mailboxError}</p>}
           </div>
-          <div className="flex gap-2 pt-2">
-            <Button asChild>
-              <Link href="/">Open Dashboard</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/settings/workspace">Workspace Settings</Link>
-            </Button>
-          </div>
+          {workspaceId ? (
+            <div className="flex gap-2 pt-2">
+              <Button asChild>
+                <Link href="/">Open Dashboard</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/settings/workspace">Workspace Settings</Link>
+              </Button>
+            </div>
+          ) : (
+            <form action={createWorkspaceAction}>
+              <Button type="submit">Create Workspace</Button>
+            </form>
+          )}
         </CardContent>
       </Card>
     </div>
