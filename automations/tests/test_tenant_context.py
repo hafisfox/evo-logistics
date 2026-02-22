@@ -22,6 +22,7 @@ class _FakeQuery:
         self.eq_calls = []
         self.update_values = None
         self.upsert_values = None
+        self.insert_values = None
         self.limit_value = None
 
     def select(self, _columns):
@@ -41,6 +42,10 @@ class _FakeQuery:
 
     def upsert(self, values):
         self.upsert_values = values
+        return self
+
+    def insert(self, values):
+        self.insert_values = values
         return self
 
     def execute(self):
@@ -97,7 +102,7 @@ class TenantContextTests(unittest.TestCase):
         )
         self.assertEqual(tc.resolve_workspace_id(supabase, "ops@example.com"), "ws-123")
 
-    def test_resolve_workspace_id_falls_back_to_bootstrap(self):
+    def test_resolve_workspace_id_returns_none_without_fallback(self):
         supabase = _FakeSupabase(
             {
                 "workspace_mailboxes": [
@@ -105,17 +110,23 @@ class TenantContextTests(unittest.TestCase):
                 ]
             }
         )
-        self.assertEqual(
-            tc.resolve_workspace_id(supabase, "ops@example.com"),
-            tc.BOOTSTRAP_WORKSPACE_ID,
-        )
+        self.assertIsNone(tc.resolve_workspace_id(supabase, "ops@example.com"))
 
     def test_resolve_workspace_id_handles_query_error(self):
         supabase = _FakeSupabase(raise_tables={"workspace_mailboxes"})
-        self.assertEqual(
-            tc.resolve_workspace_id(supabase, "ops@example.com"),
-            tc.BOOTSTRAP_WORKSPACE_ID,
-        )
+        self.assertIsNone(tc.resolve_workspace_id(supabase, "ops@example.com"))
+
+    def test_resolve_workspace_id_supports_optional_bootstrap_fallback(self):
+        supabase = _FakeSupabase()
+        previous = tc.ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK
+        tc.ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK = True
+        try:
+            self.assertEqual(
+                tc.resolve_workspace_id(supabase, "ops@example.com"),
+                tc.BOOTSTRAP_WORKSPACE_ID,
+            )
+        finally:
+            tc.ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK = previous
 
     def test_scoped_select_applies_workspace_filter_for_tenant_tables(self):
         supabase = _FakeSupabase({"master_rfqs": [{"rfq_id": "RFQ-1"}]})
@@ -156,6 +167,20 @@ class TenantContextTests(unittest.TestCase):
         self.assertEqual(supabase.last_query.update_values, {"status": "Quoted"})
         self.assertIn(("rfq_id", "RFQ-1"), supabase.last_query.eq_calls)
         self.assertIn(("workspace_id", "ws-1"), supabase.last_query.eq_calls)
+
+    def test_audit_ignored_mailbox_event_writes_bootstrap_audit_row(self):
+        supabase = _FakeSupabase()
+        tc.audit_ignored_mailbox_event(
+            supabase,
+            source="phase_1_request_analysis",
+            mailbox_email="ops@example.com",
+            reason="mailbox_not_connected_or_unmapped",
+        )
+        payload = supabase.last_query.insert_values
+        self.assertEqual(payload["workspace_id"], tc.BOOTSTRAP_WORKSPACE_ID)
+        self.assertEqual(payload["action"], "automation_mailbox_event_ignored")
+        self.assertEqual(payload["entity_type"], "phase_1_request_analysis")
+        self.assertEqual(payload["entity_id"], "ops@example.com")
 
 
 if __name__ == "__main__":

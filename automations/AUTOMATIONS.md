@@ -54,13 +54,15 @@ The following are treated as tenant-scoped in automation helpers:
 - `workspace_members`
 - `audit_events`
 
-### Compatibility fallback
-If mailbox->workspace resolution fails, automations currently fall back to bootstrap workspace via:
+### Unknown mailbox handling
+If mailbox->workspace resolution fails, phase webhooks are ignored by default and an audit row is written.
 
-- env: `BOOTSTRAP_WORKSPACE_ID`
-- default: `00000000-0000-0000-0000-000000000001`
+Optional compatibility mode is still available:
 
-This is intentional for phased cutover and should be removed after production validation.
+- env: `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK=true`
+- fallback workspace env: `BOOTSTRAP_WORKSPACE_ID` (default `00000000-0000-0000-0000-000000000001`)
+
+Use compatibility mode only during transitional cutover.
 
 ## 5. Phase Behavior (Current)
 
@@ -94,6 +96,7 @@ Both phase 1 and phase 2 include `renew_gmail_watch` that:
 
 - loops connected mailbox rows from `workspace_mailboxes`
 - renews watches per mailbox
+- skips renewal if no connected mailbox rows exist
 
 This supports one mailbox per workspace model.
 
@@ -122,6 +125,7 @@ This supports one mailbox per workspace model.
 ### Optional / compatibility
 - `MODAL_LLM_API_KEY`
 - `BOOTSTRAP_WORKSPACE_ID`
+- `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK`
 
 ## 9. Deployment
 

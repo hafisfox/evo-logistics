@@ -110,21 +110,22 @@ Current behavior:
 - Gmail Pub/Sub payload mailbox is used to resolve workspace context.
 - DB reads/writes are workspace-scoped for tenant tables.
 - Watch renewal loops through active `workspace_mailboxes` rows.
-- Unknown mailbox events fall back to bootstrap workspace for compatibility.
+- Unknown/disconnected mailbox events are ignored by default and logged to `audit_events`.
+- Optional fallback can be enabled with `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK=true` during cutover.
 
 ## Dual-Mode Cutover (Active)
 
 The system currently runs in a phased dual-mode:
 
 - Existing legacy data is backfilled into bootstrap workspace `00000000-0000-0000-0000-000000000001`.
-- Missing workspace context in automation ingress can still resolve to bootstrap workspace.
+- Missing workspace context in automation ingress no longer routes by default; strict ignore + audit is active.
 - New dashboard paths and APIs are workspace-native.
 
 ## Known Hardening Follow-Ups
 
 1. Per-workspace Gmail OAuth credential lifecycle is not fully closed-loop in dashboard UX yet.
 2. Audit events are schema-ready but not yet emitted comprehensively in all mutation paths.
-3. Compatibility fallback to bootstrap workspace should be removed after production validation.
+3. Keep `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK` disabled in production except controlled emergency rollback windows.
 4. Add comprehensive automation pytest suite under `automations/tests` for cross-workspace regression coverage.
 
 ## Verification Gate (latest run)

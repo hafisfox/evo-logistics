@@ -7,6 +7,9 @@ from typing import Any, Dict, Optional
 BOOTSTRAP_WORKSPACE_ID = os.environ.get(
     "BOOTSTRAP_WORKSPACE_ID", "00000000-0000-0000-0000-000000000001"
 )
+ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK = os.environ.get(
+    "ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK", "false"
+).lower() in {"1", "true", "yes", "on"}
 
 TENANT_TABLES = {
     "master_rfqs",
@@ -53,8 +56,17 @@ def extract_pubsub_mailbox(payload: Optional[Dict[str, Any]]) -> Optional[str]:
     return None
 
 
-def resolve_workspace_id(supabase, mailbox_email: Optional[str]) -> str:
-    """Resolve workspace from connected mailbox email, fallback to bootstrap workspace."""
+def resolve_workspace_id(supabase, mailbox_email: Optional[str]) -> Optional[str]:
+    """Resolve workspace from connected mailbox email.
+
+    Default behavior is strict isolation:
+    - connected mailbox mapping -> workspace id
+    - unknown/disconnected mailbox -> None
+
+    Optional compatibility mode can be enabled via
+    ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK=true to route unresolved events
+    to the bootstrap workspace during phased cutover.
+    """
     if mailbox_email:
         try:
             row = (
@@ -74,7 +86,35 @@ def resolve_workspace_id(supabase, mailbox_email: Optional[str]) -> str:
         except Exception:
             pass
 
-    return BOOTSTRAP_WORKSPACE_ID
+    if ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK:
+        return BOOTSTRAP_WORKSPACE_ID
+    return None
+
+
+def audit_ignored_mailbox_event(
+    supabase,
+    *,
+    source: str,
+    mailbox_email: Optional[str],
+    reason: str,
+) -> None:
+    """Write a minimal audit row when a mailbox event is ignored."""
+    try:
+        supabase.table("audit_events").insert(
+            {
+                "workspace_id": BOOTSTRAP_WORKSPACE_ID,
+                "action": "automation_mailbox_event_ignored",
+                "entity_type": source,
+                "entity_id": mailbox_email or "unknown",
+                "metadata": {
+                    "mailbox_email": mailbox_email,
+                    "reason": reason,
+                },
+            }
+        ).execute()
+    except Exception:
+        # Non-blocking: webhook flow must not fail because audit write failed.
+        pass
 
 
 def scoped_select(supabase, table_name: str, workspace_id: str):
@@ -105,4 +145,3 @@ def scoped_update_by_eq(
     if table_name in TENANT_TABLES:
         query = query.eq("workspace_id", workspace_id)
     query.execute()
-

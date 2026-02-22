@@ -13,6 +13,7 @@ import openai
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from tenant_context import (
+    audit_ignored_mailbox_event,
     extract_pubsub_mailbox,
     resolve_workspace_id,
     scoped_select,
@@ -658,9 +659,11 @@ def renew_gmail_watch():
         .data
         or []
     )
-    targets = mailboxes or [{"workspace_id": "bootstrap", "email": "default"}]
+    if not mailboxes:
+        print("No connected workspace mailboxes found; skipping Gmail watch renewal.")
+        return
 
-    for mailbox in targets:
+    for mailbox in mailboxes:
         result = gmail_service.users().watch(userId='me', body={
             'topicName': topic,
             'labelIds': ['INBOX']
@@ -703,6 +706,18 @@ def _process_agent_quotes(pubsub_payload=None):
     supabase = get_supabase_client()
     mailbox_email = extract_pubsub_mailbox(pubsub_payload)
     workspace_id = resolve_workspace_id(supabase, mailbox_email)
+    if not workspace_id:
+        audit_ignored_mailbox_event(
+            supabase,
+            source="phase_2_quote_analysis",
+            mailbox_email=mailbox_email,
+            reason="mailbox_not_connected_or_unmapped",
+        )
+        print(
+            "Ignoring Phase 2 webhook event because mailbox is not connected "
+            f"to any workspace: {mailbox_email or 'unknown'}"
+        )
+        return
 
     # BUG-4 Fix: Only fetch agent rate replies to prevent race condition with Phase 1
     results = _gmail_call_with_backoff(
