@@ -4,6 +4,7 @@ import { calculateFullPricing } from "@/lib/pricing-engine";
 import { getSettings } from "@/lib/settings";
 import type { DOCharge } from "@/types/pricing";
 import type { Database } from "@/types/supabase";
+import { requireWorkspaceApiContext } from "@/lib/workspace-context";
 import {
   validatePricingCalculateBody,
   type ApiErrorPayload,
@@ -20,6 +21,13 @@ function jsonError(payload: ApiErrorPayload, status: number) {
 }
 
 export async function POST(request: Request) {
+  const scope = await requireWorkspaceApiContext({
+    allowedRoles: ["owner", "admin", "member"],
+  });
+  if (scope.response) return scope.response;
+  if (!scope.context) return jsonError({ error: "Workspace not configured" }, 409);
+  const workspaceId = scope.context.workspaceId;
+
   let body: unknown;
 
   try {
@@ -37,10 +45,19 @@ export async function POST(request: Request) {
     const supabase = await createClient();
 
     const [doRes, destRes, transpRes, settings] = await Promise.all([
-      supabase.from("do_charges").select("*"),
-      supabase.from("destination_charges").select("*"),
-      supabase.from("transportation_charges").select("*"),
-      getSettings(),
+      supabase
+        .from("do_charges")
+        .select("*")
+        .eq("workspace_id", workspaceId),
+      supabase
+        .from("destination_charges")
+        .select("*")
+        .eq("workspace_id", workspaceId),
+      supabase
+        .from("transportation_charges")
+        .select("*")
+        .eq("workspace_id", workspaceId),
+      getSettings(workspaceId),
     ]);
 
     if (doRes.error) throw doRes.error;

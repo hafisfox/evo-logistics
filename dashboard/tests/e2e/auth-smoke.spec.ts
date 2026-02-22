@@ -4,7 +4,7 @@ test("unauthenticated users are redirected to login for app pages", async ({ pag
   await page.goto("/");
   await expect(page).toHaveURL(/\/login/);
   await expect(
-    page.getByRole("heading", { name: /evo logistics auth/i })
+    page.getByRole("heading", { name: /evo logistics sign in/i })
   ).toBeVisible();
 });
 

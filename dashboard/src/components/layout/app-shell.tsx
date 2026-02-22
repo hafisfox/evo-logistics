@@ -6,8 +6,8 @@ import { Sidebar } from "./sidebar";
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  // Do not render the sidebar or main layout shell on the login page
-  if (pathname === "/login") {
+  // Do not render the sidebar or main layout shell on auth/onboarding pages
+  if (pathname === "/login" || pathname === "/signup" || pathname === "/onboarding") {
     return <>{children}</>;
   }
 

@@ -12,6 +12,13 @@ from pydantic import BaseModel, Field, field_validator
 import openai
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from tenant_context import (
+    extract_pubsub_mailbox,
+    resolve_workspace_id,
+    scoped_select,
+    scoped_eq_filter,
+    scoped_upsert,
+)
 
 # =====================================================================
 # MODAL APP DEFINITION
@@ -128,9 +135,8 @@ def get_supabase_client():
 # =====================================================================
 # SUPABASE HELPERS
 # =====================================================================
-def _read_table(supabase, table_name):
-    result = supabase.table(table_name).select("*").execute()
-    data = result.data
+def _read_table(supabase, table_name, workspace_id=None):
+    data = scoped_select(supabase, table_name, workspace_id) if workspace_id else supabase.table(table_name).select("*").execute().data
     if not data:
         return [], []
     headers = list(data[0].keys())
@@ -140,12 +146,17 @@ def _read_table(supabase, table_name):
         rows.append([str(v) if v is not None else "" for v in row_arr])
     return headers, rows
 
-def _upsert_row(supabase, table_name, row_data: dict):
+def _upsert_row(supabase, table_name, row_data: dict, workspace_id=None):
     """Upsert a row via Supabase"""
-    supabase.table(table_name).upsert(row_data).execute()
+    if workspace_id:
+        scoped_upsert(supabase, table_name, workspace_id, row_data)
+    else:
+        supabase.table(table_name).upsert(row_data).execute()
 
-def _get_rows_by_filter(supabase, table_name, filter_column, filter_value):
+def _get_rows_by_filter(supabase, table_name, filter_column, filter_value, workspace_id=None):
     """Get all rows where filter_column == filter_value."""
+    if workspace_id:
+        return scoped_eq_filter(supabase, table_name, workspace_id, filter_column, filter_value)
     result = supabase.table(table_name).select("*").eq(filter_column, filter_value).execute()
     return result.data
 
@@ -617,7 +628,7 @@ def gmail_push_phase2(_data: dict):
     IMPORTANT: Always return 200 to Pub/Sub — retries cause rate limit storms.
     """
     try:
-        _process_agent_quotes()
+        _process_agent_quotes(_data)
     except Exception as e:
         print(f"CRITICAL ERROR in _process_agent_quotes: {e}")
         import traceback; traceback.print_exc()
@@ -634,19 +645,37 @@ def gmail_push_phase2(_data: dict):
 def renew_gmail_watch():
     """Renews the Gmail push notification watch on INBOX."""
     gmail_service = get_google_services()
+    supabase = get_supabase_client()
     topic = os.environ["GOOGLE_PUBSUB_TOPIC"]
-    result = gmail_service.users().watch(userId='me', body={
-        'topicName': topic,
-        'labelIds': ['INBOX']
-    }).execute()
-    print(f"Gmail watch renewed. History ID: {result.get('historyId')}, Expiry: {result.get('expiration')}")
+    mailboxes = (
+        supabase.table("workspace_mailboxes")
+        .select("workspace_id, email, status")
+        .eq("status", "connected")
+        .execute()
+        .data
+        or []
+    )
+    targets = mailboxes or [{"workspace_id": "bootstrap", "email": "default"}]
+
+    for mailbox in targets:
+        result = gmail_service.users().watch(userId='me', body={
+            'topicName': topic,
+            'labelIds': ['INBOX']
+        }).execute()
+        print(
+            "Gmail watch renewed for workspace "
+            f"{mailbox.get('workspace_id')} ({mailbox.get('email')}): "
+            f"History ID={result.get('historyId')} Expiry={result.get('expiration')}"
+        )
 
 # =====================================================================
 # CORE QUOTE PROCESSING LOGIC
 # =====================================================================
-def _process_agent_quotes():
+def _process_agent_quotes(pubsub_payload=None):
     gmail_service = get_google_services()
     supabase = get_supabase_client()
+    mailbox_email = extract_pubsub_mailbox(pubsub_payload)
+    workspace_id = resolve_workspace_id(supabase, mailbox_email)
 
     # BUG-4 Fix: Only fetch agent rate replies to prevent race condition with Phase 1
     results = _gmail_call_with_backoff(
@@ -744,7 +773,7 @@ def _process_agent_quotes():
                     'validity': 'N/A',
                     'received_at': now_str,
                 }
-                _upsert_row(supabase, "agent_outbound_log", log_data)
+                _upsert_row(supabase, "agent_outbound_log", log_data, workspace_id)
                 print(f"No valid quotes from {agent_name}, logged as Invalid_Quote")
                 continue
 
@@ -776,11 +805,11 @@ def _process_agent_quotes():
                     'received_at': now_str,
                 }
 
-                _upsert_row(supabase, "agent_outbound_log", log_data)
+                _upsert_row(supabase, "agent_outbound_log", log_data, workspace_id)
                 print(f"Quote logged: {agent_name} / {carrier} / ${price} (shipment {quote.shipment_number})")
 
             # After logging all quotes, check threshold
-            _check_threshold_and_notify(gmail_service, supabase, ref_id)
+            _check_threshold_and_notify(gmail_service, supabase, ref_id, workspace_id)
 
         except Exception as e:
             print(f"Error processing quote from {agent_name}: {e}")
@@ -796,15 +825,15 @@ def _process_agent_quotes():
                     'carrier': 'N/A',
                     'shipment_number': '1',
                     'received_at': datetime.now(UAE_TZ).strftime('%Y-%m-%d %I:%M %p'),
-                })
+                }, workspace_id)
             except Exception:
                 pass
 
 
-def _check_threshold_and_notify(gmail_service, supabase, ref_id: str):
+def _check_threshold_and_notify(gmail_service, supabase, ref_id: str, workspace_id: str):
     """Check if enough valid quotes received and notify manager."""
     # Get the master RFQ
-    master_rows = _get_rows_by_filter(supabase, "master_rfqs", "rfq_id", ref_id)
+    master_rows = _get_rows_by_filter(supabase, "master_rfqs", "rfq_id", ref_id, workspace_id)
     if not master_rows:
         print(f"No master_rfqs row found for {ref_id}")
         return
@@ -812,7 +841,7 @@ def _check_threshold_and_notify(gmail_service, supabase, ref_id: str):
     rfq = master_rows[0]
 
     # Get all quotes for this RFQ
-    all_quote_rows = _get_rows_by_filter(supabase, "agent_outbound_log", "rfq_id", ref_id)
+    all_quote_rows = _get_rows_by_filter(supabase, "agent_outbound_log", "rfq_id", ref_id, workspace_id)
 
     # Build summary
     summary = build_quote_summary(rfq, all_quote_rows)

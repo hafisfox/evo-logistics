@@ -5,9 +5,17 @@ const { getSettingsMock, updateSettingsMock } = vi.hoisted(() => ({
   updateSettingsMock: vi.fn(),
 }));
 
+const { requireWorkspaceApiContextMock } = vi.hoisted(() => ({
+  requireWorkspaceApiContextMock: vi.fn(),
+}));
+
 vi.mock("@/lib/settings", () => ({
   getSettings: getSettingsMock,
   updateSettings: updateSettingsMock,
+}));
+
+vi.mock("@/lib/workspace-context", () => ({
+  requireWorkspaceApiContext: requireWorkspaceApiContextMock,
 }));
 
 import { GET, POST } from "@/app/api/settings/route";
@@ -15,6 +23,9 @@ import { GET, POST } from "@/app/api/settings/route";
 describe("/api/settings route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    requireWorkspaceApiContextMock.mockResolvedValue({
+      context: { workspaceId: "ws-1", role: "owner", userId: "user-1" },
+    });
   });
 
   it("returns settings from GET", async () => {
@@ -22,10 +33,21 @@ describe("/api/settings route", () => {
 
     const response = await GET();
     expect(response.status).toBe(200);
+    expect(getSettingsMock).toHaveBeenCalledWith("ws-1");
     await expect(response.json()).resolves.toEqual({
       profitMargin: 13,
       quoteThreshold: 2,
     });
+  });
+
+  it("returns unauthorized when workspace context is missing", async () => {
+    requireWorkspaceApiContextMock.mockResolvedValue({
+      response: new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }),
+    });
+
+    const response = await GET();
+    expect(response.status).toBe(401);
+    expect(getSettingsMock).not.toHaveBeenCalled();
   });
 
   it("rejects malformed JSON in POST", async () => {
@@ -69,7 +91,7 @@ describe("/api/settings route", () => {
 
     const response = await POST(request);
     expect(response.status).toBe(200);
-    expect(updateSettingsMock).toHaveBeenCalledWith({
+    expect(updateSettingsMock).toHaveBeenCalledWith("ws-1", {
       profitMargin: 15,
       quoteThreshold: 3,
     });

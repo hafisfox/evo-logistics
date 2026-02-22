@@ -1,382 +1,187 @@
-# DASHBOARD.md — Evo Logistics Pricing Dashboard
+# DASHBOARD.md — Evo Logistics Dashboard (Workspace Multi-Tenant)
 
-> Frontend dashboard for the FCL Pricing Engine. Replaces email-based manager interaction with a proper UI and adds full pipeline visibility.
-
----
+Updated: 2026-02-22
 
 ## 1. Architecture
 
 ```text
-Browser  ──GET──>  Next.js API Routes  ──>  Supabase PostgreSQL (read, realtime)
-Browser  ──POST──> Next.js API Routes  ──>  Modal.com Webhooks (write/actions) / Supabase (write)
+Browser -> Next.js App Router/API -> Supabase (RLS)
+                            -> Modal select endpoint (Phase 3)
 ```
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 14+ (App Router, TypeScript) |
-| Styling | Tailwind CSS + shadcn/ui + next-themes (Light/Dark mode) |
-| Data Fetching | TanStack Query v5 (polling + caching) |
-| Tables | TanStack Table v8 |
-| Charts | Recharts |
-| Auth | Supabase Auth (`@supabase/ssr`) with Multi-Tenant RLS |
-| State | Zustand (UI state only) |
-| Deployment | Vercel |
+- Framework: Next.js 16 + React 19
+- Auth/session: Supabase Auth + `@supabase/ssr`
+- Access control: workspace membership + role checks in server APIs
+- Multi-tenancy boundary: `workspace_id` on operational tables + enforced RLS
 
----
+## 2. Auth and Onboarding
 
-## 2. Pages
+### Public auth routes
+- `/login` (sign-in focused)
+- `/signup` (new account creation)
+- `/auth/callback` and `/auth/confirm` handle auth returns
 
-| Route | Purpose |
-|-------|---------|
-| `/` | Dashboard — KPIs, pipeline chart, pending actions, activity feed |
-| `/rfqs` | RFQ Pipeline — table + kanban, filters, search |
-| `/rfqs/[rfqId]` | RFQ Detail — shipment info, quotes, pricing breakdown, timeline |
-| `/rfqs/[rfqId]/select` | Agent Selection — quote comparison, select & confirm |
-| `/agents` | Agent Directory — performance metrics, response rates |
-| `/pricing` | Pricing Tables — DO, destination, transport charges |
-| `/settings` | Config — margin %, quote threshold |
+### Post-auth bootstrap
+After first successful auth, backend ensures:
+- `user_profiles` row exists
+- personal workspace is created if user has none
+- owner membership is created
+- `workspace_id` cookie is set
+- if `invite` token is present, invite acceptance is attempted during callback/confirm
 
----
+Implementation: `dashboard/src/lib/workspaces.ts`
 
-## 3. API Routes
+### Middleware behavior
+File: `dashboard/src/lib/supabase/middleware.ts`
 
-| Route | Method | Source | Cache |
-|-------|--------|--------|-------|
-| `/api/rfqs` | GET | `master_rfqs` | None |
-| `/api/rfqs/[rfqId]` | GET | `master_rfqs` + `agent_outbound_log` | None |
-| `/api/rfqs/[rfqId]/quotes` | GET | `agent_outbound_log` | None |
-| `/api/rfqs/[rfqId]/select` | POST | → Modal webhook | None |
-| `/api/agents` | GET | `agents` | None |
-| `/api/pricing/do-charges` | GET | `do_charges` | None |
-| `/api/pricing/dest-charges` | GET | `destination_charges` | None |
-| `/api/pricing/transport` | GET | `transportation_charges` | None |
-| `/api/pricing/calculate` | POST | All 3 pricing tables | None |
-| `/api/analytics` | GET | `master_rfqs` + `agent_outbound_log` | None |
+- Unauthenticated page requests -> redirect `/login`
+- Unauthenticated API requests -> `401` JSON
+- Authenticated users with no active workspace memberships -> redirect `/onboarding`
+- Authenticated users on `/login` or `/signup` -> redirect to callback/default app page
 
----
+## 3. Pages
 
-## 4. Data Models
+### Core operations
+- `/`
+- `/rfqs`
+- `/rfqs/[rfqId]`
+- `/rfqs/[rfqId]/select`
+- `/agents`
+- `/pricing`
 
-### master_rfqs
+### Settings and account
+- `/settings` -> redirects to `/settings/workspace`
+- `/settings/workspace` (workspace-level pricing/settings)
+- `/settings/account` (profile, session revoke, MFA flag, soft delete request)
+- `/settings/members` (members + invites)
 
-| Column | Type | Description |
-|--------|------|-------------|
-| rfq_id | string | `RFQ-YYYYMMDD-XXX` |
-| user_id | uuid | References `auth.users(id)` for Row Level Security |
-| thread_id | string | Gmail thread ID |
-| customer_email | string | |
-| status | enum | Processing, Missing_Port_Data, Missing_Door_Data, Parse_Error, Selected, Quoted, Reminded, Followed_Up, Customer_Replied |
-| pol | string | Port of Loading (newline-separated, repeated per container entry) |
-| pod | string | Port of Discharge (newline-separated, same format as pol) |
-| container_type | string | Newline-separated container types, e.g. `"40FT\n20FT"` |
-| qty | string | Newline-separated quantities, index-aligned with container_type, e.g. `"2\n1"` |
-| ready_date | string | YYYY-MM-DD |
-| delivery_deadline | string? | Required delivery date YYYY-MM-DD |
-| service_type | string | port-to-port, door-to-port, port-to-door, door-to-door |
-| pickup_address | string? | For door-to-* services |
-| delivery_address | string? | For *-to-door services |
-| received_at | string | YYYY-MM-DD hh:mm a |
-| selected_agent | string? | Agent name after manager selection |
-| final_price_usd | string? | After pricing calculation |
-| final_price_aed | string? | After pricing calculation |
-| quoted_at | string? | Timestamp |
+### Onboarding
+- `/onboarding` with setup checklist for workspace/mailbox/config prep
 
-### agent_outbound_log
+## 4. Workspace UX Model
 
-| Column | Type | Description |
-|--------|------|-------------|
-| rfq_id | string | Links to master_rfqs |
-| user_id | uuid | References `auth.users(id)` for Row Level Security |
-| match | string | `rfq_id_agentEmail_shipmentNumber` (upsert key — one row per agent per container entry) |
-| agent_name | string | |
-| agent_email | string | |
-| shipment_number | string | For multi-shipment RFQs |
-| carrier | string | COSCO, MAERSK, MSC, etc. |
-| price | string | USD ocean freight |
-| currency | string | USD |
-| etd | string | YYYY-MM-DD |
-| transit_time | string | Days |
-| free_time | string | Days at destination |
-| validity | string | Quote expiry date |
-| status | enum | Requested, Received, Invalid_Quote |
-| sent_at | string | |
-| received_at | string | |
+### Header workspace context
+File: `dashboard/src/components/layout/header.tsx`
 
-### Status Lifecycle
+- Workspace switcher (`/api/workspaces/current`)
+- Account/workspace/members shortcuts
+- Sign out action via `/api/auth/logout`
 
-```text
-master_rfqs:
-  Processing → Missing_Port_Data / Missing_Door_Data / Parse_Error
-  Processing → Selected → Quoted
+### Workspace selection persistence
+- Selected workspace is stored in secure HTTP-only `workspace_id` cookie.
+- APIs resolve active context from membership + cookie + user default workspace.
 
-agent_outbound_log:
-  Requested → Received / Invalid_Quote
-```
+Context resolver: `dashboard/src/lib/workspace-context.ts`
 
----
+## 5. API Surface
 
-## 5. Pricing Engine
+### Auth
+- `POST /api/auth/logout`
 
-### Constants
-- **USD_TO_AED:** 3.685 (hardcoded in code — requires redeploy to change)
-- **MARGIN:** 13% default (dynamic — configurable via `/settings` page, passed to Modal at selection time)
-- **QUOTE_THRESHOLD:** 2 default (dynamic — configurable via `/settings` page)
-- **Rounding:** `Math.ceil(total / 10) * 10` (nearest 10 AED up)
+### Workspace APIs
+- `GET /api/workspaces`
+- `POST /api/workspaces`
+- `GET /api/workspaces/current`
+- `POST /api/workspaces/current`
+- `GET /api/workspaces/[workspaceId]/members`
+- `PATCH /api/workspaces/[workspaceId]/members`
+- `GET /api/workspaces/[workspaceId]/invites`
+- `POST /api/workspaces/[workspaceId]/invites`
+- `POST /api/workspaces/invites/accept`
 
-### Port-to-Port
+### Operational APIs (workspace-scoped)
+- `/api/rfqs`
+- `/api/rfqs/[rfqId]`
+- `/api/rfqs/[rfqId]/quotes`
+- `/api/rfqs/[rfqId]/select`
+- `/api/agents`
+- `/api/pricing/*`
+- `/api/settings`
+- `/api/analytics`
 
-```
-Ocean Freight (AED) = price_usd × 3.685
-With Margin         = Ocean Freight × 1.13
-Final Price (AED)   = ceil(With Margin / 10) × 10
-```
+All routes now require workspace context and filter by `workspace_id`.
 
-### Door Service (adds to port-to-port)
+## 6. Role Enforcement
 
-```
-DO Charges       = document_fee + (per_container_fee × qty)
-Dest Charges     = Σ(charge: fixed → amount, per-container → amount × qty)
-Transport        = transport_per_container × qty
-Subtotal (AED)   = Ocean Freight + DO + Dest + Transport
-With Margin      = Subtotal × 1.13
-Final Price      = ceil(With Margin / 10) × 10
-```
+- `owner` and `admin`:
+  - workspace settings mutation
+  - member/invite management
+  - pricing table/settings writes
+- `member`:
+  - RFQ operational reads/actions
+  - no workspace/member admin APIs
 
-### DO Charges Column Mapping
-- 20FT/20GP → `20FT` column
-- 40FT/40GP → `40FT` column
-- 40HC/40HQ/45FT → `40HQ` column
+Primary helpers:
+- `requireWorkspaceApiContext(...)`
+- `requireWorkspaceMembership(...)`
+- `canManageWorkspace(...)`
 
-### Destination Charges Column Mapping
-- 20FT/20GP → `20FT` column
-- Everything else → `40FT` column
+## 7. Data Model (dashboard-facing)
 
-### Destination Charges Basis
-- `"Fixed (per shipment)"` → charge once
-- All others → charge × qty
+Tenant-scoped operational tables:
+- `master_rfqs`
+- `agent_outbound_log`
+- `agents`
+- `do_charges`
+- `destination_charges`
+- `transportation_charges`
+- `app_settings`
 
-### Transport Charges
-- Match delivery address against `Place` column (case-insensitive, substring match)
-- Apply per container × qty
+Workspace/meta tables:
+- `workspaces`
+- `workspace_members`
+- `workspace_invites`
+- `workspace_mailboxes`
+- `audit_events`
+- `user_profiles`
 
-### Multi-Container / Multi-Shipment
-- All fields are newline-separated and **index-aligned** (e.g., `container_type: "40FT\n20FT"`, `qty: "2\n1"`, `pol: "SHENZHEN\nSHENZHEN"`)
-- Route fields (pol, pod, ready_date) are repeated per container entry so all fields have the same line count
-- A "shipment" = one route. Mixed container types on the same route produce multiple lines with the same pol/pod
-- Parse with `value.split('\n').map(v => v.trim())` — see `parseMultiValue()` in `lib/utils.ts`
-- Calculate each container entry independently, sum for grand total
+Migration: `dashboard/supabase/migrations/20260222_001_multitenant_workspaces.sql`
 
----
+## 8. Modal Integration
 
-## 6. Modal Integration
+Selection route: `POST /api/rfqs/[rfqId]/select`
 
-### Select Agent Endpoint (POST)
+Payload now includes server-derived tenancy keys:
 
-Modal function `select_agent` in `automations/phase_3_select_and_quote.py` handles agent selection, pricing calculation, and quotation email.
-
-**Payload:**
 ```json
 {
-  "rfq_id": "RFQ-20260220-ABC",
-  "selected_agent": "Agent Name",
-  "selected_carrier": "COSCO",
+  "rfq_id": "RFQ-...",
+  "workspace_id": "uuid",
+  "selected_by_user_id": "uuid",
+  "selected_agent": "...",
+  "selected_carrier": "...",
   "shipment_number": "1",
-  "selected_by": "manager@company.com",
+  "selected_by": "...",
   "margin": 0.13,
   "quote_threshold": 2
 }
 ```
 
-**Flow:** Receive → Update master_rfqs (status=Selected) → Get Selected Quote → Read Pricing Tables → Port or Door? → Cost calculation (using dynamic `margin` from dashboard settings) → Update master_rfqs (status=Quoted, prices) → Send Quotation Email → Notify Sales → Return pricing breakdown
+## 9. Environment Variables
 
-**Response:**
-```json
-{
-  "success": true,
-  "rfq_id": "RFQ-20260220-ABC",
-  "final_price_aed": 15230,
-  "final_price_usd": 4133.51
-}
-```
+See `dashboard/.env.example` for full local template.
 
-### Deployment
+Required for dashboard runtime:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_SITE_URL`
+- `MODAL_WEBHOOK_SELECT_AGENT`
+
+Optional hardening:
+- `MODAL_WEBHOOK_SECRET`
+- `MODAL_WEBHOOK_TIMEOUT_MS`
+
+## 10. Quality Gates
+
+From `dashboard/`:
+
 ```bash
-modal deploy automations/phase_3_select_and_quote.py
-```
-The deployed URL (e.g. `https://user--select-and-quote-phase-3-select-agent.modal.run`) is set as `MODAL_WEBHOOK_SELECT_AGENT` in the dashboard `.env.local`.
-
----
-
-## 7. Supabase Database
-
-The backend and frontend both interact natively with Supabase PostgreSQL. 
-
-| Table | Purpose |
-|-------|---------|
-| `master_rfqs` | RFQ tracking and customer interactions |
-| `agent_outbound_log` | Agent quotes and reminders |
-| `agents` | Agent directory |
-| `do_charges` | DO charges by carrier |
-| `destination_charges` | Terminal/handling fees |
-| `transportation_charges` | Trucking by location |
-
----
-
-## 8. Environment Variables
-
-```env
-# Supabase Database
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-
-# Modal Webhooks
-MODAL_WEBHOOK_SELECT_AGENT=
-MODAL_WEBHOOK_SECRET=
-
-# NextAuth (Legacy - Removed)
-# NEXTAUTH_SECRET=
-# NEXTAUTH_URL=
-# GOOGLE_CLIENT_ID=
-# GOOGLE_CLIENT_SECRET=
+npm run lint
+npm run typecheck
+npm run test
+npm run test:e2e
+npm run build
 ```
 
----
-
-## 9. Data Standards (from ACTION_PLAN.md §5)
-
-### Carriers
-`COSCO` · `MAERSK` · `EVERGREEN` · `MSC` · `ONE` · `HAPAG-LLOYD` · `CMA CGM` · `YANG MING` · `HMM` · `ZIM` · `PIL`
-
-### Container Types
-`20FT` · `40FT` · `40HC` · `40HQ` · `45FT` · `20OT` · `40OT`
-
-### Status Colors
-
-| Status | Color | Hex |
-|--------|-------|-----|
-| Processing | Blue | `#3B82F6` |
-| Missing_Port_Data | Orange | `#F97316` |
-| Missing_Door_Data | Orange | `#F97316` |
-| Parse_Error | Red | `#EF4444` |
-| Selected | Purple | `#8B5CF6` |
-| Quoted | Green | `#22C55E` |
-| Reminded | Yellow | `#EAB308` |
-| Followed_Up | Teal | `#14B8A6` |
-| Customer_Replied | Indigo | `#6366F1` |
-| Requested | Slate | `#64748B` |
-| Received | Emerald | `#10B981` |
-| Invalid_Quote | Red | `#EF4444` |
-
----
-
-## 10. Component Map
-
-### Layout
-- `app-shell.tsx` — root layout: sidebar + header + main
-- `sidebar.tsx` — navigation with route links
-- `header.tsx` — page title, notification bell, user avatar
-
-### Dashboard (`/`)
-- `kpi-card.tsx` — single metric (value, label, trend)
-- `kpi-grid.tsx` — row of 5 KPIs: Active RFQs, Awaiting Quotes, Pending Selection, Quoted Today, Avg Response Time
-- `pipeline-chart.tsx` — stacked bar of RFQ status counts
-- `activity-feed.tsx` — recent status changes
-- `pending-actions.tsx` — RFQs needing manager action
-
-### RFQ Pipeline (`/rfqs`)
-- `rfq-table.tsx` — sortable/filterable table (TanStack Table)
-- `rfq-kanban.tsx` — status column board
-- `status-badge.tsx` — color-coded status pill
-- `rfq-filters.tsx` — status, date range, service type
-- `view-toggle.tsx` — table/kanban switch
-
-### RFQ Detail (`/rfqs/[rfqId]`)
-- `shipment-card.tsx` — POL/POD, containers, service type
-- `quote-table.tsx` — all agent quotes sorted by price
-- `quote-chart.tsx` — bar chart price comparison
-- `pricing-breakdown.tsx` — line-item cost table
-- `timeline.tsx` — chronological event log
-- `action-bar.tsx` — Select Agent, Recalculate, View Thread
-
-### Agent Selection (`/rfqs/[rfqId]/select`)
-- `quote-card.tsx` — rich card per agent/carrier quote
-- `quote-grid.tsx` — grid layout of cards
-- `comparison-table.tsx` — side-by-side for 2-3 quotes
-- `confirm-dialog.tsx` — modal confirming choice → POST to Modal webhook
-
-### Shared
-- `currency-display.tsx` — format USD/AED
-- `route-display.tsx` — POL → POD with arrow
-- `container-badge.tsx` — "3×40HC" styled badge
-
----
-
-## 11. Folder Structure
-
-```
-dashboard/
-├── .env.local
-├── .env.example
-├── next.config.ts
-├── package.json
-├── tsconfig.json
-├── tailwind.config.ts
-├── src/
-│   ├── app/
-│   │   ├── layout.tsx
-│   │   ├── page.tsx
-│   │   ├── rfqs/
-│   │   │   ├── page.tsx
-│   │   │   └── [rfqId]/
-│   │   │       ├── page.tsx
-│   │   │       └── select/page.tsx
-│   │   ├── agents/page.tsx
-│   │   ├── pricing/page.tsx
-│   │   ├── settings/page.tsx
-│   │   └── api/
-│   │       ├── auth/[...nextauth]/route.ts
-│   │       ├── rfqs/
-│   │       │   ├── route.ts
-│   │       │   └── [rfqId]/
-│   │       │       ├── route.ts
-│   │       │       ├── quotes/route.ts
-│   │       │       └── select/route.ts
-│   │       ├── agents/route.ts
-│   │       ├── pricing/
-│   │       │   ├── do-charges/route.ts
-│   │       │   ├── dest-charges/route.ts
-│   │       │   ├── transport/route.ts
-│   │       │   └── calculate/route.ts
-│   │       └── analytics/route.ts
-│   ├── components/
-│   │   ├── layout/
-│   │   ├── dashboard/
-│   │   ├── rfqs/
-│   │   ├── rfq-detail/
-│   │   ├── selection/
-│   │   ├── agents/
-│   │   ├── pricing/
-│   │   └── ui/
-│   ├── lib/
-│   │   ├── supabase.ts
-│   │   ├── modal-client.ts
-│   │   ├── pricing-engine.ts
-│   │   ├── constants.ts
-│   │   ├── utils.ts
-│   │   └── auth.ts
-│   ├── hooks/
-│   │   ├── use-rfqs.ts
-│   │   ├── use-rfq-detail.ts
-│   │   ├── use-agents.ts
-│   │   ├── use-pricing-tables.ts
-│   │   ├── use-analytics.ts
-│   │   └── use-select-agent.ts
-│   ├── types/
-│   │   ├── rfq.ts
-│   │   ├── agent.ts
-│   │   ├── pricing.ts
-│   │   └── analytics.ts
-│   └── store/
-│       └── ui-store.ts
-```
+Notes:
+- E2E and build are configured to run in webpack mode in this workspace to avoid Turbopack + worktree symlink failures.

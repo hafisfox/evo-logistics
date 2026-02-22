@@ -13,24 +13,244 @@ export interface Database {
     Tables: {
       app_settings: {
         Row: {
+          workspace_id: string;
           key: string;
           value: Numeric;
           updated_at: string | null;
         };
         Insert: {
+          workspace_id: string;
           key: string;
           value: Numeric;
           updated_at?: string | null;
         };
         Update: {
+          workspace_id?: string;
           key?: string;
           value?: Numeric;
           updated_at?: string | null;
         };
         Relationships: [];
       };
+      workspaces: {
+        Row: {
+          id: string;
+          name: string;
+          slug: string;
+          kind: "personal" | "team" | string;
+          created_by: string | null;
+          is_bootstrap: boolean;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          slug: string;
+          kind: "personal" | "team" | string;
+          created_by?: string | null;
+          is_bootstrap?: boolean;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          slug?: string;
+          kind?: "personal" | "team" | string;
+          created_by?: string | null;
+          is_bootstrap?: boolean;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      workspace_members: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          user_id: string;
+          role: "owner" | "admin" | "member" | string;
+          status: "active" | "invited" | "suspended" | string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          user_id: string;
+          role?: "owner" | "admin" | "member" | string;
+          status?: "active" | "invited" | "suspended" | string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          user_id?: string;
+          role?: "owner" | "admin" | "member" | string;
+          status?: "active" | "invited" | "suspended" | string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      workspace_invites: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          email: string;
+          role: "owner" | "admin" | "member" | string;
+          invited_by: string | null;
+          invite_token: string;
+          status: "pending" | "accepted" | "revoked" | "expired" | string;
+          expires_at: string;
+          accepted_at: string | null;
+          accepted_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          email: string;
+          role?: "owner" | "admin" | "member" | string;
+          invited_by?: string | null;
+          invite_token?: string;
+          status?: "pending" | "accepted" | "revoked" | "expired" | string;
+          expires_at?: string;
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          email?: string;
+          role?: "owner" | "admin" | "member" | string;
+          invited_by?: string | null;
+          invite_token?: string;
+          status?: "pending" | "accepted" | "revoked" | "expired" | string;
+          expires_at?: string;
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      workspace_mailboxes: {
+        Row: {
+          workspace_id: string;
+          email: string;
+          gmail_refresh_token_encrypted: string | null;
+          gmail_access_token_encrypted: string | null;
+          token_expires_at: string | null;
+          status: "connected" | "disconnected" | "error" | string;
+          last_error: string | null;
+          watch_expiration: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          workspace_id: string;
+          email: string;
+          gmail_refresh_token_encrypted?: string | null;
+          gmail_access_token_encrypted?: string | null;
+          token_expires_at?: string | null;
+          status?: "connected" | "disconnected" | "error" | string;
+          last_error?: string | null;
+          watch_expiration?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          workspace_id?: string;
+          email?: string;
+          gmail_refresh_token_encrypted?: string | null;
+          gmail_access_token_encrypted?: string | null;
+          token_expires_at?: string | null;
+          status?: "connected" | "disconnected" | "error" | string;
+          last_error?: string | null;
+          watch_expiration?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      audit_events: {
+        Row: {
+          id: number;
+          workspace_id: string;
+          actor_user_id: string | null;
+          action: string;
+          entity_type: string | null;
+          entity_id: string | null;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          workspace_id: string;
+          actor_user_id?: string | null;
+          action: string;
+          entity_type?: string | null;
+          entity_id?: string | null;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: number;
+          workspace_id?: string;
+          actor_user_id?: string | null;
+          action?: string;
+          entity_type?: string | null;
+          entity_id?: string | null;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      user_profiles: {
+        Row: {
+          id: string;
+          full_name: string | null;
+          avatar_url: string | null;
+          default_workspace_id: string | null;
+          mfa_enabled: boolean;
+          deleted_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          full_name?: string | null;
+          avatar_url?: string | null;
+          default_workspace_id?: string | null;
+          mfa_enabled?: boolean;
+          deleted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          full_name?: string | null;
+          avatar_url?: string | null;
+          default_workspace_id?: string | null;
+          mfa_enabled?: boolean;
+          deleted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       master_rfqs: {
         Row: {
+          workspace_id: string;
           rfq_id: string;
           thread_id: string;
           customer_email: string;
@@ -52,6 +272,7 @@ export interface Database {
           user_id?: string | null;
         };
         Insert: {
+          workspace_id: string;
           rfq_id: string;
           thread_id: string;
           customer_email: string;
@@ -73,6 +294,8 @@ export interface Database {
           user_id?: string | null;
         };
         Update: {
+          workspace_id?: string;
+          rfq_id?: string;
           thread_id?: string;
           customer_email?: string;
           status?: string;
@@ -96,6 +319,7 @@ export interface Database {
       };
       agent_outbound_log: {
         Row: {
+          workspace_id: string;
           match: string;
           rfq_id: string;
           agent_name: string;
@@ -114,6 +338,7 @@ export interface Database {
           user_id?: string | null;
         };
         Insert: {
+          workspace_id: string;
           match: string;
           rfq_id: string;
           agent_name: string;
@@ -132,6 +357,8 @@ export interface Database {
           user_id?: string | null;
         };
         Update: {
+          workspace_id?: string;
+          match?: string;
           rfq_id?: string;
           agent_name?: string;
           agent_email?: string;
@@ -152,18 +379,21 @@ export interface Database {
       };
       agents: {
         Row: {
+          workspace_id: string;
           agent_name: string;
           email: string;
           status: string;
           user_id?: string | null;
         };
         Insert: {
+          workspace_id: string;
           agent_name: string;
           email: string;
           status?: string;
           user_id?: string | null;
         };
         Update: {
+          workspace_id?: string;
           agent_name?: string;
           email?: string;
           status?: string;
@@ -174,6 +404,7 @@ export interface Database {
       do_charges: {
         Row: {
           id: number;
+          workspace_id: string;
           carrier: string;
           document: Numeric;
           "20FT": Numeric;
@@ -183,6 +414,7 @@ export interface Database {
         };
         Insert: {
           id?: number;
+          workspace_id: string;
           carrier: string;
           document: Numeric;
           "20FT": Numeric;
@@ -192,6 +424,7 @@ export interface Database {
         };
         Update: {
           id?: number;
+          workspace_id?: string;
           carrier?: string;
           document?: Numeric;
           "20FT"?: Numeric;
@@ -204,6 +437,7 @@ export interface Database {
       destination_charges: {
         Row: {
           id: number;
+          workspace_id: string;
           charge_type: string;
           basis: string;
           "20FT": Numeric;
@@ -212,6 +446,7 @@ export interface Database {
         };
         Insert: {
           id?: number;
+          workspace_id: string;
           charge_type: string;
           basis: string;
           "20FT": Numeric;
@@ -220,6 +455,7 @@ export interface Database {
         };
         Update: {
           id?: number;
+          workspace_id?: string;
           charge_type?: string;
           basis?: string;
           "20FT"?: Numeric;
@@ -231,18 +467,21 @@ export interface Database {
       transportation_charges: {
         Row: {
           id: number;
+          workspace_id: string;
           place: string;
           price: Numeric;
           user_id?: string | null;
         };
         Insert: {
           id?: number;
+          workspace_id: string;
           place: string;
           price: Numeric;
           user_id?: string | null;
         };
         Update: {
           id?: number;
+          workspace_id?: string;
           place?: string;
           price?: Numeric;
           user_id?: string | null;
@@ -256,3 +495,4 @@ export interface Database {
     CompositeTypes: Record<string, never>;
   };
 }
+

@@ -2,17 +2,33 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { DashboardKPIs, PipelineCount, ActivityItem } from "@/types/analytics";
 import type { MasterRFQ, AgentQuote } from "@/types/rfq";
+import { requireWorkspaceApiContext } from "@/lib/workspace-context";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const scope = await requireWorkspaceApiContext({
+    allowedRoles: ["owner", "admin", "member"],
+  });
+  if (scope.response) return scope.response;
+  if (!scope.context) {
+    return NextResponse.json({ error: "Workspace not configured" }, { status: 409 });
+  }
+  const workspaceId = scope.context.workspaceId;
+
   try {
     const supabase = await createClient();
 
     // Fetch all RFQs and Quotes in parallel from Supabase
     const [rfqsRes, quotesRes] = await Promise.all([
-      supabase.from('master_rfqs').select('rfq_id, status, received_at, quoted_at, customer_email, pol, pod'),
-      supabase.from('agent_outbound_log').select('rfq_id, status')
+      supabase
+        .from('master_rfqs')
+        .select('rfq_id, status, received_at, quoted_at, customer_email, pol, pod')
+        .eq("workspace_id", workspaceId),
+      supabase
+        .from('agent_outbound_log')
+        .select('rfq_id, status')
+        .eq("workspace_id", workspaceId)
     ]);
 
     if (rfqsRes.error) throw rfqsRes.error;

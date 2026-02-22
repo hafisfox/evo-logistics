@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { MasterRFQ, AgentQuote } from "@/types/rfq";
+import { requireWorkspaceApiContext } from "@/lib/workspace-context";
 
 export const dynamic = "force-dynamic";
 
@@ -8,14 +9,32 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ rfqId: string }> }
 ) {
+  const scope = await requireWorkspaceApiContext({
+    allowedRoles: ["owner", "admin", "member"],
+  });
+  if (scope.response) return scope.response;
+  if (!scope.context) {
+    return NextResponse.json({ error: "Workspace not configured" }, { status: 409 });
+  }
+  const workspaceId = scope.context.workspaceId;
+
   try {
     const { rfqId } = await params;
     const supabase = await createClient();
 
     // Splitting queries to avoid Promise.all never inference issues with .single()
     const [rfqRes, quotesRes] = await Promise.all([
-      supabase.from('master_rfqs').select('*').eq('rfq_id', rfqId).single(),
-      supabase.from('agent_outbound_log').select('*').eq('rfq_id', rfqId)
+      supabase
+        .from('master_rfqs')
+        .select('*')
+        .eq('workspace_id', workspaceId)
+        .eq('rfq_id', rfqId)
+        .single(),
+      supabase
+        .from('agent_outbound_log')
+        .select('*')
+        .eq('workspace_id', workspaceId)
+        .eq('rfq_id', rfqId)
     ]);
 
     if (rfqRes.error && rfqRes.error.code !== 'PGRST116') {

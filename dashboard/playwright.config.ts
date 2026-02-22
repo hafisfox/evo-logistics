@@ -26,7 +26,8 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: `npm run dev -- --port ${port}`,
+    // Turbopack can fail in git worktrees when node_modules is a symlink.
+    command: `npm run dev -- --webpack --port ${port}`,
     url: `${baseURL}/login`,
     timeout: 120_000,
     reuseExistingServer: true,

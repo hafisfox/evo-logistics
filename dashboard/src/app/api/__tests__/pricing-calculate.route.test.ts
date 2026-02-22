@@ -1,9 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { calculateFullPricingMock, getSettingsMock, createClientMock } = vi.hoisted(() => ({
+const {
+  calculateFullPricingMock,
+  getSettingsMock,
+  createClientMock,
+  requireWorkspaceApiContextMock,
+} = vi.hoisted(() => ({
   calculateFullPricingMock: vi.fn(),
   getSettingsMock: vi.fn(),
   createClientMock: vi.fn(),
+  requireWorkspaceApiContextMock: vi.fn(),
 }));
 
 vi.mock("@/lib/pricing-engine", () => ({
@@ -18,11 +24,18 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: createClientMock,
 }));
 
+vi.mock("@/lib/workspace-context", () => ({
+  requireWorkspaceApiContext: requireWorkspaceApiContextMock,
+}));
+
 import { POST } from "@/app/api/pricing/calculate/route";
 
 describe("/api/pricing/calculate route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    requireWorkspaceApiContextMock.mockResolvedValue({
+      context: { workspaceId: "ws-1", userId: "user-1", role: "member" },
+    });
   });
 
   it("rejects malformed payload", async () => {
@@ -48,7 +61,9 @@ describe("/api/pricing/calculate route", () => {
 
     createClientMock.mockResolvedValue({
       from: (table: keyof typeof tableData) => ({
-        select: () => Promise.resolve({ data: tableData[table], error: null }),
+        select: () => ({
+          eq: () => Promise.resolve({ data: tableData[table], error: null }),
+        }),
       }),
     });
 
@@ -84,11 +99,28 @@ describe("/api/pricing/calculate route", () => {
     expect(calculateFullPricingMock).toHaveBeenCalledTimes(1);
     const callArg = calculateFullPricingMock.mock.calls[0][0];
     expect(callArg.settings).toEqual({ margin: 0.13, quoteThreshold: 2 });
+    expect(getSettingsMock).toHaveBeenCalledWith("ws-1");
 
     await expect(response.json()).resolves.toEqual({
       shipments: [],
       grandTotalAED: 1000,
       grandTotalUSD: 272,
     });
+  });
+
+  it("returns unauthorized when workspace context is missing", async () => {
+    requireWorkspaceApiContextMock.mockResolvedValue({
+      response: new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }),
+    });
+
+    const request = new Request("http://localhost/api/pricing/calculate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(401);
+    expect(calculateFullPricingMock).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,14 @@
--- Supabase Schema for Evo Logistics Dashboard
+-- Supabase schema snapshot (workspace multi-tenant v1)
+-- Canonical migration: dashboard/supabase/migrations/20260222_001_multitenant_workspaces.sql
 
--- ENUMS
-CREATE TYPE rfq_status AS ENUM (
+create extension if not exists pgcrypto;
+
+create type workspace_role as enum ('owner', 'admin', 'member');
+create type workspace_member_status as enum ('active', 'invited', 'suspended');
+create type workspace_invite_status as enum ('pending', 'accepted', 'revoked', 'expired');
+create type mailbox_status as enum ('connected', 'disconnected', 'error');
+
+create type rfq_status as enum (
   'Processing',
   'Missing_Port_Data',
   'Missing_Door_Data',
@@ -13,124 +20,192 @@ CREATE TYPE rfq_status AS ENUM (
   'Customer_Replied'
 );
 
-CREATE TYPE quote_status AS ENUM (
+create type quote_status as enum (
   'Requested',
   'Reminded',
   'Received',
   'Invalid_Quote'
 );
 
-CREATE TYPE service_type AS ENUM (
+create type service_type as enum (
   'port-to-port',
   'door-to-port',
   'port-to-door',
   'door-to-door'
 );
 
-CREATE TYPE agent_status AS ENUM (
-  'active',
-  'inactive'
+create type agent_status as enum ('active', 'inactive');
+
+-- Workspace core
+create table workspaces (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  slug text not null unique,
+  kind text not null check (kind in ('personal', 'team')),
+  created_by uuid references auth.users(id) on delete set null,
+  is_bootstrap boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
-
--- TABLES
-
--- 1. Master RFQs
-CREATE TABLE master_rfqs (
-  rfq_id TEXT PRIMARY KEY,
-  thread_id TEXT NOT NULL,
-  customer_email TEXT NOT NULL,
-  status rfq_status NOT NULL DEFAULT 'Processing',
-  pol TEXT,                           -- nullable: partial RFQs accepted
-  pod TEXT,                           -- nullable
-  container_type TEXT,                -- nullable
-  qty TEXT,                           -- nullable
-  ready_date DATE,                    -- nullable
-  delivery_deadline DATE,             -- nullable: customer's required delivery date
-  service_type service_type NOT NULL,
-  pickup_address TEXT,
-  delivery_address TEXT,
-  received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  selected_agent TEXT,
-  final_price_usd NUMERIC,
-  final_price_aed NUMERIC,
-  quoted_at TIMESTAMPTZ
+create table user_profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  full_name text,
+  avatar_url text,
+  default_workspace_id uuid references workspaces(id) on delete set null,
+  mfa_enabled boolean not null default false,
+  deleted_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
--- 2. Agent Outbound Log (Quotes)
-CREATE TABLE agent_outbound_log (
-  match TEXT PRIMARY KEY,
-  rfq_id TEXT NOT NULL REFERENCES master_rfqs(rfq_id) ON DELETE CASCADE,
-  agent_name TEXT NOT NULL,
-  agent_email TEXT NOT NULL,
-  shipment_number TEXT NOT NULL,
-  carrier TEXT NOT NULL,
-  price NUMERIC,
-  currency TEXT NOT NULL DEFAULT 'USD',
-  etd DATE,
-  transit_time TEXT,
-  free_time TEXT,
-  validity DATE,
-  status quote_status NOT NULL DEFAULT 'Requested',
-  sent_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  received_at TIMESTAMPTZ
+create table workspace_members (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  role workspace_role not null default 'member',
+  status workspace_member_status not null default 'active',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (workspace_id, user_id)
 );
 
-CREATE INDEX idx_agent_outbound_log_rfq_id ON agent_outbound_log(rfq_id);
-
--- 3. Agents
-CREATE TABLE agents (
-  agent_name TEXT PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
-  status agent_status NOT NULL DEFAULT 'active'
+create table workspace_invites (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  email text not null,
+  role workspace_role not null default 'member',
+  invited_by uuid references auth.users(id) on delete set null,
+  invite_token uuid not null unique default gen_random_uuid(),
+  status workspace_invite_status not null default 'pending',
+  expires_at timestamptz not null default now() + interval '7 days',
+  accepted_at timestamptz,
+  accepted_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
--- 4. Pricing: DO Charges
-CREATE TABLE do_charges (
-  id SERIAL PRIMARY KEY,
-  carrier TEXT NOT NULL UNIQUE,
-  document NUMERIC NOT NULL,
-  "20FT" NUMERIC NOT NULL,
-  "40FT" NUMERIC NOT NULL,
-  "40HQ" NUMERIC NOT NULL
+create table workspace_mailboxes (
+  workspace_id uuid primary key references workspaces(id) on delete cascade,
+  email text not null unique,
+  gmail_refresh_token_encrypted text,
+  gmail_access_token_encrypted text,
+  token_expires_at timestamptz,
+  status mailbox_status not null default 'disconnected',
+  last_error text,
+  watch_expiration timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
--- 5. Pricing: Destination Charges
-CREATE TABLE destination_charges (
-  id SERIAL PRIMARY KEY,
-  charge_type TEXT NOT NULL,
-  basis TEXT NOT NULL,
-  "20FT" NUMERIC NOT NULL,
-  "40FT" NUMERIC NOT NULL
+create table audit_events (
+  id bigserial primary key,
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  actor_user_id uuid references auth.users(id) on delete set null,
+  action text not null,
+  entity_type text,
+  entity_id text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
 );
 
--- 6. Pricing: Transportation Charges
-CREATE TABLE transportation_charges (
-  id SERIAL PRIMARY KEY,
-  place TEXT NOT NULL UNIQUE,
-  price NUMERIC NOT NULL
+-- Operational tables (workspace-scoped)
+create table master_rfqs (
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  rfq_id text not null,
+  thread_id text not null,
+  customer_email text not null,
+  status rfq_status not null default 'Processing',
+  pol text,
+  pod text,
+  container_type text,
+  qty text,
+  ready_date date,
+  delivery_deadline date,
+  service_type service_type not null,
+  pickup_address text,
+  delivery_address text,
+  received_at timestamptz not null default now(),
+  selected_agent text,
+  final_price_usd numeric,
+  final_price_aed numeric,
+  quoted_at timestamptz,
+  primary key (workspace_id, rfq_id)
 );
 
+create table agent_outbound_log (
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  match text not null,
+  rfq_id text not null,
+  agent_name text not null,
+  agent_email text not null,
+  shipment_number text not null,
+  carrier text not null,
+  price numeric,
+  currency text not null default 'USD',
+  etd date,
+  transit_time text,
+  free_time text,
+  validity date,
+  status quote_status not null default 'Requested',
+  sent_at timestamptz not null default now(),
+  received_at timestamptz,
+  primary key (workspace_id, match),
+  foreign key (workspace_id, rfq_id)
+    references master_rfqs(workspace_id, rfq_id)
+    on delete cascade
+);
 
--- ROW LEVEL SECURITY (RLS)
--- Since this is an internal dashboard backend, we default to restricting all public access,
--- but allowing full access to authenticated service roles, OR we can open read access if using anon key securely.
--- For a Next.js app where API routes (backend) fetch the data, they will use the Service Role Key or bypass RLS.
--- Let's enable RLS and create straightforward policies.
+create table agents (
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  agent_name text not null,
+  email text not null,
+  status agent_status not null default 'active',
+  primary key (workspace_id, agent_name),
+  unique (workspace_id, email)
+);
 
-ALTER TABLE master_rfqs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE agent_outbound_log ENABLE ROW LEVEL SECURITY;
-ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
-ALTER TABLE do_charges ENABLE ROW LEVEL SECURITY;
-ALTER TABLE destination_charges ENABLE ROW LEVEL SECURITY;
-ALTER TABLE transportation_charges ENABLE ROW LEVEL SECURITY;
+create table do_charges (
+  id bigserial primary key,
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  carrier text not null,
+  document numeric not null,
+  "20FT" numeric not null,
+  "40FT" numeric not null,
+  "40HQ" numeric not null,
+  unique (workspace_id, carrier)
+);
 
--- Allow read access to authenticated anon (if using client-side fetching)
-CREATE POLICY "Allow public read access" ON master_rfqs FOR SELECT USING (true);
-CREATE POLICY "Allow public read access" ON agent_outbound_log FOR SELECT USING (true);
-CREATE POLICY "Allow public read access" ON agents FOR SELECT USING (true);
-CREATE POLICY "Allow public read access" ON do_charges FOR SELECT USING (true);
-CREATE POLICY "Allow public read access" ON destination_charges FOR SELECT USING (true);
-CREATE POLICY "Allow public read access" ON transportation_charges FOR SELECT USING (true);
+create table destination_charges (
+  id bigserial primary key,
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  charge_type text not null,
+  basis text not null,
+  "20FT" numeric not null,
+  "40FT" numeric not null
+);
 
--- (Write operations will be performed by backend API routes or Modal using Service Role Key, which bypasses RLS)
+create table transportation_charges (
+  id bigserial primary key,
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  place text not null,
+  price numeric not null,
+  unique (workspace_id, place)
+);
+
+create table app_settings (
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  key text not null,
+  value numeric not null,
+  updated_at timestamptz,
+  primary key (workspace_id, key)
+);
+
+-- High-value indexes
+create index idx_workspace_members_user_workspace on workspace_members(user_id, workspace_id);
+create index idx_master_rfqs_workspace_status on master_rfqs(workspace_id, status);
+create index idx_agent_outbound_log_workspace_rfq on agent_outbound_log(workspace_id, rfq_id);
+create index idx_app_settings_workspace_key on app_settings(workspace_id, key);
+
+-- RLS policy definitions are maintained in migration file.

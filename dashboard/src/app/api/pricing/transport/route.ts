@@ -1,12 +1,25 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { requireWorkspaceApiContext } from "@/lib/workspace-context";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const scope = await requireWorkspaceApiContext({
+    allowedRoles: ["owner", "admin", "member"],
+  });
+  if (scope.response) return scope.response;
+  if (!scope.context) {
+    return NextResponse.json({ error: "Workspace not configured" }, { status: 409 });
+  }
+  const workspaceId = scope.context.workspaceId;
+
   try {
     const supabase = await createClient();
-    const { data, error } = await supabase.from('transportation_charges').select('*');
+    const { data, error } = await supabase
+      .from('transportation_charges')
+      .select('*')
+      .eq("workspace_id", workspaceId);
     if (error) throw error;
 
     // Map snake_case columns back to original Google Sheets format expected by frontend

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { selectAgent } from "@/lib/modal-client";
 import { getSettings } from "@/lib/settings";
 import { validateSelectAgentBody, type ApiErrorPayload } from "@/lib/validation";
+import { requireWorkspaceApiContext } from "@/lib/workspace-context";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,13 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ rfqId: string }> }
 ) {
+  const scope = await requireWorkspaceApiContext({
+    allowedRoles: ["owner", "admin", "member"],
+  });
+  if (scope.response) return scope.response;
+  if (!scope.context) return jsonError({ error: "Workspace not configured" }, 409);
+  const { workspaceId, userId } = scope.context;
+
   let body: unknown;
 
   try {
@@ -28,14 +36,16 @@ export async function POST(
 
   try {
     const { rfqId } = await params;
-    const settings = await getSettings();
+    const settings = await getSettings(workspaceId);
 
     const result = await selectAgent({
       rfq_id: rfqId,
+      workspace_id: workspaceId,
+      selected_by_user_id: userId,
       selected_agent: validation.data.selected_agent,
       selected_carrier: validation.data.selected_carrier,
       shipment_number: validation.data.shipment_number || "1",
-      selected_by: validation.data.selected_by || "dashboard",
+      selected_by: validation.data.selected_by || userId,
       margin: settings.profitMargin / 100,
       quote_threshold: settings.quoteThreshold,
     });

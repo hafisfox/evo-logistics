@@ -14,10 +14,13 @@ export const defaultSettings: Settings = {
 type AppSettingsRow = Database["public"]["Tables"]["app_settings"]["Row"];
 type AppSettingsInsert = Database["public"]["Tables"]["app_settings"]["Insert"];
 
-export async function getSettings(): Promise<Settings> {
+export async function getSettings(workspaceId: string): Promise<Settings> {
   try {
     const supabase = await createClient();
-    const { data, error } = await supabase.from("app_settings").select("key, value");
+    const { data, error } = await supabase
+      .from("app_settings")
+      .select("key, value")
+      .eq("workspace_id", workspaceId);
 
     if (error) throw error;
 
@@ -36,12 +39,16 @@ export async function getSettings(): Promise<Settings> {
   }
 }
 
-export async function updateSettings(updates: Partial<Settings>): Promise<Settings> {
+export async function updateSettings(
+  workspaceId: string,
+  updates: Partial<Settings>
+): Promise<Settings> {
   const supabase = await createClient();
 
   const upserts: AppSettingsInsert[] = [];
   if (typeof updates.profitMargin === "number") {
     upserts.push({
+      workspace_id: workspaceId,
       key: "profitMargin",
       value: updates.profitMargin,
       updated_at: new Date().toISOString(),
@@ -50,6 +57,7 @@ export async function updateSettings(updates: Partial<Settings>): Promise<Settin
 
   if (typeof updates.quoteThreshold === "number") {
     upserts.push({
+      workspace_id: workspaceId,
       key: "quoteThreshold",
       value: updates.quoteThreshold,
       updated_at: new Date().toISOString(),
@@ -57,14 +65,14 @@ export async function updateSettings(updates: Partial<Settings>): Promise<Settin
   }
 
   if (upserts.length === 0) {
-    return getSettings();
+    return getSettings(workspaceId);
   }
 
   const { error } = await supabase.from("app_settings").upsert(upserts, {
-    onConflict: "key",
+    onConflict: "workspace_id,key",
   });
 
   if (error) throw error;
 
-  return getSettings();
+  return getSettings(workspaceId);
 }

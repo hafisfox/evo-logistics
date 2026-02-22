@@ -55,6 +55,8 @@ export async function callModalWebhook<T = unknown>({
 
 export async function selectAgent(payload: {
   rfq_id: string;
+  workspace_id: string;
+  selected_by_user_id: string;
   selected_agent: string;
   selected_carrier: string;
   shipment_number: string;

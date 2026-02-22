@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { AgentQuote } from "@/types/rfq";
+import { requireWorkspaceApiContext } from "@/lib/workspace-context";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,15 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ rfqId: string }> }
 ) {
+  const scope = await requireWorkspaceApiContext({
+    allowedRoles: ["owner", "admin", "member"],
+  });
+  if (scope.response) return scope.response;
+  if (!scope.context) {
+    return NextResponse.json({ error: "Workspace not configured" }, { status: 409 });
+  }
+  const workspaceId = scope.context.workspaceId;
+
   try {
     const { rfqId } = await params;
     const supabase = await createClient();
@@ -15,6 +25,7 @@ export async function GET(
     const { data, error } = await supabase
       .from('agent_outbound_log')
       .select('*')
+      .eq('workspace_id', workspaceId)
       .eq('rfq_id', rfqId);
 
     if (error) throw error;

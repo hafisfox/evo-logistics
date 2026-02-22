@@ -10,6 +10,7 @@ import modal
 from pydantic import BaseModel
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from tenant_context import scoped_select, scoped_eq_filter
 
 # =====================================================================
 # MODAL APP DEFINITION
@@ -33,6 +34,8 @@ image = modal.Image.debian_slim(python_version="3.11").pip_install(
 # =====================================================================
 class SelectAgentRequest(BaseModel):
     rfq_id: str
+    workspace_id: str
+    selected_by_user_id: str = "dashboard"
     selected_agent: str
     selected_carrier: str
     shipment_number: str = "1"
@@ -376,13 +379,17 @@ def calculate_full_pricing(rfq, quote, do_charges, dest_charges, transp_charges,
 # =====================================================================
 # SUPABASE HELPERS
 # =====================================================================
-def _get_table(supabase, table_name):
+def _get_table(supabase, table_name, workspace_id=None):
     """Fetch all rows from a Supabase table as a list of dicts."""
+    if workspace_id:
+        return scoped_select(supabase, table_name, workspace_id)
     result = supabase.table(table_name).select("*").execute()
     return result.data or []
 
-def _get_by_filter(supabase, table_name, column, value):
+def _get_by_filter(supabase, table_name, column, value, workspace_id=None):
     """Fetch rows matching a filter as a list of dicts."""
+    if workspace_id:
+        return scoped_eq_filter(supabase, table_name, workspace_id, column, value)
     result = supabase.table(table_name).select("*").eq(column, value).execute()
     return result.data or []
 
@@ -573,11 +580,14 @@ def select_agent(request: SelectAgentRequest) -> dict:
 def _process_agent_selection(request: SelectAgentRequest) -> dict:
     gmail_service = get_google_services()
     supabase = get_supabase_client()
+    workspace_id = request.workspace_id
 
     # 1. Fetch the RFQ from Supabase
-    rfq_rows = _get_by_filter(supabase, "master_rfqs", "rfq_id", request.rfq_id)
+    rfq_rows = _get_by_filter(supabase, "master_rfqs", "rfq_id", request.rfq_id, workspace_id)
     if not rfq_rows:
-        raise Exception(f"RFQ '{request.rfq_id}' not found in master_rfqs")
+        raise Exception(
+            f"RFQ '{request.rfq_id}' not found in master_rfqs for workspace '{workspace_id}'"
+        )
     rfq_data = rfq_rows[0]
 
     print(f"Found RFQ {request.rfq_id}")
@@ -586,18 +596,20 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
     supabase.table("master_rfqs").update({
         "status": "Selected",
         "selected_agent": request.selected_agent
-    }).eq("rfq_id", request.rfq_id).execute()
+    }).eq("workspace_id", workspace_id).eq("rfq_id", request.rfq_id).execute()
     print(f"Updated RFQ status to Selected, agent: {request.selected_agent}")
 
     # 3. Find the selected quote
-    all_quotes = _get_by_filter(supabase, "agent_outbound_log", "rfq_id", request.rfq_id)
+    all_quotes = _get_by_filter(
+        supabase, "agent_outbound_log", "rfq_id", request.rfq_id, workspace_id
+    )
     quote_data = _find_selected_quote(all_quotes, request)
     print(f"Found quote: carrier={quote_data.get('carrier')}, price={quote_data.get('price')}")
 
     # 4. Read pricing lookup tables directly as dicts
-    do_charges = _get_table(supabase, "do_charges")
-    dest_charges = _get_table(supabase, "destination_charges")
-    transp_charges = _get_table(supabase, "transportation_charges")
+    do_charges = _get_table(supabase, "do_charges", workspace_id)
+    dest_charges = _get_table(supabase, "destination_charges", workspace_id)
+    transp_charges = _get_table(supabase, "transportation_charges", workspace_id)
 
     # 5. Calculate pricing
     pricing = calculate_full_pricing(
@@ -618,7 +630,7 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
         "final_price_aed": pricing["grand_total_aed"],
         "final_price_usd": pricing["grand_total_usd"],
         "quoted_at": now_str
-    }).eq("rfq_id", request.rfq_id).execute()
+    }).eq("workspace_id", workspace_id).eq("rfq_id", request.rfq_id).execute()
     print(f"master_rfqs updated with pricing and status=Quoted")
 
     # 7. Send quotation email on original thread

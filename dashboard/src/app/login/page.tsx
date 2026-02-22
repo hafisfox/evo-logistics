@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,14 +21,30 @@ const getURL = () => {
 };
 
 export default async function LoginPage(props: {
-    searchParams: Promise<{ callbackUrl?: string; error?: string; code?: string; message?: string }>;
+    searchParams: Promise<{
+        callbackUrl?: string;
+        error?: string;
+        code?: string;
+        message?: string;
+        invite?: string;
+    }>;
 }) {
     const searchParams = await props.searchParams;
+    const callbackTarget = searchParams.callbackUrl || "/";
+    const inviteToken = typeof searchParams.invite === "string" ? searchParams.invite.trim() : "";
+    const encodedInvite = inviteToken ? `&invite=${encodeURIComponent(inviteToken)}` : "";
 
     // If Supabase falls back to the Site URL, middleware redirects /?code=... to /login?code=...
     // We catch the code here and forward it to the proper callback route.
     if (searchParams.code) {
-        redirect(`/auth/callback?code=${searchParams.code}&next=${searchParams.callbackUrl || "/"}`);
+        const callbackParams = new URLSearchParams({
+            code: searchParams.code,
+            next: callbackTarget,
+        });
+        if (inviteToken) {
+            callbackParams.set("invite", inviteToken);
+        }
+        redirect(`/auth/callback?${callbackParams.toString()}`);
     }
 
     const supabase = await createClient();
@@ -47,7 +64,7 @@ export default async function LoginPage(props: {
 
     // If already authenticated, redirect to callbackUrl or home
     if (session) {
-        redirect(searchParams.callbackUrl || "/");
+        redirect(callbackTarget);
     }
 
     // Server Action to handle Email Sign In (Magic Link)
@@ -56,7 +73,7 @@ export default async function LoginPage(props: {
         const email = formData.get("email") as string;
         const supabaseServer = await createClient();
 
-        const redirectTo = `${getURL()}auth/confirm?callbackUrl=${searchParams.callbackUrl || "/"}`;
+        const redirectTo = `${getURL()}auth/confirm?next=${encodeURIComponent(callbackTarget)}${encodedInvite}`;
 
         const { error } = await supabaseServer.auth.signInWithOtp({
             email,
@@ -77,7 +94,7 @@ export default async function LoginPage(props: {
         "use server";
         const supabaseServer = await createClient();
 
-        const redirectTo = `${getURL()}auth/callback?next=${searchParams.callbackUrl || "/"}`;
+        const redirectTo = `${getURL()}auth/callback?next=${encodeURIComponent(callbackTarget)}${encodedInvite}`;
 
         const { data, error } = await supabaseServer.auth.signInWithOAuth({
             provider: "google",
@@ -109,10 +126,10 @@ export default async function LoginPage(props: {
                         </div>
                     </div>
                     <h1 className="text-2xl font-semibold tracking-tighter text-white">
-                        Evo Logistics Auth
+                        Evo Logistics Sign In
                     </h1>
                     <p className="text-sm text-slate-400">
-                        Enter your email to receive a magic link
+                        Sign in to your workspace dashboard
                     </p>
                 </div>
 
@@ -173,7 +190,13 @@ export default async function LoginPage(props: {
                 </div>
 
                 <p className="px-8 text-center text-sm text-slate-500">
-                    By clicking continue, you agree to our Terms of Service and Privacy Policy.
+                    New here?{" "}
+                    <Link
+                        href={inviteToken ? `/signup?invite=${encodeURIComponent(inviteToken)}` : "/signup"}
+                        className="text-cyan-400 hover:text-cyan-300"
+                    >
+                        Create an account
+                    </Link>
                 </p>
             </div>
         </div>

@@ -5,6 +5,7 @@ from datetime import datetime, timezone, timedelta
 import modal
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from tenant_context import scoped_select, scoped_eq_filter, scoped_update_by_eq
 
 # =====================================================================
 # TIMEZONES
@@ -59,13 +60,17 @@ def get_supabase_client():
 # =====================================================================
 # SUPABASE HELPERS
 # =====================================================================
-def _get_table(supabase, table_name):
+def _get_table(supabase, table_name, workspace_id=None):
     """Fetch all rows from a Supabase table as a list of dicts."""
+    if workspace_id:
+        return scoped_select(supabase, table_name, workspace_id)
     result = supabase.table(table_name).select("*").execute()
     return result.data or []
 
-def _get_by_filter(supabase, table_name, column, value):
+def _get_by_filter(supabase, table_name, column, value, workspace_id=None):
     """Fetch rows matching a filter as a list of dicts."""
+    if workspace_id:
+        return scoped_eq_filter(supabase, table_name, workspace_id, column, value)
     result = supabase.table(table_name).select("*").eq(column, value).execute()
     return result.data or []
 
@@ -162,6 +167,7 @@ def check_agent_reminders():
     
     for row in all_agent_rows:
         rfq_id = row.get('rfq_id', '')
+        workspace_id = row.get('workspace_id')
         status = row.get('status', '')
         sent_at_str = row.get('sent_at', '')
         agent_email = row.get('agent_email', '')
@@ -190,7 +196,15 @@ def check_agent_reminders():
                 send_email(gmail_service, agent_email, subject, body)
                 
                 match_key = f"{rfq_id}_{agent_email}"
-                supabase.table("agent_outbound_log").update({"status": "Reminded"}).eq("match", match_key).execute()
+                if workspace_id:
+                    scoped_update_by_eq(
+                        supabase,
+                        "agent_outbound_log",
+                        workspace_id,
+                        {"status": "Reminded"},
+                        "match",
+                        match_key,
+                    )
                 print(f"Sent reminder for RFQ {rfq_id} to {agent_email}")
                 reminders_sent += 1
                 
@@ -221,6 +235,7 @@ def check_customer_followups():
     for row in all_rfqs:
         if row.get('status') != 'Quoted':
             continue
+        workspace_id = row.get("workspace_id")
 
         quoted_at_str = row.get('quoted_at', '')
         if not quoted_at_str:
@@ -244,7 +259,15 @@ def check_customer_followups():
                 )
                 send_reply_email(gmail_service, customer_email, thread_id, subject, body)
                 
-                supabase.table("master_rfqs").update({"status": "Followed_Up"}).eq("rfq_id", rfq_id).execute()
+                if workspace_id:
+                    scoped_update_by_eq(
+                        supabase,
+                        "master_rfqs",
+                        workspace_id,
+                        {"status": "Followed_Up"},
+                        "rfq_id",
+                        rfq_id,
+                    )
                 print(f"Sent 24-hour follow-up for RFQ {rfq_id} to {customer_email}")
                 followups_sent += 1
         except Exception as e:

@@ -1,38 +1,47 @@
-# Evo Logistics — Pricing Dashboard
+# Evo Logistics Dashboard
 
-This is the Next.js App Router frontend for the Evo Logistics FCL Pricing Engine. It allows pricing managers to monitor RFQ pipeline state, review agent quotes, and execute final selection flows with consistent pricing logic.
+Updated: 2026-02-22
 
-## Core Features
+Workspace-centric Next.js control plane for RFQ operations, pricing, and automation handoff.
 
-- **Supabase Authentication and Session Guarding:** `@supabase/ssr` with route protection.
-- **RLS-Aligned Data Access:** Dashboard APIs read/write against Supabase tables under controlled auth flow.
-- **Pipeline Visibility:** Real-time RFQ status views with filters, table/kanban modes, and detail drill-down.
-- **Pricing and Selection:** Agent selection, pricing calculations, and webhook handoff to automations.
-- **Theme Support:** `next-themes` with CSS-variable-based light/dark themes.
+## What Is Implemented
 
-## Tech Stack
+- Supabase auth with dedicated `/login` and `/signup` experiences.
+- Post-auth workspace bootstrap (personal workspace + owner membership).
+- Workspace switcher persisted with secure `workspace_id` cookie.
+- Role-aware API guards for `owner`, `admin`, and `member`.
+- Workspace-scoped RFQ/pricing/settings APIs.
+- Invite links that carry token through auth callback and auto-accept membership.
+- Account settings (`/settings/account`) with profile update, session revoke, MFA flag toggle, and soft-delete request.
+- Workspace member/invite management (`/settings/members`).
+- Workspace settings (`/settings/workspace`).
 
-- **Framework:** Next.js 16+ (App Router)
-- **Styling:** Tailwind CSS + shadcn/ui
-- **Data:** Supabase PostgreSQL + `@supabase/ssr`
-- **State:** TanStack Query v5 + Zustand (UI state)
-- **Testing:** Vitest + Testing Library + Playwright
+## Main Routes
 
-## Getting Started Locally
+- `/login`
+- `/signup`
+- `/onboarding`
+- `/rfqs`
+- `/agents`
+- `/pricing`
+- `/settings/workspace`
+- `/settings/account`
+- `/settings/members`
 
-1. Copy `.env.example` to `.env.local` and set required values.
-2. Install dependencies and start dev server:
+## Environment Setup
+
+1. Copy `.env.example` to `.env.local`.
+2. Fill required keys.
+3. Install dependencies and run dev server.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+## Commands
 
-## Quality Commands
-
-Run all quality checks from `dashboard/`:
+From `dashboard/`:
 
 ```bash
 npm run lint
@@ -42,39 +51,19 @@ npm run test:e2e
 npm run build
 ```
 
-## Auth and Proxy Behavior
+Notes:
+- Playwright and build use webpack mode in this branch to avoid Turbopack/worktree symlink crashes.
 
-- Request guarding is handled in `src/proxy.ts`.
-- Unauthenticated **page** requests redirect to `/login`.
-- Unauthenticated **API** requests return JSON `401`:
+## Key Files
 
-```json
-{ "error": "Unauthorized" }
-```
+- `src/lib/workspace-context.ts` — active workspace/role resolution helpers.
+- `src/lib/workspaces.ts` — user workspace bootstrap + defaults seeding.
+- `src/lib/supabase/middleware.ts` — auth/onboarding gate behavior.
+- `src/app/api/workspaces/**` — workspace/member/invite APIs.
+- `src/app/api/rfqs/[rfqId]/select/route.ts` — workspace-aware Modal handoff.
 
-## API Error Contract
+## Related Docs
 
-Validated mutable routes return `400` for invalid payloads in this shape:
-
-```json
-{
-  "error": "Invalid ... payload",
-  "details": ["field-specific reason"]
-}
-```
-
-Server failures return `500` with:
-
-```json
-{ "error": "..." }
-```
-
-## CI
-
-GitHub Actions workflow: `.github/workflows/dashboard-quality.yml`
-
-It runs lint, typecheck, unit/integration tests, Playwright smoke tests, and build for dashboard changes.
-
-## System Architecture
-
-This dashboard is the frontend control plane for the pricing workflow. Backend async ingestion and outbound quote automation are managed in `/automations`. See root docs (`ACTION_PLAN.md`, `DASHBOARD.md`) for full flow and schema context.
+- `../ACTION_PLAN.md`
+- `../DASHBOARD.md`
+- `../automations/AUTOMATIONS.md`
