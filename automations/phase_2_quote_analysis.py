@@ -14,10 +14,12 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from tenant_context import (
     audit_ignored_mailbox_event,
+    claim_email_event,
     extract_pubsub_mailbox,
+    resolve_canonical_rfq_id,
     resolve_workspace_id,
-    scoped_select,
     scoped_eq_filter,
+    scoped_select,
     scoped_upsert,
 )
 
@@ -754,6 +756,28 @@ def _process_agent_quotes(pubsub_payload=None):
             )
             continue
 
+        claimed = claim_email_event(
+            supabase,
+            workspace_id=workspace_id,
+            source="phase_2_quote_analysis",
+            gmail_message_id=msg_id,
+            thread_id=thread_id,
+            subject=subject,
+            sender=sender,
+        )
+        print(
+            f"[{msg_id}] Claim result: {'claimed' if claimed else 'already-claimed'} "
+            f"thread={thread_id}"
+        )
+        if not claimed:
+            _gmail_call_with_backoff(
+                gmail_service.users().messages().modify(
+                    userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}
+                )
+            )
+            print(f"[{msg_id}] Skipping duplicate delivery for thread {thread_id}")
+            continue
+
         # Mark as read immediately to prevent re-processing
         _gmail_call_with_backoff(
             gmail_service.users().messages().modify(
@@ -766,6 +790,11 @@ def _process_agent_quotes(pubsub_payload=None):
         if not ref_id:
             print(f"No Ref ID in subject, skipping: {subject}")
             continue
+        canonical_ref_id = resolve_canonical_rfq_id(supabase, workspace_id, ref_id)
+        if canonical_ref_id != ref_id:
+            print(
+                f"[{msg_id}] RFQ alias resolved: {ref_id} -> {canonical_ref_id}"
+            )
 
         agent_name, agent_email = extract_agent_info(sender)
 
@@ -799,9 +828,9 @@ def _process_agent_quotes(pubsub_payload=None):
 
             if not extracted.quotes:
                 # Agent declined or no quotes — log as invalid
-                match_key = f"{ref_id}_{agent_email}"
+                match_key = f"{canonical_ref_id}_{agent_email}"
                 log_data = {
-                    'rfq_id': ref_id,
+                    'rfq_id': canonical_ref_id,
                     'match': match_key,
                     'status': 'Invalid_Quote',
                     'agent_name': agent_name,
@@ -829,9 +858,11 @@ def _process_agent_quotes(pubsub_payload=None):
                     price > 0
                 )
 
-                match_key = f"{ref_id}_{agent_email}_{carrier}_{quote.shipment_number}"
+                match_key = (
+                    f"{canonical_ref_id}_{agent_email}_{carrier}_{quote.shipment_number}"
+                )
                 log_data = {
-                    'rfq_id': ref_id,
+                    'rfq_id': canonical_ref_id,
                     'match': match_key,
                     'status': 'Received' if is_valid else 'Invalid_Quote',
                     'agent_name': agent_name,
@@ -851,15 +882,20 @@ def _process_agent_quotes(pubsub_payload=None):
                 print(f"Quote logged: {agent_name} / {carrier} / ${price} (shipment {quote.shipment_number})")
 
             # After logging all quotes, check threshold
-            _check_threshold_and_notify(gmail_service, supabase, ref_id, workspace_id)
+            _check_threshold_and_notify(
+                gmail_service,
+                supabase,
+                canonical_ref_id,
+                workspace_id,
+            )
 
         except Exception as e:
             print(f"Error processing quote from {agent_name}: {e}")
             # Log error but continue processing other messages
             try:
-                match_key = f"{ref_id}_{agent_email}"
+                match_key = f"{canonical_ref_id}_{agent_email}"
                 _upsert_row(supabase, "agent_outbound_log", {
-                    'rfq_id': ref_id,
+                    'rfq_id': canonical_ref_id,
                     'match': match_key,
                     'status': 'Invalid_Quote',
                     'agent_name': agent_name,

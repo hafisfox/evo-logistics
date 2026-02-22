@@ -131,7 +131,31 @@ create table master_rfqs (
   final_price_usd numeric,
   final_price_aed numeric,
   quoted_at timestamptz,
-  primary key (workspace_id, rfq_id)
+  primary key (workspace_id, rfq_id),
+  unique (workspace_id, thread_id)
+);
+
+create table processed_email_events (
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  source text not null,
+  gmail_message_id text not null,
+  thread_id text,
+  subject text,
+  sender text,
+  claimed_at timestamptz not null default now(),
+  primary key (workspace_id, source, gmail_message_id)
+);
+
+create table rfq_id_aliases (
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  duplicate_rfq_id text not null,
+  canonical_rfq_id text not null,
+  created_at timestamptz not null default now(),
+  primary key (workspace_id, duplicate_rfq_id),
+  foreign key (workspace_id, canonical_rfq_id)
+    references master_rfqs(workspace_id, rfq_id)
+    on delete cascade,
+  check (duplicate_rfq_id <> canonical_rfq_id)
 );
 
 create table agent_outbound_log (
@@ -205,6 +229,8 @@ create table app_settings (
 -- High-value indexes
 create index idx_workspace_members_user_workspace on workspace_members(user_id, workspace_id);
 create index idx_master_rfqs_workspace_status on master_rfqs(workspace_id, status);
+create index idx_processed_email_events_workspace_thread on processed_email_events(workspace_id, thread_id);
+create index idx_rfq_id_aliases_workspace_canonical on rfq_id_aliases(workspace_id, canonical_rfq_id);
 create index idx_agent_outbound_log_workspace_rfq on agent_outbound_log(workspace_id, rfq_id);
 create index idx_app_settings_workspace_key on app_settings(workspace_id, key);
 

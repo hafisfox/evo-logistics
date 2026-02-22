@@ -134,6 +134,12 @@ class TenantContextTests(unittest.TestCase):
         self.assertEqual(rows, [{"rfq_id": "RFQ-1"}])
         self.assertIn(("workspace_id", "ws-abc"), supabase.last_query.eq_calls)
 
+    def test_scoped_select_applies_workspace_filter_for_processed_email_events(self):
+        supabase = _FakeSupabase({"processed_email_events": [{"gmail_message_id": "m-1"}]})
+        rows = tc.scoped_select(supabase, "processed_email_events", "ws-abc")
+        self.assertEqual(rows, [{"gmail_message_id": "m-1"}])
+        self.assertIn(("workspace_id", "ws-abc"), supabase.last_query.eq_calls)
+
     def test_scoped_select_skips_workspace_filter_for_non_tenant_tables(self):
         supabase = _FakeSupabase({"public_reference_data": [{"id": 1}]})
         rows = tc.scoped_select(supabase, "public_reference_data", "ws-abc")
@@ -181,6 +187,10 @@ class TenantContextTests(unittest.TestCase):
         self.assertEqual(payload["action"], "automation_mailbox_event_ignored")
         self.assertEqual(payload["entity_type"], "phase_1_request_analysis")
         self.assertEqual(payload["entity_id"], "ops@example.com")
+
+    def test_tenant_tables_include_new_idempotency_tables(self):
+        self.assertIn("processed_email_events", tc.TENANT_TABLES)
+        self.assertIn("rfq_id_aliases", tc.TENANT_TABLES)
 
 
 if __name__ == "__main__":

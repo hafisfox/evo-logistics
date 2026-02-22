@@ -15,9 +15,13 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from tenant_context import (
     audit_ignored_mailbox_event,
+    claim_email_event,
     extract_pubsub_mailbox,
+    is_unique_violation,
     resolve_workspace_id,
+    scoped_eq_filter,
     scoped_select,
+    scoped_update_by_eq,
     scoped_upsert,
 )
 
@@ -1028,6 +1032,96 @@ def _load_known_threads(supabase, workspace_id):
         print(f"Warning: Could not load known threads for dedup: {e}")
         return {}
 
+
+_STATUS_PRIORITY = {
+    "quoted": 1,
+    "followed_up": 2,
+    "customer_replied": 3,
+    "selected": 4,
+    "reminded": 5,
+    "processing": 6,
+    "missing_door_data": 7,
+    "missing_port_data": 8,
+    "parse_error": 9,
+}
+
+
+def _status_rank(status_value: Optional[str]) -> int:
+    if not status_value:
+        return 999
+    return _STATUS_PRIORITY.get(str(status_value).strip().lower(), 999)
+
+
+def _parse_received_for_sort(value: Optional[str]):
+    if not value:
+        return (2, "")
+
+    if isinstance(value, datetime):
+        return (0, value.isoformat())
+
+    text = str(value).strip()
+
+    try:
+        # Stored by automation as: YYYY-MM-DD HH:MM AM/PM (UAE local)
+        parsed = datetime.strptime(text, "%Y-%m-%d %I:%M %p")
+        return (0, parsed.isoformat())
+    except Exception:
+        pass
+
+    try:
+        # In case row was inserted with an ISO timestamp
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return (0, parsed.isoformat())
+    except Exception:
+        return (1, text)
+
+
+def _pick_preferred_thread_row(rows: list) -> Optional[dict]:
+    if not rows:
+        return None
+    return sorted(
+        rows,
+        key=lambda row: (
+            _status_rank(row.get("status")),
+            _parse_received_for_sort(row.get("received_at")),
+            str(row.get("rfq_id") or ""),
+        ),
+    )[0]
+
+
+def _get_thread_record(supabase, workspace_id: str, thread_id: str):
+    if not thread_id:
+        return None
+
+    try:
+        rows = scoped_eq_filter(supabase, "master_rfqs", workspace_id, "thread_id", thread_id)
+    except Exception as exc:
+        print(f"Warning: Could not refresh thread {thread_id} for dedup: {exc}")
+        return None
+
+    if not rows:
+        return None
+
+    preferred = _pick_preferred_thread_row(rows)
+    if not preferred:
+        return None
+
+    return {
+        "status": preferred.get("status") or "",
+        "rfq_id": preferred.get("rfq_id") or "",
+    }
+
+
+def _mark_message_read(gmail_service, msg_id: str):
+    try:
+        _gmail_call_with_backoff(
+            gmail_service.users().messages().modify(
+                userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}
+            )
+        )
+    except Exception:
+        pass
+
 # =====================================================================
 # CORE EMAIL PROCESSING LOGIC
 # =====================================================================
@@ -1089,32 +1183,54 @@ def _process_incoming_rfqs(pubsub_payload=None):
         # RFC 2822 Message-ID is needed for proper threading (not the Gmail internal ID)
         rfc_message_id = headers_dict.get('message-id', '')
 
+        claimed = claim_email_event(
+            supabase,
+            workspace_id=workspace_id,
+            source="phase_1_request_analysis",
+            gmail_message_id=msg_id,
+            thread_id=thread_id,
+            subject=subject,
+            sender=sender,
+        )
+        print(
+            f"[{msg_id}] Claim result: {'claimed' if claimed else 'already-claimed'} "
+            f"thread={thread_id}"
+        )
+        if not claimed:
+            _mark_message_read(gmail_service, msg_id)
+            processed_msg_ids.add(msg_id)
+            print(f"[{msg_id}] Skipping duplicate delivery for thread {thread_id}")
+            continue
+
         # Mark as read IMMEDIATELY to prevent concurrent Pub/Sub invocations
         # from picking up the same email (closes the race window)
-        try:
-            _gmail_call_with_backoff(
-                gmail_service.users().messages().modify(
-                    userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}
-                )
-            )
-        except Exception:
-            pass
+        _mark_message_read(gmail_service, msg_id)
         processed_msg_ids.add(msg_id)
 
         # FIX-1: Hard guard — skip any email sent by our own address to prevent reply loops
         if OWN_EMAIL in sender.lower():
-            print(f"Skipping self-sent email: {subject}")
+            print(f"[{msg_id}] Skipping self-sent email: {subject}")
             continue
 
         # Extract body text
         email_body = extract_email_body(email_data['payload'])
         if not email_body.strip():
             email_body = email_data.get('snippet', '')
-            print(f"WARNING: Body extraction empty, using snippet: {email_body[:200]}")
+            print(f"[{msg_id}] WARNING: Body extraction empty, using snippet: {email_body[:200]}")
 
-        print(f"Processing email: {subject} from {sender}")
+        print(f"[{msg_id}] Processing email: {subject} from {sender}")
         body_preview = email_body[:300] # Use a preview for logging
-        print(f"Email body length: {len(email_body)} chars | Preview: {body_preview}")
+        print(
+            f"[{msg_id}] Email body length: {len(email_body)} chars | "
+            f"thread={thread_id} | Preview: {body_preview}"
+        )
+
+        # Refresh thread state for each message to avoid stale dedup snapshots.
+        existing = _get_thread_record(supabase, workspace_id, thread_id)
+        if existing:
+            known_threads[thread_id] = existing
+        else:
+            existing = known_threads.get(thread_id)
 
         # 2. CLASSIFY EMAIL
         email_category = classify_email(modal_llm_client, subject, sender, body_preview,
@@ -1126,24 +1242,41 @@ def _process_incoming_rfqs(pubsub_payload=None):
             continue
 
         # DEDUPLICATION: Check if this thread was already processed
-        existing = known_threads.get(thread_id)
         if existing:
             existing_status = existing['status']
             if existing_status in ('Missing_Port_Data', 'Missing_Door_Data'):
                 # Thread needs more data — allow processing as followup
-                print(f"Thread {thread_id} needs data ({existing_status}), processing as followup")
-            elif existing_status in ('Quoted', 'Followed_Up') and email_category == 'customer_followup':
-                print(f"Customer replied to quoted thread {thread_id}. Updating status.")
-                _upsert_row(
-                    supabase, 
-                    "master_rfqs", 
-                    {'thread_id': thread_id, 'status': 'Customer_Replied'},
-                    workspace_id
+                print(
+                    f"[{msg_id}] Thread {thread_id} needs data "
+                    f"({existing_status}), processing as followup"
                 )
+            elif existing_status in ('Quoted', 'Followed_Up') and email_category == 'customer_followup':
+                print(f"[{msg_id}] Customer replied to quoted thread {thread_id}. Updating status.")
+                try:
+                    scoped_update_by_eq(
+                        supabase,
+                        "master_rfqs",
+                        workspace_id,
+                        {"status": "Customer_Replied"},
+                        "thread_id",
+                        thread_id,
+                    )
+                    known_threads[thread_id] = {
+                        "status": "Customer_Replied",
+                        "rfq_id": existing.get("rfq_id") or "",
+                    }
+                except Exception as update_exc:
+                    print(
+                        f"[{msg_id}] Failed to update thread {thread_id} "
+                        f"to Customer_Replied: {update_exc}"
+                    )
                 continue
             else:
                 # Already processed (Processing, Parse_Error, etc.) — skip
-                print(f"Thread {thread_id} already processed (status: {existing_status}), skipping")
+                print(
+                    f"[{msg_id}] Thread {thread_id} already processed "
+                    f"(status: {existing_status}), skipping"
+                )
                 continue
 
         # Only process customer_rfq and customer_followup
@@ -1179,10 +1312,24 @@ def _process_incoming_rfqs(pubsub_payload=None):
             extracted = response.choices[0].message.parsed
 
             if not extracted.shipments:
-                print(f"No logistics data found in email: {subject}. Handling as fallback.")
+                print(f"[{msg_id}] No logistics data found in email: {subject}. Handling as fallback.")
                 # Fallback: log + reply + notify admin
-                _handle_fallback(gmail_service, supabase, rfq_id, sender, thread_id,
-                                rfc_message_id, subject, email_body, email_meta, now_str, workspace_id)
+                fallback_ok = _handle_fallback(
+                    gmail_service,
+                    supabase,
+                    rfq_id,
+                    sender,
+                    thread_id,
+                    rfc_message_id,
+                    subject,
+                    email_body,
+                    email_meta,
+                    now_str,
+                    workspace_id,
+                    msg_id=msg_id,
+                )
+                if fallback_ok:
+                    known_threads[thread_id] = {"status": "Parse_Error", "rfq_id": rfq_id}
                 continue
 
             # 4. Validate and normalize each shipment
@@ -1242,7 +1389,20 @@ def _process_incoming_rfqs(pubsub_payload=None):
             # 7. Route based on action
             if action == 'complete':
                 sheet_row['status'] = 'Processing'
-                _upsert_row(supabase, "master_rfqs", sheet_row, workspace_id)
+                try:
+                    _upsert_row(supabase, "master_rfqs", sheet_row, workspace_id)
+                except Exception as upsert_exc:
+                    if is_unique_violation(upsert_exc):
+                        print(
+                            f"[{msg_id}] Duplicate thread detected at write time "
+                            f"(thread={thread_id}); skipping side-effects."
+                        )
+                        refreshed = _get_thread_record(supabase, workspace_id, thread_id)
+                        if refreshed:
+                            known_threads[thread_id] = refreshed
+                        continue
+                    raise
+                known_threads[thread_id] = {'status': 'Processing', 'rfq_id': rfq_id}
                 print(f"RFQ {rfq_id} is complete. Sending agent outreach...")
 
                 # Send rate requests to agents
@@ -1253,24 +1413,73 @@ def _process_incoming_rfqs(pubsub_payload=None):
 
             elif action == 'need_door_data':
                 sheet_row['status'] = 'Missing_Door_Data'
-                _upsert_row(supabase, "master_rfqs", sheet_row, workspace_id)
+                try:
+                    _upsert_row(supabase, "master_rfqs", sheet_row, workspace_id)
+                except Exception as upsert_exc:
+                    if is_unique_violation(upsert_exc):
+                        print(
+                            f"[{msg_id}] Duplicate thread detected at write time "
+                            f"(thread={thread_id}); skipping side-effects."
+                        )
+                        refreshed = _get_thread_record(supabase, workspace_id, thread_id)
+                        if refreshed:
+                            known_threads[thread_id] = refreshed
+                        continue
+                    raise
+                known_threads[thread_id] = {'status': 'Missing_Door_Data', 'rfq_id': rfq_id}
                 send_door_data_reply(gmail_service, sender, thread_id, rfc_message_id,
                                      subject, current_details, missing_formatted)
                 print(f"Door data reply sent for thread: {thread_id}")
 
             elif action == 'need_port_data':
                 sheet_row['status'] = 'Missing_Port_Data'
-                _upsert_row(supabase, "master_rfqs", sheet_row, workspace_id)
+                try:
+                    _upsert_row(supabase, "master_rfqs", sheet_row, workspace_id)
+                except Exception as upsert_exc:
+                    if is_unique_violation(upsert_exc):
+                        print(
+                            f"[{msg_id}] Duplicate thread detected at write time "
+                            f"(thread={thread_id}); skipping side-effects."
+                        )
+                        refreshed = _get_thread_record(supabase, workspace_id, thread_id)
+                        if refreshed:
+                            known_threads[thread_id] = refreshed
+                        continue
+                    raise
+                known_threads[thread_id] = {'status': 'Missing_Port_Data', 'rfq_id': rfq_id}
                 send_port_data_reply(gmail_service, sender, thread_id, rfc_message_id,
                                      subject, current_details, missing_formatted)
                 print(f"Port data reply sent for thread: {thread_id}")
 
         except Exception as e:
+            if is_unique_violation(e):
+                print(
+                    f"[{msg_id}] Duplicate thread conflict during processing "
+                    f"(thread={thread_id}); skipping fallback side-effects."
+                )
+                refreshed = _get_thread_record(supabase, workspace_id, thread_id)
+                if refreshed:
+                    known_threads[thread_id] = refreshed
+                continue
             print(f"Error processing message {msg_id}: {e}")
             # Handle as fallback
             try:
-                _handle_fallback(gmail_service, supabase, rfq_id, sender, thread_id,
-                                rfc_message_id, subject, email_body, email_meta, now_str, workspace_id)
+                fallback_ok = _handle_fallback(
+                    gmail_service,
+                    supabase,
+                    rfq_id,
+                    sender,
+                    thread_id,
+                    rfc_message_id,
+                    subject,
+                    email_body,
+                    email_meta,
+                    now_str,
+                    workspace_id,
+                    msg_id=msg_id,
+                )
+                if fallback_ok:
+                    known_threads[thread_id] = {"status": "Parse_Error", "rfq_id": rfq_id}
             except Exception as e2:
                 print(f"Fallback handler also failed for {msg_id}: {e2}")
         finally:
@@ -1278,7 +1487,8 @@ def _process_incoming_rfqs(pubsub_payload=None):
 
 
 def _handle_fallback(gmail_service, supabase, rfq_id, sender, thread_id,
-                     rfc_message_id, subject, email_body, email_meta, now_str, workspace_id):
+                     rfc_message_id, subject, email_body, email_meta, now_str, workspace_id,
+                     msg_id: str = ""):
     """Handle emails that couldn't be parsed: log, reply to customer, notify admin."""
     # Log to sheets with Parse_Error status
     sheet_row = {
@@ -1293,6 +1503,12 @@ def _handle_fallback(gmail_service, supabase, rfq_id, sender, thread_id,
     try:
         _upsert_row(supabase, "master_rfqs", sheet_row, workspace_id)
     except Exception as e:
+        if is_unique_violation(e):
+            print(
+                f"[{msg_id or 'fallback'}] Duplicate thread conflict while logging fallback "
+                f"(thread={thread_id}); skipping fallback side-effects."
+            )
+            return False
         print(f"Failed to log fallback to Supabase: {e}")
 
     # Reply to customer with fallback template
@@ -1308,6 +1524,7 @@ def _handle_fallback(gmail_service, supabase, rfq_id, sender, thread_id,
         print(f"Admin fallback notification sent for {rfq_id}")
     except Exception as e:
         print(f"Failed to send admin notification: {e}")
+    return True
 
 
 if __name__ == "__main__":

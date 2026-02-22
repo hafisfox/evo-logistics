@@ -23,6 +23,8 @@ TENANT_TABLES = {
     "workspace_invites",
     "workspace_members",
     "audit_events",
+    "processed_email_events",
+    "rfq_id_aliases",
 }
 
 
@@ -145,3 +147,90 @@ def scoped_update_by_eq(
     if table_name in TENANT_TABLES:
         query = query.eq("workspace_id", workspace_id)
     query.execute()
+
+
+def _extract_pg_error_code(exc: Exception) -> Optional[str]:
+    """Extract Postgres error code from PostgREST exceptions."""
+    code = getattr(exc, "code", None)
+    if code:
+        return str(code)
+
+    if getattr(exc, "args", None):
+        first_arg = exc.args[0]
+        if isinstance(first_arg, dict) and first_arg.get("code"):
+            return str(first_arg.get("code"))
+    return None
+
+
+def is_unique_violation(exc: Exception) -> bool:
+    """Return True when exception represents UNIQUE VIOLATION (23505)."""
+    return _extract_pg_error_code(exc) == "23505"
+
+
+def claim_email_event(
+    supabase,
+    *,
+    workspace_id: str,
+    source: str,
+    gmail_message_id: str,
+    thread_id: Optional[str],
+    subject: Optional[str] = None,
+    sender: Optional[str] = None,
+) -> bool:
+    """Insert idempotency claim row; False if already claimed.
+
+    During phased rollout, fail-open if table is missing.
+    """
+    payload = {
+        "workspace_id": workspace_id,
+        "source": source,
+        "gmail_message_id": gmail_message_id,
+        "thread_id": thread_id,
+        "subject": subject,
+        "sender": sender,
+    }
+    try:
+        supabase.table("processed_email_events").insert(payload).execute()
+        return True
+    except Exception as exc:
+        code = _extract_pg_error_code(exc)
+        if code == "23505":
+            return False
+        if code == "42P01":
+            print(
+                "Warning: processed_email_events table missing; "
+                "continuing in fail-open mode."
+            )
+            return True
+        raise
+
+
+def resolve_canonical_rfq_id(supabase, workspace_id: str, rfq_id: str) -> str:
+    """Resolve duplicate RFQ IDs via alias table; fallback to original ID."""
+    if not rfq_id:
+        return rfq_id
+
+    try:
+        rows = (
+            supabase.table("rfq_id_aliases")
+            .select("canonical_rfq_id")
+            .eq("workspace_id", workspace_id)
+            .eq("duplicate_rfq_id", rfq_id)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:
+        code = _extract_pg_error_code(exc)
+        if code == "42P01":
+            print(
+                "Warning: rfq_id_aliases table missing; "
+                "continuing without alias resolution."
+            )
+            return rfq_id
+        raise
+
+    if rows and rows[0].get("canonical_rfq_id"):
+        return rows[0]["canonical_rfq_id"]
+    return rfq_id
