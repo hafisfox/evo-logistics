@@ -1,4 +1,5 @@
 export interface DOCharge {
+  id?: number;
   carrier: string;
   document: number;
   "20FT": number;
@@ -7,6 +8,7 @@ export interface DOCharge {
 }
 
 export interface DestinationCharge {
+  id?: number;
   "Charge Type": string;
   Basis: string;
   "20FT": number;
@@ -14,6 +16,7 @@ export interface DestinationCharge {
 }
 
 export interface TransportCharge {
+  id?: number;
   Place: string;
   Price: number;
 }

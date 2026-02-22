@@ -21,6 +21,7 @@ export async function GET() {
       .from('master_rfqs')
       .select('*')
       .eq("workspace_id", workspaceId)
+      .is("deleted_at", null)
       .order('received_at', { ascending: false });
 
     if (error) throw error;

@@ -36,6 +36,7 @@ export interface MasterRFQ {
   final_price_usd: string | null;
   final_price_aed: string | null;
   quoted_at: string | null;
+  deleted_at?: string | null;
 }
 
 export interface AgentQuote {

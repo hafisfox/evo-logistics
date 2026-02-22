@@ -269,6 +269,7 @@ export interface Database {
           final_price_usd: Numeric | null;
           final_price_aed: Numeric | null;
           quoted_at: string | null;
+          deleted_at: string | null;
           user_id?: string | null;
         };
         Insert: {
@@ -291,6 +292,7 @@ export interface Database {
           final_price_usd?: Numeric | null;
           final_price_aed?: Numeric | null;
           quoted_at?: string | null;
+          deleted_at?: string | null;
           user_id?: string | null;
         };
         Update: {
@@ -313,6 +315,7 @@ export interface Database {
           final_price_usd?: Numeric | null;
           final_price_aed?: Numeric | null;
           quoted_at?: string | null;
+          deleted_at?: string | null;
           user_id?: string | null;
         };
         Relationships: [];
@@ -495,4 +498,3 @@ export interface Database {
     CompositeTypes: Record<string, never>;
   };
 }
-

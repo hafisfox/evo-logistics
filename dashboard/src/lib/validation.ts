@@ -31,6 +31,70 @@ export interface PricingCalculateBody {
   };
 }
 
+export interface AgentCreateBody {
+  agent_name: string;
+  email: string;
+  status: "active" | "inactive";
+}
+
+export interface AgentUpdateBody {
+  current_agent_name: string;
+  agent_name?: string;
+  email?: string;
+  status?: "active" | "inactive";
+}
+
+export interface AgentDeleteBody {
+  agent_name: string;
+}
+
+export interface DOChargeCreateBody {
+  carrier: string;
+  document: number;
+  "20FT": number;
+  "40FT": number;
+  "40HQ": number;
+}
+
+export interface DOChargeUpdateBody {
+  id: number;
+  carrier?: string;
+  document?: number;
+  "20FT"?: number;
+  "40FT"?: number;
+  "40HQ"?: number;
+}
+
+export interface DestinationChargeCreateBody {
+  charge_type: string;
+  basis: string;
+  "20FT": number;
+  "40FT": number;
+}
+
+export interface DestinationChargeUpdateBody {
+  id: number;
+  charge_type?: string;
+  basis?: string;
+  "20FT"?: number;
+  "40FT"?: number;
+}
+
+export interface TransportChargeCreateBody {
+  place: string;
+  price: number;
+}
+
+export interface TransportChargeUpdateBody {
+  id: number;
+  place?: string;
+  price?: number;
+}
+
+export interface IdDeleteBody {
+  id: number;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -46,6 +110,54 @@ function asNumber(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+const AGENT_STATUSES = new Set(["active", "inactive"]);
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+
+function asStringOrNull(value: unknown): string | null {
+  if (!isNonEmptyString(value)) return null;
+  return value.trim();
+}
+
+function parseRequiredNumber(
+  value: unknown,
+  field: string,
+  details: string[]
+): number | null {
+  const parsed = asNumber(value);
+  if (parsed == null) {
+    details.push(`${field} must be a finite number.`);
+    return null;
+  }
+  return parsed;
+}
+
+function parseOptionalNumber(
+  value: unknown,
+  field: string,
+  details: string[]
+): number | undefined {
+  if (value == null) return undefined;
+  const parsed = asNumber(value);
+  if (parsed == null) {
+    details.push(`${field} must be a finite number when provided.`);
+    return undefined;
+  }
+  return parsed;
+}
+
+function parseRequiredId(
+  value: unknown,
+  entityLabel: string,
+  details: string[]
+): number | null {
+  const parsed = asNumber(value);
+  if (parsed == null || !Number.isInteger(parsed) || parsed <= 0) {
+    details.push(`${entityLabel} id must be a positive integer.`);
+    return null;
+  }
+  return parsed;
 }
 
 export function validateSettingsUpdateBody(body: unknown): ValidationResult<Partial<Settings>> {
@@ -247,5 +359,473 @@ export function validatePricingCalculateBody(body: unknown): ValidationResult<Pr
         price,
       },
     },
+  };
+}
+
+export function validateAgentCreateBody(body: unknown): ValidationResult<AgentCreateBody> {
+  if (!isRecord(body)) {
+    return {
+      success: false,
+      error: "Invalid agent payload",
+      details: ["Body must be a JSON object."],
+    };
+  }
+
+  const details: string[] = [];
+
+  const agentName = asStringOrNull(body.agent_name);
+  if (!agentName) {
+    details.push("agent_name is required.");
+  }
+
+  const rawEmail = asStringOrNull(body.email);
+  const email = rawEmail?.toLowerCase() ?? null;
+  if (!email) {
+    details.push("email is required.");
+  } else if (!EMAIL_REGEX.test(email)) {
+    details.push("email must be a valid email address.");
+  }
+
+  const status =
+    typeof body.status === "string" && AGENT_STATUSES.has(body.status)
+      ? (body.status as "active" | "inactive")
+      : body.status == null
+        ? "active"
+        : null;
+  if (status == null) {
+    details.push("status must be active or inactive when provided.");
+  }
+
+  if (details.length > 0 || !agentName || !email || !status) {
+    return {
+      success: false,
+      error: "Invalid agent payload",
+      details,
+    };
+  }
+
+  return {
+    success: true,
+    data: {
+      agent_name: agentName,
+      email,
+      status,
+    },
+  };
+}
+
+export function validateAgentUpdateBody(body: unknown): ValidationResult<AgentUpdateBody> {
+  if (!isRecord(body)) {
+    return {
+      success: false,
+      error: "Invalid agent payload",
+      details: ["Body must be a JSON object."],
+    };
+  }
+
+  const details: string[] = [];
+  const currentAgentName = asStringOrNull(body.current_agent_name);
+  if (!currentAgentName) {
+    details.push("current_agent_name is required.");
+  }
+
+  const updates: Omit<AgentUpdateBody, "current_agent_name"> = {};
+
+  if ("agent_name" in body) {
+    const nextAgentName = asStringOrNull(body.agent_name);
+    if (!nextAgentName) {
+      details.push("agent_name must be a non-empty string when provided.");
+    } else {
+      updates.agent_name = nextAgentName;
+    }
+  }
+
+  if ("email" in body) {
+    const nextEmail = asStringOrNull(body.email)?.toLowerCase() ?? null;
+    if (!nextEmail) {
+      details.push("email must be a non-empty string when provided.");
+    } else if (!EMAIL_REGEX.test(nextEmail)) {
+      details.push("email must be a valid email address.");
+    } else {
+      updates.email = nextEmail;
+    }
+  }
+
+  if ("status" in body) {
+    if (
+      typeof body.status !== "string" ||
+      !AGENT_STATUSES.has(body.status)
+    ) {
+      details.push("status must be active or inactive when provided.");
+    } else {
+      updates.status = body.status as "active" | "inactive";
+    }
+  }
+
+  if (Object.keys(updates).length === 0) {
+    details.push("At least one updatable field is required.");
+  }
+
+  if (details.length > 0 || !currentAgentName) {
+    return {
+      success: false,
+      error: "Invalid agent payload",
+      details,
+    };
+  }
+
+  return {
+    success: true,
+    data: {
+      current_agent_name: currentAgentName,
+      ...updates,
+    },
+  };
+}
+
+export function validateAgentDeleteBody(body: unknown): ValidationResult<AgentDeleteBody> {
+  if (!isRecord(body)) {
+    return {
+      success: false,
+      error: "Invalid agent payload",
+      details: ["Body must be a JSON object."],
+    };
+  }
+
+  const agentName = asStringOrNull(body.agent_name);
+  if (!agentName) {
+    return {
+      success: false,
+      error: "Invalid agent payload",
+      details: ["agent_name is required."],
+    };
+  }
+
+  return {
+    success: true,
+    data: { agent_name: agentName },
+  };
+}
+
+export function validateDOChargeCreateBody(body: unknown): ValidationResult<DOChargeCreateBody> {
+  if (!isRecord(body)) {
+    return {
+      success: false,
+      error: "Invalid DO charges payload",
+      details: ["Body must be a JSON object."],
+    };
+  }
+
+  const details: string[] = [];
+  const carrier = asStringOrNull(body.carrier);
+  if (!carrier) {
+    details.push("carrier is required.");
+  }
+
+  const document = parseRequiredNumber(body.document, "document", details);
+  const c20 = parseRequiredNumber(body["20FT"], "20FT", details);
+  const c40 = parseRequiredNumber(body["40FT"], "40FT", details);
+  const c40hq = parseRequiredNumber(body["40HQ"], "40HQ", details);
+
+  if (details.length > 0 || !carrier || document == null || c20 == null || c40 == null || c40hq == null) {
+    return {
+      success: false,
+      error: "Invalid DO charges payload",
+      details,
+    };
+  }
+
+  return {
+    success: true,
+    data: {
+      carrier,
+      document,
+      "20FT": c20,
+      "40FT": c40,
+      "40HQ": c40hq,
+    },
+  };
+}
+
+export function validateDOChargeUpdateBody(body: unknown): ValidationResult<DOChargeUpdateBody> {
+  if (!isRecord(body)) {
+    return {
+      success: false,
+      error: "Invalid DO charges payload",
+      details: ["Body must be a JSON object."],
+    };
+  }
+
+  const details: string[] = [];
+  const id = parseRequiredId(body.id, "DO charge", details);
+  const updates: Omit<DOChargeUpdateBody, "id"> = {};
+
+  if ("carrier" in body) {
+    const carrier = asStringOrNull(body.carrier);
+    if (!carrier) {
+      details.push("carrier must be a non-empty string when provided.");
+    } else {
+      updates.carrier = carrier;
+    }
+  }
+
+  const document = "document" in body
+    ? parseOptionalNumber(body.document, "document", details)
+    : undefined;
+  if (document != null) updates.document = document;
+
+  const c20 = "20FT" in body
+    ? parseOptionalNumber(body["20FT"], "20FT", details)
+    : undefined;
+  if (c20 != null) updates["20FT"] = c20;
+
+  const c40 = "40FT" in body
+    ? parseOptionalNumber(body["40FT"], "40FT", details)
+    : undefined;
+  if (c40 != null) updates["40FT"] = c40;
+
+  const c40hq = "40HQ" in body
+    ? parseOptionalNumber(body["40HQ"], "40HQ", details)
+    : undefined;
+  if (c40hq != null) updates["40HQ"] = c40hq;
+
+  if (Object.keys(updates).length === 0) {
+    details.push("At least one updatable field is required.");
+  }
+
+  if (details.length > 0 || id == null) {
+    return {
+      success: false,
+      error: "Invalid DO charges payload",
+      details,
+    };
+  }
+
+  return {
+    success: true,
+    data: { id, ...updates },
+  };
+}
+
+export function validateDestinationChargeCreateBody(
+  body: unknown
+): ValidationResult<DestinationChargeCreateBody> {
+  if (!isRecord(body)) {
+    return {
+      success: false,
+      error: "Invalid destination charges payload",
+      details: ["Body must be a JSON object."],
+    };
+  }
+
+  const details: string[] = [];
+  const chargeType = asStringOrNull(body["Charge Type"]);
+  if (!chargeType) {
+    details.push("Charge Type is required.");
+  }
+
+  const basis = asStringOrNull(body.Basis);
+  if (!basis) {
+    details.push("Basis is required.");
+  }
+
+  const c20 = parseRequiredNumber(body["20FT"], "20FT", details);
+  const c40 = parseRequiredNumber(body["40FT"], "40FT", details);
+
+  if (details.length > 0 || !chargeType || !basis || c20 == null || c40 == null) {
+    return {
+      success: false,
+      error: "Invalid destination charges payload",
+      details,
+    };
+  }
+
+  return {
+    success: true,
+    data: {
+      charge_type: chargeType,
+      basis,
+      "20FT": c20,
+      "40FT": c40,
+    },
+  };
+}
+
+export function validateDestinationChargeUpdateBody(
+  body: unknown
+): ValidationResult<DestinationChargeUpdateBody> {
+  if (!isRecord(body)) {
+    return {
+      success: false,
+      error: "Invalid destination charges payload",
+      details: ["Body must be a JSON object."],
+    };
+  }
+
+  const details: string[] = [];
+  const id = parseRequiredId(body.id, "Destination charge", details);
+  const updates: Omit<DestinationChargeUpdateBody, "id"> = {};
+
+  if ("Charge Type" in body) {
+    const chargeType = asStringOrNull(body["Charge Type"]);
+    if (!chargeType) {
+      details.push("Charge Type must be a non-empty string when provided.");
+    } else {
+      updates.charge_type = chargeType;
+    }
+  }
+
+  if ("Basis" in body) {
+    const basis = asStringOrNull(body.Basis);
+    if (!basis) {
+      details.push("Basis must be a non-empty string when provided.");
+    } else {
+      updates.basis = basis;
+    }
+  }
+
+  const c20 = "20FT" in body
+    ? parseOptionalNumber(body["20FT"], "20FT", details)
+    : undefined;
+  if (c20 != null) updates["20FT"] = c20;
+
+  const c40 = "40FT" in body
+    ? parseOptionalNumber(body["40FT"], "40FT", details)
+    : undefined;
+  if (c40 != null) updates["40FT"] = c40;
+
+  if (Object.keys(updates).length === 0) {
+    details.push("At least one updatable field is required.");
+  }
+
+  if (details.length > 0 || id == null) {
+    return {
+      success: false,
+      error: "Invalid destination charges payload",
+      details,
+    };
+  }
+
+  return {
+    success: true,
+    data: {
+      id,
+      ...updates,
+    },
+  };
+}
+
+export function validateTransportChargeCreateBody(
+  body: unknown
+): ValidationResult<TransportChargeCreateBody> {
+  if (!isRecord(body)) {
+    return {
+      success: false,
+      error: "Invalid transport charges payload",
+      details: ["Body must be a JSON object."],
+    };
+  }
+
+  const details: string[] = [];
+  const place = asStringOrNull(body.Place);
+  if (!place) {
+    details.push("Place is required.");
+  }
+  const price = parseRequiredNumber(body.Price, "Price", details);
+
+  if (details.length > 0 || !place || price == null) {
+    return {
+      success: false,
+      error: "Invalid transport charges payload",
+      details,
+    };
+  }
+
+  return {
+    success: true,
+    data: {
+      place,
+      price,
+    },
+  };
+}
+
+export function validateTransportChargeUpdateBody(
+  body: unknown
+): ValidationResult<TransportChargeUpdateBody> {
+  if (!isRecord(body)) {
+    return {
+      success: false,
+      error: "Invalid transport charges payload",
+      details: ["Body must be a JSON object."],
+    };
+  }
+
+  const details: string[] = [];
+  const id = parseRequiredId(body.id, "Transport charge", details);
+  const updates: Omit<TransportChargeUpdateBody, "id"> = {};
+
+  if ("Place" in body) {
+    const place = asStringOrNull(body.Place);
+    if (!place) {
+      details.push("Place must be a non-empty string when provided.");
+    } else {
+      updates.place = place;
+    }
+  }
+
+  if ("Price" in body) {
+    const price = parseOptionalNumber(body.Price, "Price", details);
+    if (price != null) {
+      updates.price = price;
+    }
+  }
+
+  if (Object.keys(updates).length === 0) {
+    details.push("At least one updatable field is required.");
+  }
+
+  if (details.length > 0 || id == null) {
+    return {
+      success: false,
+      error: "Invalid transport charges payload",
+      details,
+    };
+  }
+
+  return {
+    success: true,
+    data: {
+      id,
+      ...updates,
+    },
+  };
+}
+
+export function validateIdDeleteBody(
+  body: unknown,
+  entityLabel: string
+): ValidationResult<IdDeleteBody> {
+  if (!isRecord(body)) {
+    return {
+      success: false,
+      error: `Invalid ${entityLabel} payload`,
+      details: ["Body must be a JSON object."],
+    };
+  }
+
+  const details: string[] = [];
+  const id = parseRequiredId(body.id, entityLabel, details);
+  if (details.length > 0 || id == null) {
+    return {
+      success: false,
+      error: `Invalid ${entityLabel} payload`,
+      details,
+    };
+  }
+
+  return {
+    success: true,
+    data: { id },
   };
 }

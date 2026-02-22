@@ -131,6 +131,7 @@ create table master_rfqs (
   final_price_usd numeric,
   final_price_aed numeric,
   quoted_at timestamptz,
+  deleted_at timestamptz,
   primary key (workspace_id, rfq_id),
   unique (workspace_id, thread_id)
 );
@@ -229,6 +230,7 @@ create table app_settings (
 -- High-value indexes
 create index idx_workspace_members_user_workspace on workspace_members(user_id, workspace_id);
 create index idx_master_rfqs_workspace_status on master_rfqs(workspace_id, status);
+create index idx_master_rfqs_workspace_deleted_received on master_rfqs(workspace_id, deleted_at, received_at desc);
 create index idx_processed_email_events_workspace_thread on processed_email_events(workspace_id, thread_id);
 create index idx_rfq_id_aliases_workspace_canonical on rfq_id_aliases(workspace_id, canonical_rfq_id);
 create index idx_agent_outbound_log_workspace_rfq on agent_outbound_log(workspace_id, rfq_id);

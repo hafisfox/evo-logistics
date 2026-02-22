@@ -1,7 +1,15 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { RFQTable } from "@/components/rfqs/rfq-table";
 import type { MasterRFQ } from "@/types/rfq";
+
+vi.mock("@/hooks/use-workspace-access", () => ({
+  useWorkspaceAccess: () => ({ canManage: true }),
+}));
+
+vi.mock("@/hooks/use-rfqs", () => ({
+  useDeleteRFQ: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
 
 const rfqs: MasterRFQ[] = [
   {
@@ -39,6 +47,12 @@ describe("RFQTable", () => {
     expect(
       screen.getByRole("link", {
         name: /select agent for rfq rfq-20260222-001/i,
+      })
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", {
+        name: /delete rfq rfq-20260222-001/i,
       })
     ).toBeInTheDocument();
   });

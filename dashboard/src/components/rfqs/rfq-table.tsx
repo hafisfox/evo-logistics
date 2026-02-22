@@ -16,14 +16,32 @@ import { ContainerBadge } from "@/components/ui/container-badge";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatDate } from "@/lib/utils";
+import { useDeleteRFQ } from "@/hooks/use-rfqs";
+import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
+import { toast } from "sonner";
 import type { MasterRFQ } from "@/types/rfq";
-import { Eye, UserCheck } from "lucide-react";
+import { Eye, Trash2, UserCheck } from "lucide-react";
 
 interface RFQTableProps {
   rfqs: MasterRFQ[];
 }
 
 export function RFQTable({ rfqs }: RFQTableProps) {
+  const { canManage } = useWorkspaceAccess();
+  const deleteMutation = useDeleteRFQ();
+
+  const handleDelete = async (rfqId: string) => {
+    const confirmed = window.confirm(`Delete RFQ \"${rfqId}\"?`);
+    if (!confirmed) return;
+
+    try {
+      await deleteMutation.mutateAsync(rfqId);
+      toast.success("RFQ deleted");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete RFQ");
+    }
+  };
+
   if (rfqs.length === 0) {
     return <EmptyState title="No RFQs found" description="Waiting for incoming customer enquiries" />;
   }
@@ -102,6 +120,18 @@ export function RFQTable({ rfqs }: RFQTableProps) {
                       <Link href={`/rfqs/${rfq.rfq_id}/select`}>
                         <UserCheck className="h-4 w-4" />
                       </Link>
+                    </Button>
+                  )}
+                  {canManage && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(rfq.rfq_id)}
+                      disabled={deleteMutation.isPending}
+                      aria-label={`Delete RFQ ${rfq.rfq_id}`}
+                      title={`Delete RFQ ${rfq.rfq_id}`}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   )}
                 </div>
