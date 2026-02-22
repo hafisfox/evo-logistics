@@ -23,7 +23,14 @@ export function Header({ title, description }: HeaderProps) {
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" className="relative">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="relative"
+          aria-label="Open notifications"
+          title="Open notifications"
+        >
           <Bell className="h-4 w-4" />
         </Button>
         <Avatar className="h-8 w-8">

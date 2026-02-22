@@ -1,41 +1,80 @@
 # Evo Logistics — Pricing Dashboard
 
-This is the Next.js 14 (App Router) frontend interface for the Evo Logistics FCL Pricing Engine. It allows pricing managers to monitor the automated RFQ pipeline, review China agent marine freight quotes, manage multi-tenant logistics processes, and execute final customer quotations to generate profit.
+This is the Next.js App Router frontend for the Evo Logistics FCL Pricing Engine. It allows pricing managers to monitor RFQ pipeline state, review agent quotes, and execute final selection flows with consistent pricing logic.
 
 ## Core Features
 
-- **Supabase Native Authentication:** Secure `@supabase/ssr` session management leveraging Google OAuth and Email Magic Links.
-- **Row Level Security (RLS):** True multi-tenant data siloing. Logisticians can only view, manage, and quote on RFQs and Agent interactions tied to their specific `user_id`.
-- **Dynamic Aesthetic Theming:** Seamless `next-themes` integration featuring a dual CSS variable architecture. Supports both a pristine Light Corporate mode and a Cyberpunk Dark aesthetic.
-- **Pipeline Visibility:** Real-time TanStack queries presenting live RFQ statuses (Processing, Quoted, Reminded, etc.) driven by backend Python serverless functions.
-- **Automated Quotation Generation:** One-click rate lock-in and margin calculation (calculating DO, terminal fees, and transport) that dispatches email quotations directly to customers.
+- **Supabase Authentication and Session Guarding:** `@supabase/ssr` with route protection.
+- **RLS-Aligned Data Access:** Dashboard APIs read/write against Supabase tables under controlled auth flow.
+- **Pipeline Visibility:** Real-time RFQ status views with filters, table/kanban modes, and detail drill-down.
+- **Pricing and Selection:** Agent selection, pricing calculations, and webhook handoff to automations.
+- **Theme Support:** `next-themes` with CSS-variable-based light/dark themes.
 
 ## Tech Stack
 
-- **Framework:** Next.js 14+ (App Router)
-- **Styling:** Tailwind CSS + shadcn/ui + next-themes
-- **Data & Auth:** Supabase PostgreSQL + `@supabase/ssr` 
-- **State Management:** TanStack Query v5 (Data Fetching) + Zustand (UI State)
-- **Components:** TanStack Table v8, Recharts, Lucide Icons
+- **Framework:** Next.js 16+ (App Router)
+- **Styling:** Tailwind CSS + shadcn/ui
+- **Data:** Supabase PostgreSQL + `@supabase/ssr`
+- **State:** TanStack Query v5 + Zustand (UI state)
+- **Testing:** Vitest + Testing Library + Playwright
 
 ## Getting Started Locally
 
-First, ensure you have copied the `.env.example` to `.env.local` and filled in your Supabase variables.
-
-Run the development server:
+1. Copy `.env.example` to `.env.local` and set required values.
+2. Install dependencies and start dev server:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the application. Standard log-in requires an active Supabase user session.
+Open [http://localhost:3000](http://localhost:3000).
+
+## Quality Commands
+
+Run all quality checks from `dashboard/`:
+
+```bash
+npm run lint
+npm run typecheck
+npm run test
+npm run test:e2e
+npm run build
+```
+
+## Auth and Proxy Behavior
+
+- Request guarding is handled in `src/proxy.ts`.
+- Unauthenticated **page** requests redirect to `/login`.
+- Unauthenticated **API** requests return JSON `401`:
+
+```json
+{ "error": "Unauthorized" }
+```
+
+## API Error Contract
+
+Validated mutable routes return `400` for invalid payloads in this shape:
+
+```json
+{
+  "error": "Invalid ... payload",
+  "details": ["field-specific reason"]
+}
+```
+
+Server failures return `500` with:
+
+```json
+{ "error": "..." }
+```
+
+## CI
+
+GitHub Actions workflow: `.github/workflows/dashboard-quality.yml`
+
+It runs lint, typecheck, unit/integration tests, Playwright smoke tests, and build for dashboard changes.
 
 ## System Architecture
 
-This Next.js dashboard acts as the unified frontend reading from the Supabase database. All backend asynchronous email ingestion, parsing, and automated agent outreach are handled via standalone Python Modal.com instances (`/automations`). See the repository root `ACTION_PLAN.md` and `DASHBOARD.md` for high-level system workflows and database schema relationships.
+This dashboard is the frontend control plane for the pricing workflow. Backend async ingestion and outbound quote automation are managed in `/automations`. See root docs (`ACTION_PLAN.md`, `DASHBOARD.md`) for full flow and schema context.

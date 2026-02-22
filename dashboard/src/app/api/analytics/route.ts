@@ -20,24 +20,27 @@ export async function GET() {
 
     const rfqs = (rfqsRes.data || []) as Partial<MasterRFQ>[];
     const quotes = (quotesRes.data || []) as Partial<AgentQuote>[];
+    const receivedQuoteCountByRfq = new Map<string, number>();
+
+    for (const quote of quotes) {
+      if (quote.status !== "Received" || !quote.rfq_id) continue;
+      const count = receivedQuoteCountByRfq.get(quote.rfq_id) || 0;
+      receivedQuoteCountByRfq.set(quote.rfq_id, count + 1);
+    }
 
     const today = new Date().toISOString().split("T")[0];
 
     // KPIs
     const activeRFQs = rfqs.filter((r) => r.status === "Processing").length;
     const awaitingQuotes = rfqs.filter((r) => {
-      if (r.status !== "Processing") return false;
-      const rfqQuotes = quotes.filter(
-        (q) => q.rfq_id === r.rfq_id && q.status === "Received"
-      );
-      return rfqQuotes.length > 0 && rfqQuotes.length < 4;
+      if (r.status !== "Processing" || !r.rfq_id) return false;
+      const quoteCount = receivedQuoteCountByRfq.get(r.rfq_id) || 0;
+      return quoteCount > 0 && quoteCount < 4;
     }).length;
     const pendingSelection = rfqs.filter((r) => {
-      if (r.status !== "Processing") return false;
-      const rfqQuotes = quotes.filter(
-        (q) => q.rfq_id === r.rfq_id && q.status === "Received"
-      );
-      return rfqQuotes.length >= 2;
+      if (r.status !== "Processing" || !r.rfq_id) return false;
+      const quoteCount = receivedQuoteCountByRfq.get(r.rfq_id) || 0;
+      return quoteCount >= 2;
     }).length;
     const quotedToday = rfqs.filter(
       (r) => ["Quoted", "Followed_Up", "Customer_Replied"].includes(r.status as string) && r.quoted_at && r.quoted_at.startsWith(today)

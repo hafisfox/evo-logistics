@@ -1,6 +1,21 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+function isApiPath(pathname: string) {
+    return pathname.startsWith('/api')
+}
+
+function isPublicPath(pathname: string) {
+    return pathname === '/login' || pathname.startsWith('/auth')
+}
+
+function sanitizeCallbackUrl(callbackUrl: string | null) {
+    if (!callbackUrl) return '/'
+    if (!callbackUrl.startsWith('/')) return '/'
+    if (callbackUrl.startsWith('//')) return '/'
+    return callbackUrl
+}
+
 export async function updateSession(request: NextRequest) {
     let supabaseResponse = NextResponse.next({
         request,
@@ -15,7 +30,7 @@ export async function updateSession(request: NextRequest) {
                     return request.cookies.getAll()
                 },
                 setAll(cookiesToSet) {
-                    cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+                    cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
                     supabaseResponse = NextResponse.next({
                         request,
                     })
@@ -27,23 +42,37 @@ export async function updateSession(request: NextRequest) {
         }
     )
 
-    // Refresh session if expired
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
+    const pathname = request.nextUrl.pathname
+    const apiRequest = isApiPath(pathname)
+    const publicPath = isPublicPath(pathname)
 
-    // Protect routes here
-    if (!user && request.nextUrl.pathname !== '/login' && !request.nextUrl.pathname.startsWith('/auth')) {
+    let user = null
+    try {
+        const {
+            data: { user: resolvedUser },
+            error,
+        } = await supabase.auth.getUser()
+        if (error) {
+            console.error('Supabase auth getUser error:', error.message)
+        }
+        user = resolvedUser
+    } catch (error) {
+        console.error('Supabase auth getUser exception:', error)
+    }
+
+    if (!user && !publicPath) {
+        if (apiRequest) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
         const url = request.nextUrl.clone()
         url.pathname = '/login'
+        url.searchParams.set('callbackUrl', `${pathname}${request.nextUrl.search}`)
         return NextResponse.redirect(url)
     }
 
-    // Redirect to dashboard if logged in and trying to access /login
-    if (user && request.nextUrl.pathname === '/login') {
-        const url = request.nextUrl.clone()
-        url.pathname = '/'
-        return NextResponse.redirect(url)
+    if (user && pathname === '/login') {
+        const destination = sanitizeCallbackUrl(request.nextUrl.searchParams.get('callbackUrl'))
+        return NextResponse.redirect(new URL(destination, request.url))
     }
 
     return supabaseResponse

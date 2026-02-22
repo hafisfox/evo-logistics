@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import type { Database } from "@/types/supabase";
 
 export interface Settings {
   profitMargin: number;
@@ -10,21 +11,17 @@ export const defaultSettings: Settings = {
   quoteThreshold: 2,
 };
 
-interface AppSettingsRow {
-  key: string;
-  value: number;
-}
+type AppSettingsRow = Database["public"]["Tables"]["app_settings"]["Row"];
+type AppSettingsInsert = Database["public"]["Tables"]["app_settings"]["Insert"];
 
 export async function getSettings(): Promise<Settings> {
   try {
     const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("app_settings")
-      .select("key, value");
+    const { data, error } = await supabase.from("app_settings").select("key, value");
 
     if (error) throw error;
 
-    const rows = (data || []) as unknown as AppSettingsRow[];
+    const rows = (data || []) as AppSettingsRow[];
     if (rows.length === 0) return defaultSettings;
 
     const settings = { ...defaultSettings };
@@ -39,20 +36,33 @@ export async function getSettings(): Promise<Settings> {
   }
 }
 
-export async function updateSettings(
-  updates: Partial<Settings>
-): Promise<Settings> {
+export async function updateSettings(updates: Partial<Settings>): Promise<Settings> {
   const supabase = await createClient();
 
-  const upserts = Object.entries(updates).map(([key, value]) => ({
-    key,
-    value,
-    updated_at: new Date().toISOString(),
-  }));
+  const upserts: AppSettingsInsert[] = [];
+  if (typeof updates.profitMargin === "number") {
+    upserts.push({
+      key: "profitMargin",
+      value: updates.profitMargin,
+      updated_at: new Date().toISOString(),
+    });
+  }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase.from("app_settings") as any)
-    .upsert(upserts, { onConflict: "key" });
+  if (typeof updates.quoteThreshold === "number") {
+    upserts.push({
+      key: "quoteThreshold",
+      value: updates.quoteThreshold,
+      updated_at: new Date().toISOString(),
+    });
+  }
+
+  if (upserts.length === 0) {
+    return getSettings();
+  }
+
+  const { error } = await supabase.from("app_settings").upsert(upserts, {
+    onConflict: "key",
+  });
 
   if (error) throw error;
 

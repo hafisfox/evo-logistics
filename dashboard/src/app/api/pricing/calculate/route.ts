@@ -2,46 +2,77 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { calculateFullPricing } from "@/lib/pricing-engine";
 import { getSettings } from "@/lib/settings";
-import type { DestinationCharge, TransportCharge } from "@/types/pricing";
+import type { DOCharge } from "@/types/pricing";
+import type { Database } from "@/types/supabase";
+import {
+  validatePricingCalculateBody,
+  type ApiErrorPayload,
+} from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
+type DoChargeRow = Database["public"]["Tables"]["do_charges"]["Row"];
+type DestinationChargeRow = Database["public"]["Tables"]["destination_charges"]["Row"];
+type TransportChargeRow = Database["public"]["Tables"]["transportation_charges"]["Row"];
+
+function jsonError(payload: ApiErrorPayload, status: number) {
+  return NextResponse.json(payload, { status });
+}
+
 export async function POST(request: Request) {
+  let body: unknown;
+
   try {
-    const body = await request.json();
+    body = await request.json();
+  } catch {
+    return jsonError({ error: "Invalid pricing payload", details: ["Body must be valid JSON."] }, 400);
+  }
+
+  const validation = validatePricingCalculateBody(body);
+  if (!validation.success) {
+    return jsonError({ error: validation.error, details: validation.details }, 400);
+  }
+
+  try {
     const supabase = await createClient();
 
-    // Maximize parallel execution for internal reads and Supabase queries
     const [doRes, destRes, transpRes, settings] = await Promise.all([
-      supabase.from('do_charges').select('*'),
-      supabase.from('destination_charges').select('*'),
-      supabase.from('transportation_charges').select('*'),
-      getSettings()
+      supabase.from("do_charges").select("*"),
+      supabase.from("destination_charges").select("*"),
+      supabase.from("transportation_charges").select("*"),
+      getSettings(),
     ]);
 
     if (doRes.error) throw doRes.error;
     if (destRes.error) throw destRes.error;
     if (transpRes.error) throw transpRes.error;
 
-    // Map snake_case columns back to original Google Sheets format expected by pricing engine
-    const mappedDestCharges = ((destRes.data || []) as Record<string, unknown>[]).map(d => ({
-      "Charge Type": d.charge_type,
-      Basis: d.basis,
-      "20FT": d["20FT"],
-      "40FT": d["40FT"]
+    const doCharges = ((doRes.data || []) as DoChargeRow[]).map((item) => ({
+      carrier: item.carrier,
+      document: Number(item.document),
+      "20FT": Number(item["20FT"]),
+      "40FT": Number(item["40FT"]),
+      "40HQ": Number(item["40HQ"]),
+    })) as DOCharge[];
+
+    const mappedDestCharges = ((destRes.data || []) as DestinationChargeRow[]).map((item) => ({
+      "Charge Type": item.charge_type,
+      Basis: item.basis,
+      "20FT": Number(item["20FT"]),
+      "40FT": Number(item["40FT"]),
     }));
 
-    const mappedTranspCharges = ((transpRes.data || []) as Record<string, unknown>[]).map(t => ({
-      Place: t.place,
-      Price: t.price
+    const mappedTranspCharges = ((transpRes.data || []) as TransportChargeRow[]).map((item) => ({
+      Place: item.place,
+      Price: Number(item.price),
     }));
 
     const result = calculateFullPricing({
-      rfq: body.rfq,
-      quote: body.quote,
-      doCharges: doRes.data,
-      destCharges: mappedDestCharges as DestinationCharge[],
-      transpCharges: mappedTranspCharges as TransportCharge[],
+      rfq: validation.data.rfq,
+      quote: validation.data.quote,
+      doCharges,
+      destCharges: mappedDestCharges,
+      transpCharges: mappedTranspCharges,
       settings: {
         margin: settings.profitMargin / 100,
         quoteThreshold: settings.quoteThreshold,
@@ -51,9 +82,6 @@ export async function POST(request: Request) {
     return NextResponse.json(result);
   } catch (error) {
     console.error("Failed to calculate pricing:", error);
-    return NextResponse.json(
-      { error: "Failed to calculate pricing" },
-      { status: 500 }
-    );
+    return jsonError({ error: "Failed to calculate pricing" }, 500);
   }
 }

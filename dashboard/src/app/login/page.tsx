@@ -31,7 +31,19 @@ export default async function LoginPage(props: {
     }
 
     const supabase = await createClient();
-    const { data: { session } } = await supabase.auth.getSession();
+    let session = null;
+    try {
+        const {
+            data: { session: activeSession },
+            error,
+        } = await supabase.auth.getSession();
+        if (error) {
+            console.error("Supabase session error:", error.message);
+        }
+        session = activeSession;
+    } catch (error) {
+        console.error("Supabase session exception:", error);
+    }
 
     // If already authenticated, redirect to callbackUrl or home
     if (session) {
@@ -74,9 +86,15 @@ export default async function LoginPage(props: {
             },
         });
 
+        if (error) {
+            redirect(`/login?error=${encodeURIComponent(error.message)}`);
+        }
+
         if (data.url) {
             redirect(data.url);
         }
+
+        redirect("/login?error=Google%20sign%20in%20failed");
     };
 
     return (

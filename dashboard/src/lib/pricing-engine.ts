@@ -19,6 +19,14 @@ export function parseMultiValue(value: string | null | undefined): string[] {
   return [value];
 }
 
+function parsePositiveInteger(value: string | undefined, fallback = 1): number {
+  const parsed = Number.parseInt(value || String(fallback), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+}
+
 function getDOCol(containerType: string): "20FT" | "40FT" | "40HQ" {
   const t = (containerType || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (t === "20FT" || t === "20GP") return "20FT";
@@ -198,7 +206,7 @@ export function calculateFullPricing(params: {
 
   for (let i = 0; i < shipmentCount; i++) {
     const containerType = containerTypes[i] || containerTypes[0] || "40HQ";
-    const qty = parseInt(quantities[i] || quantities[0] || "1");
+    const qty = parsePositiveInteger(quantities[i] || quantities[0], 1);
     const carrier = carriers[i] || carriers[0] || "TBD";
     const oceanFreightUSD = parseFloat(prices[i] || prices[0] || "0");
     const pol = pols[i] || pols[0] || "N/A";

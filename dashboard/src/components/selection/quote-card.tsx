@@ -21,11 +21,10 @@ export function QuoteCard({ quote, rank, isSelected, onSelect }: QuoteCardProps)
   return (
     <Card
       className={cn(
-        "cursor-pointer transition-all hover:shadow-md",
+        "transition-all hover:shadow-md",
         isSelected && "ring-2 ring-primary shadow-md",
         isBest && !isSelected && "border-emerald-300"
       )}
-      onClick={onSelect}
     >
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
@@ -91,9 +90,17 @@ export function QuoteCard({ quote, rank, isSelected, onSelect }: QuoteCardProps)
         )}
 
         <Button
+          type="button"
           variant={isSelected ? "default" : "outline"}
           className="w-full"
           size="sm"
+          onClick={onSelect}
+          aria-pressed={isSelected}
+          aria-label={
+            isSelected
+              ? `Selected quote from ${quote.agent_name} on ${quote.carrier}`
+              : `Select quote from ${quote.agent_name} on ${quote.carrier}`
+          }
         >
           {isSelected ? "Selected" : "Select This Quote"}
         </Button>

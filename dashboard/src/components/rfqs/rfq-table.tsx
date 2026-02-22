@@ -80,13 +80,25 @@ export function RFQTable({ rfqs }: RFQTableProps) {
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-1">
-                  <Button variant="ghost" size="icon" asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    asChild
+                    aria-label={`View RFQ ${rfq.rfq_id}`}
+                    title={`View RFQ ${rfq.rfq_id}`}
+                  >
                     <Link href={`/rfqs/${rfq.rfq_id}`}>
                       <Eye className="h-4 w-4" />
                     </Link>
                   </Button>
                   {rfq.status === "Processing" && (
-                    <Button variant="ghost" size="icon" asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      asChild
+                      aria-label={`Select agent for RFQ ${rfq.rfq_id}`}
+                      title={`Select agent for RFQ ${rfq.rfq_id}`}
+                    >
                       <Link href={`/rfqs/${rfq.rfq_id}/select`}>
                         <UserCheck className="h-4 w-4" />
                       </Link>

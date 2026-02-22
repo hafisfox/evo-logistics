@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useMemo, useState } from "react";
+import type { Settings } from "@/lib/settings";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -10,46 +11,53 @@ import { DollarSign, Save } from "lucide-react";
 import { toast } from "sonner";
 import { useSettings, useUpdateSettings } from "@/hooks/use-settings";
 
+function formatSliderValue(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 export default function SettingsPage() {
   const { data: savedSettings, isLoading } = useSettings();
   const { mutate: save, isPending: saving } = useUpdateSettings();
+  const [draftSettings, setDraftSettings] = useState<Settings | null>(null);
 
-  const [profitMargin, setProfitMargin] = useState(13);
-  const [quoteThreshold, setQuoteThreshold] = useState(2);
+  const persistedSettings = useMemo<Settings>(
+    () => ({
+      profitMargin: savedSettings?.profitMargin ?? 13,
+      quoteThreshold: savedSettings?.quoteThreshold ?? 2,
+    }),
+    [savedSettings]
+  );
 
-  // Sync local form state when server data loads
-  useEffect(() => {
-    if (savedSettings) {
-      setProfitMargin(savedSettings.profitMargin);
-      setQuoteThreshold(savedSettings.quoteThreshold);
-    }
-  }, [savedSettings]);
+  const formSettings = draftSettings ?? persistedSettings;
+  const hasUnsavedChanges = draftSettings !== null;
+
+  const updateDraft = <K extends keyof Settings>(key: K, value: Settings[K]) => {
+    setDraftSettings((current) => ({
+      ...(current ?? persistedSettings),
+      [key]: value,
+    }));
+  };
 
   const handleSave = () => {
-    save(
-      { profitMargin, quoteThreshold },
-      {
-        onSuccess: () => {
-          toast.success("Settings Saved", {
-            description: "Pricing constants have been updated successfully.",
-          });
-        },
-        onError: () => {
-          toast.error("Error", {
-            description: "Failed to save settings.",
-          });
-        },
-      }
-    );
+    save(formSettings, {
+      onSuccess: () => {
+        setDraftSettings(null);
+        toast.success("Settings Saved", {
+          description: "Pricing constants have been updated successfully.",
+        });
+      },
+      onError: () => {
+        toast.error("Error", {
+          description: "Failed to save settings.",
+        });
+      },
+    });
   };
 
   return (
     <div>
-      <Header
-        title="Settings"
-        description="Dashboard configuration"
-      />
-      <div className="p-6 space-y-6 max-w-2xl">
+      <Header title="Settings" description="Dashboard configuration" />
+      <div className="max-w-2xl space-y-6 p-6">
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
@@ -66,50 +74,91 @@ export default function SettingsPage() {
             ) : (
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="flex justify-between items-center mb-2 mt-1">
-                    <label className="text-sm text-muted-foreground">
+                  <div className="mb-2 mt-1 flex items-center justify-between">
+                    <label
+                      id="profit-margin-label"
+                      className="text-sm text-muted-foreground"
+                    >
                       Profit Margin (%)
                     </label>
-                    <span className="font-mono text-sm border px-2 py-1 rounded-md min-w-[3rem] text-center">{profitMargin}</span>
+                    <span
+                      id="profit-margin-value"
+                      className="min-w-[3rem] rounded-md border px-2 py-1 text-center font-mono text-sm"
+                      aria-live="polite"
+                    >
+                      {formatSliderValue(formSettings.profitMargin)}
+                    </span>
                   </div>
                   <Slider
-                    value={[profitMargin]}
+                    value={[formSettings.profitMargin]}
                     min={0}
                     max={50}
                     step={0.1}
-                    onValueChange={([val]) => setProfitMargin(val)}
+                    onValueChange={([value = formSettings.profitMargin]) => {
+                      updateDraft("profitMargin", value);
+                    }}
+                    aria-labelledby="profit-margin-label"
+                    aria-describedby="profit-margin-help"
+                    aria-valuetext={`${formatSliderValue(formSettings.profitMargin)} percent`}
                     className="py-2"
                   />
+                  <p id="profit-margin-help" className="mt-1 text-xs text-muted-foreground">
+                    Added to computed shipment costs before final rounding.
+                  </p>
                 </div>
+
                 <div>
-                  <div className="flex justify-between items-center mb-2 mt-1">
-                    <label className="text-sm text-muted-foreground">
+                  <div className="mb-2 mt-1 flex items-center justify-between">
+                    <label
+                      id="quote-threshold-label"
+                      className="text-sm text-muted-foreground"
+                    >
                       Quote Threshold
                     </label>
-                    <span className="font-mono text-sm border px-2 py-1 rounded-md min-w-[2.5rem] text-center">{quoteThreshold}</span>
+                    <span
+                      id="quote-threshold-value"
+                      className="min-w-[2.5rem] rounded-md border px-2 py-1 text-center font-mono text-sm"
+                      aria-live="polite"
+                    >
+                      {formatSliderValue(formSettings.quoteThreshold)}
+                    </span>
                   </div>
                   <Slider
-                    value={[quoteThreshold]}
+                    value={[formSettings.quoteThreshold]}
                     min={1}
                     max={10}
                     step={1}
-                    onValueChange={([val]) => setQuoteThreshold(val)}
+                    onValueChange={([value = formSettings.quoteThreshold]) => {
+                      updateDraft("quoteThreshold", value);
+                    }}
+                    aria-labelledby="quote-threshold-label"
+                    aria-describedby="quote-threshold-help"
+                    aria-valuetext={`${formatSliderValue(formSettings.quoteThreshold)} quotes`}
                     className="py-2"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Minimum quotes before manager notification
+                  <p id="quote-threshold-help" className="mt-1 text-xs text-muted-foreground">
+                    Minimum quotes before manager notification.
                   </p>
                 </div>
               </div>
             )}
 
             <div className="pt-2">
-              <Button onClick={handleSave} disabled={isLoading || saving}>
-                {saving ? "Saving..." : <><Save className="mr-2 h-4 w-4" /> Save Settings</>}
+              <Button
+                onClick={handleSave}
+                disabled={isLoading || saving || !hasUnsavedChanges}
+              >
+                {saving ? (
+                  "Saving..."
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" /> Save Settings
+                  </>
+                )}
               </Button>
             </div>
 
-            <p className="text-xs text-muted-foreground pt-4 border-t">
+            <p className="border-t pt-4 text-xs text-muted-foreground">
               These values are passed automatically to the serverless automations and pricing engine calculations.
             </p>
           </CardContent>

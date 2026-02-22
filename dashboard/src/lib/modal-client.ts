@@ -1,4 +1,7 @@
 const MODAL_WEBHOOK_SECRET = process.env.MODAL_WEBHOOK_SECRET || "";
+const MODAL_WEBHOOK_TIMEOUT_MS = Number(
+  process.env.MODAL_WEBHOOK_TIMEOUT_MS || "15000"
+);
 
 interface WebhookOptions {
   url: string;
@@ -19,11 +22,28 @@ export async function callModalWebhook<T = unknown>({
     headers["Authorization"] = `Bearer ${MODAL_WEBHOOK_SECRET}`;
   }
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const controller = new AbortController();
+  const timeout = Number.isFinite(MODAL_WEBHOOK_TIMEOUT_MS)
+    ? MODAL_WEBHOOK_TIMEOUT_MS
+    : 15000;
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`Modal webhook timed out after ${timeout}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     const text = await response.text();
