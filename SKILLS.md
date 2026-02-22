@@ -26,6 +26,7 @@
 | 17 | context-fundamentals | `.agents/skills/context-fundamentals/` | Context-engineering fundamentals for managing token budgets and information hierarchy. | Active |
 | 18 | context-compression | `.agents/skills/context-compression/` | Compression strategies for preserving critical information in constrained context windows. | Active |
 | 19 | context-optimization | `.agents/skills/context-optimization/` | End-to-end context optimization methods for long-running agent sessions and multi-step tasks. | Active |
+| 20 | ui-ux-pro-max | `.agents/skills/ui-ux-pro-max/` | Comprehensive UI/UX design intelligence skill with searchable guidance, data palettes, and implementation templates across multiple stacks. | Active |
 
 <!-- TEMPLATE — copy this row when adding a new skill:
 | 1 | skill-name | `.agents/skills/skill-name/` | Brief description of what it does | Active |

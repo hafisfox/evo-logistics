@@ -35,9 +35,9 @@ export default function DashboardPage() {
       <div className="relative p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8 animate-in fade-in zoom-in-95 duration-700 ease-out fill-mode-both mt-4 md:mt-6">
         {/* KPI Row */}
         {kpisLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-5 lg:gap-6">
             {[1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} className="h-24" />
+              <Skeleton key={i} className="h-24 rounded-3xl" />
             ))}
           </div>
         ) : (

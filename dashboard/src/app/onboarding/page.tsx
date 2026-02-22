@@ -66,45 +66,53 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/20 p-6">
-      <Card className="w-full max-w-xl">
-        <CardHeader>
-          <CardTitle>Workspace Setup</CardTitle>
+    <div className="flex min-h-[100dvh] w-full items-center justify-center p-4">
+      <Card className="w-full max-w-xl rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl p-4 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] animate-in fade-in zoom-in-95 duration-700 overflow-hidden">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-2xl font-bold tracking-tight text-center md:text-left">Workspace Setup</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           {params.error && (
-            <div className="rounded border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-4 text-sm font-medium text-destructive">
               We could not create your workspace yet. Click <strong>Create Workspace</strong>{" "}
               again after applying the latest database migration.
             </div>
           )}
-          <p className="text-sm text-muted-foreground">
+          <p className="text-[15px] font-medium text-muted-foreground/90">
             Your account is ready. Continue with these setup steps before enabling full
             automation.
           </p>
-          <ol className="list-decimal space-y-2 pl-5 text-sm">
-            <li>Create or join a workspace.</li>
-            <li>Connect a workspace mailbox via Google OAuth in Workspace Settings.</li>
-            <li>Verify workspace settings, pricing tables, and agents.</li>
+          <ol className="space-y-3 pl-2 text-sm counter-reset-step">
+            <li className="flex items-start gap-4 before:content-[counter(step)] before:counter-increment-[step] before:flex before:h-6 before:w-6 before:shrink-0 before:items-center before:justify-center before:rounded-full before:bg-primary/10 before:text-primary before:text-xs before:font-bold">
+              <span className="leading-6 font-medium">Create or join a workspace.</span>
+            </li>
+            <li className="flex items-start gap-4 before:content-[counter(step)] before:counter-increment-[step] before:flex before:h-6 before:w-6 before:shrink-0 before:items-center before:justify-center before:rounded-full before:bg-primary/10 before:text-primary before:text-xs before:font-bold">
+              <span className="leading-6 font-medium">Connect a workspace mailbox via Google OAuth in Workspace Settings.</span>
+            </li>
+            <li className="flex items-start gap-4 before:content-[counter(step)] before:counter-increment-[step] before:flex before:h-6 before:w-6 before:shrink-0 before:items-center before:justify-center before:rounded-full before:bg-primary/10 before:text-primary before:text-xs before:font-bold">
+              <span className="leading-6 font-medium">Verify workspace settings, pricing tables, and agents.</span>
+            </li>
           </ol>
-          <div className="rounded border bg-background p-3 text-sm">
-            <p className="font-medium">Mailbox status: {mailboxStatus}</p>
-            {mailboxEmail && <p className="text-muted-foreground">{mailboxEmail}</p>}
-            {mailboxError && <p className="text-destructive">{mailboxError}</p>}
+          <div className="rounded-2xl border border-white/10 bg-white/5 dark:bg-black/5 p-5 text-sm shadow-inner mt-4">
+            <p className="font-semibold tracking-tight">Mailbox status: <span className="opacity-90 font-medium">{mailboxStatus}</span></p>
+            {mailboxEmail && <p className="text-muted-foreground mt-1">{mailboxEmail}</p>}
+            {mailboxError && <p className="text-destructive mt-1">{mailboxError}</p>}
           </div>
           {workspaceId ? (
-            <div className="flex gap-2 pt-2">
-              <Button asChild>
+            <div className="flex flex-col sm:flex-row gap-3 pt-4">
+              <Button asChild className="h-11 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
                 <Link href="/">Open Dashboard</Link>
               </Button>
-              <Button asChild variant="outline">
+              <Button asChild variant="outline" className="h-11 rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 text-foreground hover:bg-white/20 dark:hover:bg-white/10 shadow-sm transition-all duration-300">
                 <Link href="/settings/workspace">Workspace Settings</Link>
               </Button>
             </div>
           ) : (
-            <form action={createWorkspaceAction}>
-              <Button type="submit">Create Workspace</Button>
-            </form>
+            <div className="pt-4">
+              <form action={createWorkspaceAction}>
+                <Button type="submit" className="w-full sm:w-auto h-11 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">Create Workspace</Button>
+              </form>
+            </div>
           )}
         </CardContent>
       </Card>

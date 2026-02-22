@@ -272,20 +272,20 @@ export default function PricingPage() {
         title="Pricing Tables"
         description="Lookup tables used in cost calculations"
       />
-      <div className="p-6">
+      <div className="p-4 md:p-6 lg:p-8 animate-in fade-in zoom-in-95 duration-700">
         <Tabs defaultValue="do" className="w-full">
-          <TabsList className="w-full justify-start overflow-x-auto scrollbar-hide py-1 h-auto">
-            <TabsTrigger value="do" className="shrink-0 tracking-tight">DO Charges</TabsTrigger>
-            <TabsTrigger value="dest">Destination Charges</TabsTrigger>
-            <TabsTrigger value="transport">Transportation</TabsTrigger>
+          <TabsList className="w-full justify-start overflow-x-auto scrollbar-hide py-1 h-auto bg-card/40 backdrop-blur-2xl border border-white/10 dark:border-white/5 rounded-3xl mb-4 p-1 shadow-sm">
+            <TabsTrigger value="do" className="shrink-0 tracking-tight rounded-2xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">DO Charges</TabsTrigger>
+            <TabsTrigger value="dest" className="rounded-2xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">Destination Charges</TabsTrigger>
+            <TabsTrigger value="transport" className="rounded-2xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">Transportation</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="do" className="mt-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">DO Charges by Carrier</CardTitle>
+          <TabsContent value="do" className="mt-2 focus-visible:outline-none focus-visible:ring-0">
+            <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
+              <CardHeader className="p-6 pb-4">
+                <CardTitle className="text-lg font-bold tracking-tight">DO Charges by Carrier</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-6 pb-6 pt-2">
                 {canManage && (
                   <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-6">
                     <Input
@@ -293,33 +293,38 @@ export default function PricingPage() {
                       onChange={(event) => setNewDo((current) => ({ ...current, carrier: event.target.value }))}
                       placeholder="Carrier"
                       disabled={disableManageActions || createDo.isPending}
+                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
                     />
                     <Input
                       value={newDo.document}
                       onChange={(event) => setNewDo((current) => ({ ...current, document: event.target.value }))}
                       placeholder="Document"
                       disabled={disableManageActions || createDo.isPending}
+                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
                     />
                     <Input
                       value={newDo["20FT"]}
                       onChange={(event) => setNewDo((current) => ({ ...current, "20FT": event.target.value }))}
                       placeholder="20FT"
                       disabled={disableManageActions || createDo.isPending}
+                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
                     />
                     <Input
                       value={newDo["40FT"]}
                       onChange={(event) => setNewDo((current) => ({ ...current, "40FT": event.target.value }))}
                       placeholder="40FT"
                       disabled={disableManageActions || createDo.isPending}
+                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
                     />
                     <Input
                       value={newDo["40HQ"]}
                       onChange={(event) => setNewDo((current) => ({ ...current, "40HQ": event.target.value }))}
                       placeholder="40HQ"
                       disabled={disableManageActions || createDo.isPending}
+                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
                     />
-                    <Button onClick={handleCreateDo} disabled={disableManageActions || createDo.isPending}>
-                      <Plus className="mr-1 h-4 w-4" /> Add
+                    <Button onClick={handleCreateDo} disabled={disableManageActions || createDo.isPending} className="h-11 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                      <Plus className="mr-1.5 h-4 w-4" /> Add
                     </Button>
                   </div>
                 )}
@@ -470,12 +475,12 @@ export default function PricingPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="dest" className="mt-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">UAE Destination Charges</CardTitle>
+          <TabsContent value="dest" className="mt-2 focus-visible:outline-none focus-visible:ring-0">
+            <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
+              <CardHeader className="p-6 pb-4">
+                <CardTitle className="text-base font-bold tracking-tight">UAE Destination Charges</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-6 pb-6 pt-2">
                 {canManage && (
                   <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-5">
                     <Input
@@ -485,27 +490,31 @@ export default function PricingPage() {
                       }
                       placeholder="Charge Type"
                       disabled={disableManageActions || createDest.isPending}
+                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
                     />
                     <Input
                       value={newDest.Basis}
                       onChange={(event) => setNewDest((current) => ({ ...current, Basis: event.target.value }))}
                       placeholder="Basis"
                       disabled={disableManageActions || createDest.isPending}
+                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
                     />
                     <Input
                       value={newDest["20FT"]}
                       onChange={(event) => setNewDest((current) => ({ ...current, "20FT": event.target.value }))}
                       placeholder="20FT"
                       disabled={disableManageActions || createDest.isPending}
+                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
                     />
                     <Input
                       value={newDest["40FT"]}
                       onChange={(event) => setNewDest((current) => ({ ...current, "40FT": event.target.value }))}
                       placeholder="40FT"
                       disabled={disableManageActions || createDest.isPending}
+                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
                     />
-                    <Button onClick={handleCreateDest} disabled={disableManageActions || createDest.isPending}>
-                      <Plus className="mr-1 h-4 w-4" /> Add
+                    <Button onClick={handleCreateDest} disabled={disableManageActions || createDest.isPending} className="h-11 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                      <Plus className="mr-1.5 h-4 w-4" /> Add
                     </Button>
                   </div>
                 )}
@@ -642,14 +651,14 @@ export default function PricingPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="transport" className="mt-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">
+          <TabsContent value="transport" className="mt-2 focus-visible:outline-none focus-visible:ring-0">
+            <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
+              <CardHeader className="p-6 pb-4">
+                <CardTitle className="text-base font-bold tracking-tight">
                   Transportation Charges by Location
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-6 pb-6 pt-2">
                 {canManage && (
                   <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-3">
                     <Input
@@ -659,6 +668,7 @@ export default function PricingPage() {
                       }
                       placeholder="Place"
                       disabled={disableManageActions || createTransport.isPending}
+                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
                     />
                     <Input
                       value={newTransport.Price}
@@ -667,12 +677,14 @@ export default function PricingPage() {
                       }
                       placeholder="Price"
                       disabled={disableManageActions || createTransport.isPending}
+                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
                     />
                     <Button
                       onClick={handleCreateTransport}
                       disabled={disableManageActions || createTransport.isPending}
+                      className="h-11 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all"
                     >
-                      <Plus className="mr-1 h-4 w-4" /> Add
+                      <Plus className="mr-1.5 h-4 w-4" /> Add
                     </Button>
                   </div>
                 )}

@@ -116,33 +116,32 @@ export default async function LoginPage(props: {
     };
 
     return (
-        <div className="flex h-screen w-screen items-center justify-center bg-black">
+        <div className="flex min-h-[100dvh] w-full items-center justify-center p-4">
             <LoginHashSessionHandler callbackUrl={callbackTarget} />
 
-
-            <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
+            <div className="w-full max-w-[400px] rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl p-8 md:p-10 shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] flex flex-col justify-center space-y-6 animate-in fade-in zoom-in-95 duration-700">
                 <div className="flex flex-col space-y-2 text-center">
                     <div className="flex justify-center mb-4">
-                        <div className="h-12 w-12 rounded-full bg-cyan-500/10 flex items-center justify-center ring-1 ring-cyan-500/30">
-                            <Shield className="h-6 w-6 text-cyan-400" />
+                        <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center shadow-inner border border-primary/10">
+                            <Shield className="h-7 w-7 text-primary drop-shadow-sm" />
                         </div>
                     </div>
-                    <h1 className="text-2xl font-semibold tracking-tighter text-white">
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">
                         Evo Logistics Sign In
                     </h1>
-                    <p className="text-sm text-slate-400">
+                    <p className="text-sm font-medium text-muted-foreground/80">
                         Sign in to your workspace dashboard
                     </p>
                 </div>
 
                 <div className="grid gap-6">
                     {searchParams.error && (
-                        <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-md text-red-400 text-sm text-center">
+                        <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-2xl text-destructive text-sm text-center font-medium">
                             {searchParams.error}
                         </div>
                     )}
                     {searchParams.message && (
-                        <div className="p-3 bg-cyan-500/10 border border-cyan-500/50 rounded-md text-cyan-400 text-sm text-center">
+                        <div className="p-3 bg-primary/10 border border-primary/20 rounded-2xl text-primary text-sm text-center font-medium">
                             {searchParams.message}
                         </div>
                     )}
@@ -161,10 +160,10 @@ export default async function LoginPage(props: {
                                     autoComplete="email"
                                     autoCorrect="off"
                                     required
-                                    className="bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-cyan-500/50"
+                                    className="h-12 rounded-2xl bg-white/5 dark:bg-black/5 border-white/10 dark:border-white/5 text-foreground placeholder:text-muted-foreground/60 focus-visible:ring-primary/50 shadow-inner px-4"
                                 />
                             </div>
-                            <Button type="submit" className="bg-cyan-500 hover:bg-cyan-400 text-black font-semibold">
+                            <Button type="submit" className="h-12 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
                                 Send Magic Link
                             </Button>
                         </div>
@@ -174,16 +173,16 @@ export default async function LoginPage(props: {
                         <div className="absolute inset-0 flex items-center">
                             <span className="w-full border-t border-white/10" />
                         </div>
-                        <div className="relative flex justify-center text-xs uppercase">
-                            <span className="bg-black px-2 text-slate-400">
+                        <div className="relative flex justify-center text-xs uppercase font-medium">
+                            <span className="bg-transparent px-2 text-muted-foreground/70">
                                 Or continue with
                             </span>
                         </div>
                     </div>
 
                     <form action={handleGoogleSignIn}>
-                        <Button variant="outline" type="submit" className="w-full bg-white/5 border-white/10 text-white hover:bg-white/10 hover:text-white">
-                            <svg className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
+                        <Button variant="outline" type="submit" className="w-full h-12 rounded-2xl bg-white/5 dark:bg-black/5 border-white/10 dark:border-white/5 text-foreground hover:bg-white/20 dark:hover:bg-white/10 hover:text-foreground shadow-sm hover:shadow-md transition-all duration-300">
+                            <svg className="mr-2 h-5 w-5" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
                                 <path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path>
                             </svg>
                             Google
@@ -191,11 +190,11 @@ export default async function LoginPage(props: {
                     </form>
                 </div>
 
-                <p className="px-8 text-center text-sm text-slate-500">
+                <p className="px-8 text-center text-sm font-medium text-muted-foreground">
                     New here?{" "}
                     <Link
                         href={inviteToken ? `/signup?invite=${encodeURIComponent(inviteToken)}` : "/signup"}
-                        className="text-cyan-400 hover:text-cyan-300"
+                        className="text-primary hover:text-primary/80 transition-colors"
                     >
                         Create an account
                     </Link>

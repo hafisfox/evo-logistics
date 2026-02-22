@@ -14,15 +14,15 @@ interface ShipmentCardProps {
 
 export function ShipmentCard({ rfq }: ShipmentCardProps) {
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
+      <CardHeader className="pb-4 px-6 pt-6">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Shipment Details</CardTitle>
+          <CardTitle className="text-lg font-bold tracking-tight">Shipment Details</CardTitle>
           <StatusBadge status={rfq.status} />
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <CardContent className="space-y-4 px-6 pb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           <div>
             <p className="text-xs text-muted-foreground mb-1">Route</p>
             <RouteDisplay pol={rfq.pol} pod={rfq.pod} />

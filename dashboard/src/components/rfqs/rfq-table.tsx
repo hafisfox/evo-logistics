@@ -47,7 +47,7 @@ export function RFQTable({ rfqs }: RFQTableProps) {
   }
 
   return (
-    <div className="rounded-md border overflow-x-auto">
+    <div className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-x-auto">
       <Table className="min-w-[800px]">
         <TableHeader>
           <TableRow>
@@ -97,13 +97,14 @@ export function RFQTable({ rfqs }: RFQTableProps) {
                 )}
               </TableCell>
               <TableCell className="text-right">
-                <div className="flex justify-end gap-1">
+                <div className="flex justify-end gap-1.5">
                   <Button
                     variant="ghost"
                     size="icon"
                     asChild
                     aria-label={`View RFQ ${rfq.rfq_id}`}
                     title={`View RFQ ${rfq.rfq_id}`}
+                    className="h-8 w-8 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
                   >
                     <Link href={`/rfqs/${rfq.rfq_id}`}>
                       <Eye className="h-4 w-4" />
@@ -116,6 +117,7 @@ export function RFQTable({ rfqs }: RFQTableProps) {
                       asChild
                       aria-label={`Select agent for RFQ ${rfq.rfq_id}`}
                       title={`Select agent for RFQ ${rfq.rfq_id}`}
+                      className="h-8 w-8 rounded-lg hover:bg-primary/10 hover:text-primary transition-colors"
                     >
                       <Link href={`/rfqs/${rfq.rfq_id}/select`}>
                         <UserCheck className="h-4 w-4" />
@@ -130,6 +132,7 @@ export function RFQTable({ rfqs }: RFQTableProps) {
                       disabled={deleteMutation.isPending}
                       aria-label={`Delete RFQ ${rfq.rfq_id}`}
                       title={`Delete RFQ ${rfq.rfq_id}`}
+                      className="h-8 w-8 rounded-lg hover:bg-destructive/10 hover:text-destructive transition-colors"
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>

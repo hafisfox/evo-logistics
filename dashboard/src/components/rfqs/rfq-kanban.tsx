@@ -41,7 +41,7 @@ export function RFQKanban({ rfqs }: RFQKanbanProps) {
               <div className="space-y-2 pr-2">
                 {items.map((rfq) => (
                   <Link key={rfq.rfq_id} href={`/rfqs/${rfq.rfq_id}`}>
-                    <Card className="hover:shadow-sm transition-shadow cursor-pointer">
+                    <Card className="rounded-2xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer overflow-hidden">
                       <CardContent className="p-3 space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="font-mono text-xs text-primary">

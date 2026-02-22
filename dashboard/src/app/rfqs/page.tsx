@@ -45,7 +45,7 @@ export default function RFQPipelinePage() {
         title="RFQ Pipeline"
         description={`${rfqs?.length || 0} total RFQs`}
       />
-      <div className="p-6 space-y-4">
+      <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6 animate-in fade-in zoom-in-95 duration-700 ease-out fill-mode-both mt-4 md:mt-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <RFQFilters
             search={search}
@@ -59,9 +59,9 @@ export default function RFQPipelinePage() {
         </div>
 
         {isLoading ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {[1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} className="h-12 w-full" />
+              <Skeleton key={i} className="h-16 w-full rounded-2xl" />
             ))}
           </div>
         ) : pipelineView === "table" ? (

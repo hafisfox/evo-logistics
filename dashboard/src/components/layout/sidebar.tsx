@@ -25,8 +25,8 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden md:flex h-screen w-64 flex-col border-r bg-sidebar">
-      <div className="flex h-14 items-center gap-2 border-b px-4">
+    <aside className="hidden md:flex flex-col w-64 m-4 mr-0 rounded-3xl bg-card/60 dark:bg-card/40 backdrop-blur-2xl border border-white/20 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] h-[calc(100vh-2rem)] overflow-hidden transition-all duration-500 z-40">
+      <div className="flex h-16 items-center gap-2 border-b border-sidebar-border/50 px-6 bg-transparent">
         <Ship className="h-6 w-6 text-primary" />
         <span className="text-lg font-semibold">Evo Logistics</span>
       </div>
@@ -41,10 +41,10 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-medium transition-all duration-300",
                 isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+                  ? "bg-primary/10 text-primary shadow-sm hover:scale-[1.02]"
+                  : "text-sidebar-foreground hover:bg-white/40 dark:hover:bg-sidebar-accent/50 hover:scale-[1.01]"
               )}
             >
               <item.icon className="h-4 w-4" />

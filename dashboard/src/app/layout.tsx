@@ -17,7 +17,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="font-sans antialiased" suppressHydrationWarning>
+      <body className="font-sans antialiased relative min-h-screen bg-slate-50/50 dark:bg-black overflow-x-hidden" suppressHydrationWarning>
+        {/* Global Decorative Background Blob */}
+        <div className="fixed top-0 left-0 right-0 h-[500px] w-[140%] -ml-[20%] bg-gradient-to-br from-primary/5 via-primary/2 to-transparent dark:from-primary/10 dark:via-primary/5 blur-3xl rounded-[100%] pointer-events-none -translate-y-1/2 opacity-60 z-[-1]" />
+
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>

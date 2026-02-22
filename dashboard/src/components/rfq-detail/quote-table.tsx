@@ -29,21 +29,21 @@ export function QuoteTable({ quotes }: QuoteTableProps) {
   const bestPrice = sorted[0]?.price;
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
+      <CardHeader className="pb-4 px-6 pt-6">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Agent Quotes</CardTitle>
-          <Badge variant="secondary">{quotes.length} quotes</Badge>
+          <CardTitle className="text-lg font-bold tracking-tight">Agent Quotes</CardTitle>
+          <Badge variant="secondary" className="rounded-xl px-3 py-1 bg-white/50 dark:bg-black/50 backdrop-blur-md shadow-sm border border-white/20 dark:border-white/10">{quotes.length} quotes</Badge>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-6 pb-6 pt-2">
         {quotes.length === 0 ? (
           <EmptyState
             title="No quotes yet"
             description="Waiting for agent responses"
           />
         ) : (
-          <div className="rounded-md border">
+          <div className="rounded-2xl border border-white/10 dark:border-white/5 overflow-x-auto shadow-inner bg-white/5 dark:bg-black/5">
             <Table>
               <TableHeader>
                 <TableRow>
