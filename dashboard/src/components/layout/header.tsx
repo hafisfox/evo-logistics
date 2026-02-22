@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { Bell, Plus, UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -46,6 +47,7 @@ type Workspace = {
 
 export function Header({ title, description }: HeaderProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string>("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -88,6 +90,7 @@ export function Header({ title, description }: HeaderProps) {
       return;
     }
     setCurrentWorkspaceId(workspaceId);
+    queryClient.clear();
     router.refresh();
   };
 
@@ -145,6 +148,7 @@ export function Header({ title, description }: HeaderProps) {
       await loadWorkspaces();
       setWorkspaceName("");
       setCreateOpen(false);
+      queryClient.clear();
       router.refresh();
       toast.success("Workspace created");
     } catch (error) {
