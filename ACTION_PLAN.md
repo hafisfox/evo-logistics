@@ -158,7 +158,7 @@ The system currently runs in a phased dual-mode:
 
 Executed from this workspace branch:
 
-- `cd dashboard && npm run lint` ⚠️ pre-existing lint issue in `dashboard/scripts/prod_authenticated_smoke.js` (CommonJS `require()` in TS-eslint context)
+- `cd dashboard && npm run lint` ✅
 - `cd dashboard && npm run typecheck` ✅
 - `cd dashboard && npm run test` ✅
 - `cd dashboard && npm run build` ✅ (webpack mode)
@@ -170,7 +170,12 @@ Executed from this workspace branch:
 - Dashboard deployed and aliased to:
   - `https://evo-logistics.vercel.app`
 - Latest production deployment from `main`:
-  - commit `8584cb29c8f3a2997e8755ca6c0a69438ac82c9b`
+  - commit `b5da915`
+- Vercel environment is configured for mailbox OAuth across `production`/`preview`/`development`:
+  - `GOOGLE_OAUTH_CLIENT_ID`
+  - `GOOGLE_OAUTH_CLIENT_SECRET`
+  - `MAILBOX_TOKEN_ENCRYPTION_KEY`
+  - `MAILBOX_OAUTH_STATE_SECRET`
 - Modal apps deployed:
   - phase 1: `https://hafisjavad--rfq-analyzer-phase-1-gmail-push-phase1.modal.run`
   - phase 2: `https://hafisjavad--quote-analysis-phase-2-gmail-push-phase2.modal.run`
