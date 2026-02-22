@@ -193,6 +193,23 @@ All phases read and write exclusively to Supabase PostgreSQL. Google Sheets is n
 
 **Pricing lookup tables** (`do_charges`, `destination_charges`, `transportation_charges`) are read from Supabase and returned as plain Python dicts.
 
+### Settings Storage (`app_settings` table)
+Dashboard settings (profit margin, quote threshold) are stored in the Supabase `app_settings` table as key/value JSONB rows:
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `profitMargin` | `13` | Percentage applied to total cost (stored as whole number, e.g. `14.5` = 14.5%) |
+| `quoteThreshold` | `2` | Minimum valid quotes before manager notification |
+
+- **Dashboard** reads/writes via `getSettings()` / `updateSettings()` in `dashboard/src/lib/settings.ts` (uses Supabase server client)
+- **Phase 3** receives margin as a decimal (e.g. `0.145`) from the dashboard's select API route, which converts `profitMargin / 100`
+- **Phase 2** uses a hardcoded `QUOTE_THRESHOLD = 2` (reads from constant, not from the table — future improvement to read from `app_settings`)
+
+### Timestamp Formats
+- Phase 3 stores `quoted_at` in `master_rfqs` as `"%Y-%m-%d %I:%M %p"` (12-hour with AM/PM, e.g. `"2026-02-22 03:45 PM"`)
+- Scheduled Tasks parses `quoted_at` using the same format for 24-hour follow-up calculations
+- All other timestamps use ISO 8601 or UAE timezone (`UTC+4`)
+
 ### Gmail API Rate Limit Handling
 All Gmail API calls in Phase 1 and Phase 2 go through `_gmail_call_with_backoff()`, which retries up to 4 times with exponential backoff (2s, 4s, 8s, 16s) on HTTP 429 or 403 quota errors. This prevents transient rate limit spikes (caused by Pub/Sub bursts) from crashing processing runs.
 
@@ -285,14 +302,14 @@ Unlike Phase 1 and 2 which are triggered by Gmail Pub/Sub push notifications, Ph
 **Trigger:** HTTP POST from Dashboard → Modal FastAPI endpoint
 
 **Flow:**
-1. Receives selection payload (rfq_id, agent, carrier, shipment)
+1. Receives selection payload: `rfq_id`, `selected_agent`, `selected_carrier`, `shipment_number`, `margin` (decimal, e.g. `0.145`), `quote_threshold`
 2. Updates `master_rfqs` status to "Selected"
 3. Looks up the selected quote from `agent_outbound_log`
 4. Reads pricing tables (`do_charges`, `destination_charges`, `transportation_charges`)
-5. Calculates full pricing with dynamic margin (from dashboard settings), rounded to nearest 10 AED
-6. Updates `master_rfqs` with final prices and status "Quoted"
+5. Calculates full pricing with dynamic margin (passed from dashboard `app_settings`), rounded to nearest 10 AED
+6. Updates `master_rfqs` with final prices, `quoted_at` timestamp (`%Y-%m-%d %I:%M %p`), and status "Quoted"
 7. Sends quotation email on original Gmail thread
-8. Notifies sales team
+8. Notifies sales team with pricing breakdown
 
 **Deploy:**
 ```bash

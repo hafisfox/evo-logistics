@@ -29,11 +29,14 @@
 
 | Layer | Technology |
 |-------|-----------|
+| Dashboard | Next.js 16 + React 19, TanStack Query, Zustand, Radix UI, Tailwind CSS v4 |
 | Orchestration | Modal.com (serverless Python 3.11) |
 | AI/LLM | OpenAI GPT (Python SDK + Pydantic) |
 | Email | Gmail API (OAuth 2.0 Web Application flow) |
 | Email Trigger | Google Cloud Pub/Sub (Gmail push notifications) |
 | Database | Supabase PostgreSQL |
+| Hosting | Vercel (dashboard), Modal.com (automations) |
+| Analytics | Vercel Analytics + Speed Insights |
 | Background Jobs | Modal.com Cron (`scheduled_tasks.py`) |
 
 | Service | Credential | Usage |
@@ -49,6 +52,7 @@
 - **master_rfqs** — enquiry records with status (scoped by `user_id`)
 - **agent_outbound_log** — all agent quotes (scoped by `user_id`)
 - **agents** — agent directory (scoped by `user_id`)
+- **app_settings** — dashboard configuration (profit margin, quote threshold) — key/value JSONB store
 - **do_charges** — document and container charges lookup (globally readable)
 - **destination_charges** — UAE port fees
 - **transportation_charges** — distance-based transport costs
@@ -75,10 +79,11 @@ evo_logistics/
 │   └── authenticate_google.py                   # Generates OAuth 2.0 token.json
 ├── dashboard/                                   # Next.js pricing dashboard (frontend)
 │   └── src/
-│       ├── app/                                 # Pages & API routes
-│       ├── components/                          # React components
-│       ├── lib/                                 # Supabase client, pricing engine, utils
-│       ├── hooks/                               # TanStack Query hooks
+│       ├── app/                                 # Pages, API routes, error.tsx, not-found.tsx
+│       ├── components/                          # React components (UI, layout, domain)
+│       ├── lib/                                 # Supabase client, pricing engine, settings, utils
+│       ├── hooks/                               # TanStack Query hooks (analytics, rfqs, settings)
+│       ├── store/                               # Zustand UI state
 │       └── types/                               # TypeScript interfaces
 ```
 
@@ -254,11 +259,12 @@ PRICING & QUOTATION
 
 | Rule | Detail |
 |------|--------|
-| Profit margin | **13%** applied to total cost |
+| Profit margin | **Configurable** via dashboard Settings page (default **13%**, stored in Supabase `app_settings` table) |
 | Rounding | Always round to nearest **10 AED** |
 | Decimals | **No decimals** in final quotation — no .01, .05, etc. |
 | Margin visibility | Breakdown visible to **management only** |
-| Formula | `Final Price = ROUND(Total Cost × 1.13, nearest 10)` |
+| Formula | `Final Price = ROUND(Total Cost × (1 + margin), nearest 10)` |
+| Quote threshold | **Configurable** via dashboard Settings page (default **2**, stored in Supabase `app_settings`) — minimum quotes before manager notification |
 
 ## 14. Customer Quotation
 
