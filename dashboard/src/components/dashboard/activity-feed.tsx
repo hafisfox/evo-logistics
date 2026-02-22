@@ -12,14 +12,14 @@ interface ActivityFeedProps {
 
 export function ActivityFeed({ items }: ActivityFeedProps) {
   return (
-    <Card>
+    <Card className="hover:shadow-md transition-all duration-300">
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Recent Activity</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
           {items.map((item, i) => (
-            <div key={`${item.rfq_id}-${i}`} className="flex items-center gap-3">
+            <div key={`${item.rfq_id}-${i}`} className="group flex items-center gap-3 hover:bg-muted/50 p-2.5 -mx-2.5 rounded-lg transition-colors duration-200">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <Link
@@ -34,7 +34,7 @@ export function ActivityFeed({ items }: ActivityFeedProps) {
                   {item.customer_email} — {item.route}
                 </p>
               </div>
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
+              <span className="text-xs text-muted-foreground/80 whitespace-nowrap group-hover:text-muted-foreground transition-colors duration-200">
                 {formatDateTime(item.timestamp)}
               </span>
             </div>

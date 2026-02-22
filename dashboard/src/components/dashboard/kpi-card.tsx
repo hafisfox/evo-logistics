@@ -20,7 +20,7 @@ export function KPICard({
   className,
 }: KPICardProps) {
   return (
-    <Card className={cn(className)}>
+    <Card className={cn("group hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 cursor-default", className)}>
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
           <div>
@@ -32,8 +32,8 @@ export function KPICard({
               </p>
             )}
           </div>
-          <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
-            <Icon className="h-5 w-5 text-muted-foreground" />
+          <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center border border-muted-foreground/10 group-hover:scale-110 transition-transform duration-300">
+            <Icon className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors duration-300" />
           </div>
         </div>
       </CardContent>

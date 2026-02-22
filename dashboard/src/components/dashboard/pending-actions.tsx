@@ -18,7 +18,7 @@ export function PendingActions({ rfqs }: PendingActionsProps) {
   );
 
   return (
-    <Card>
+    <Card className="hover:shadow-md transition-all duration-300 flex flex-col h-full">
       <CardHeader className="pb-3">
         <div className="flex items-center gap-2">
           <AlertCircle className="h-4 w-4 text-orange-500" />
@@ -30,7 +30,7 @@ export function PendingActions({ rfqs }: PendingActionsProps) {
           {actionable.slice(0, 5).map((rfq) => (
             <div
               key={rfq.rfq_id}
-              className="flex items-center justify-between gap-3"
+              className="group flex items-center justify-between gap-3 hover:bg-muted/50 p-3 -mx-3 rounded-lg transition-colors duration-200"
             >
               <div className="flex-1 min-w-0">
                 <Link

@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { STATUS_CONFIG } from "@/lib/constants";
 import type { PipelineCount } from "@/types/analytics";
 
@@ -12,7 +13,7 @@ export function PipelineChart({ data }: PipelineChartProps) {
   const total = data.reduce((sum, d) => sum + d.count, 0);
 
   return (
-    <Card>
+    <Card className="hover:shadow-md transition-all duration-300">
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Pipeline Overview</CardTitle>
       </CardHeader>
@@ -24,14 +25,17 @@ export function PipelineChart({ data }: PipelineChartProps) {
         ) : (
           <div className="space-y-3">
             {/* Stacked bar */}
-            <div className="flex h-6 rounded-full overflow-hidden">
-              {data.map((d) => {
+            <div className="flex h-8 rounded-full overflow-hidden border border-muted/20">
+              {data.map((d, i) => {
                 const config = STATUS_CONFIG[d.status];
                 const pct = (d.count / total) * 100;
                 return (
                   <div
                     key={d.status}
-                    className="transition-all"
+                    className={cn(
+                      "transition-all duration-300 hover:opacity-80 cursor-pointer",
+                      i < data.length - 1 && "border-r-2 border-background"
+                    )}
                     style={{
                       width: `${pct}%`,
                       backgroundColor: config?.color || "#94a3b8",

@@ -29,7 +29,7 @@ export default function DashboardPage() {
   return (
     <div>
       <Header title="Dashboard" description="FCL Pricing Engine Overview" />
-      <div className="p-6 space-y-6">
+      <div className="p-6 space-y-6 animate-in fade-in duration-500">
         {/* KPI Row */}
         {kpisLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -39,42 +39,52 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <KPICard
-              title="Active RFQs"
-              value={kpis?.activeRFQs ?? 0}
-              icon={ClipboardList}
-            />
-            <KPICard
-              title="Awaiting Quotes"
-              value={kpis?.awaitingQuotes ?? 0}
-              icon={MessageSquare}
-            />
-            <KPICard
-              title="Pending Selection"
-              value={kpis?.pendingSelection ?? 0}
-              icon={Clock}
-              description="Ready for manager review"
-            />
-            <KPICard
-              title="Quoted Today"
-              value={kpis?.quotedToday ?? 0}
-              icon={CheckCircle}
-            />
-            <KPICard
-              title="Avg Response"
-              value={
-                kpis?.avgResponseTimeHours != null
-                  ? `${kpis.avgResponseTimeHours}h`
-                  : "—"
-              }
-              icon={Timer}
-              description="Received to quoted"
-            />
+            <div className="animate-in slide-in-from-bottom-4 fade-in duration-700 delay-100 fill-mode-both">
+              <KPICard
+                title="Active RFQs"
+                value={kpis?.activeRFQs ?? 0}
+                icon={ClipboardList}
+              />
+            </div>
+            <div className="animate-in slide-in-from-bottom-4 fade-in duration-700 delay-150 fill-mode-both">
+              <KPICard
+                title="Awaiting Quotes"
+                value={kpis?.awaitingQuotes ?? 0}
+                icon={MessageSquare}
+              />
+            </div>
+            <div className="animate-in slide-in-from-bottom-4 fade-in duration-700 delay-200 fill-mode-both">
+              <KPICard
+                title="Pending Selection"
+                value={kpis?.pendingSelection ?? 0}
+                icon={Clock}
+                description="Ready for manager review"
+              />
+            </div>
+            <div className="animate-in slide-in-from-bottom-4 fade-in duration-700 delay-300 fill-mode-both">
+              <KPICard
+                title="Quoted Today"
+                value={kpis?.quotedToday ?? 0}
+                icon={CheckCircle}
+              />
+            </div>
+            <div className="animate-in slide-in-from-bottom-4 fade-in duration-700 delay-500 fill-mode-both">
+              <KPICard
+                title="Avg Response"
+                value={
+                  kpis?.avgResponseTimeHours != null
+                    ? `${kpis.avgResponseTimeHours}h`
+                    : "—"
+                }
+                icon={Timer}
+                description="Received to quoted"
+              />
+            </div>
           </div>
         )}
 
         {/* Pipeline + Actions row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-8 fade-in duration-700 delay-700 fill-mode-both">
           <div className="lg:col-span-2">
             {pipelineLoading ? (
               <Skeleton className="h-48" />
@@ -88,11 +98,13 @@ export default function DashboardPage() {
         </div>
 
         {/* Activity Feed */}
-        {activityLoading ? (
-          <Skeleton className="h-64" />
-        ) : (
-          <ActivityFeed items={activity || []} />
-        )}
+        <div className="animate-in slide-in-from-bottom-8 fade-in duration-700 delay-1000 fill-mode-both">
+          {activityLoading ? (
+            <Skeleton className="h-64" />
+          ) : (
+            <ActivityFeed items={activity || []} />
+          )}
+        </div>
       </div>
     </div>
   );

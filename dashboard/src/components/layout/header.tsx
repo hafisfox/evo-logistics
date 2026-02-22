@@ -160,7 +160,7 @@ export function Header({ title, description }: HeaderProps) {
   };
 
   return (
-    <header className="flex h-14 items-center justify-between border-b px-6">
+    <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b px-6 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 transition-all duration-300">
       <div className="flex items-center">
         <MobileNav />
         <div>
