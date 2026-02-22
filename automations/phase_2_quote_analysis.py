@@ -34,6 +34,9 @@ image = modal.Image.debian_slim(python_version="3.11").pip_install(
     "fastapi",
     "supabase"
 ).add_local_file(
+    os.path.join(os.path.dirname(__file__), "tenant_context.py"),
+    "/root/tenant_context.py"
+).add_local_file(
     os.path.join(os.path.dirname(__file__), "token.json"),
     "/root/token.json"
 )
@@ -662,6 +665,30 @@ def renew_gmail_watch():
             'topicName': topic,
             'labelIds': ['INBOX']
         }).execute()
+        expiration_ms = result.get("expiration")
+        expiration_iso = None
+        if expiration_ms:
+            try:
+                expiration_iso = datetime.fromtimestamp(
+                    int(expiration_ms) / 1000,
+                    tz=timezone.utc
+                ).isoformat()
+            except Exception:
+                expiration_iso = None
+
+        workspace_id = mailbox.get("workspace_id")
+        if workspace_id and workspace_id != "bootstrap":
+            try:
+                supabase.table("workspace_mailboxes").update({
+                    "status": "connected",
+                    "watch_expiration": expiration_iso,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "last_error": None,
+                }).eq("workspace_id", workspace_id).execute()
+            except Exception as exc:
+                print(
+                    f"Failed to persist watch expiration for workspace {workspace_id}: {exc}"
+                )
         print(
             "Gmail watch renewed for workspace "
             f"{mailbox.get('workspace_id')} ({mailbox.get('email')}): "

@@ -25,6 +25,9 @@ image = modal.Image.debian_slim(python_version="3.11").pip_install(
     "fastapi",
     "supabase"
 ).add_local_file(
+    os.path.join(os.path.dirname(__file__), "tenant_context.py"),
+    "/root/tenant_context.py"
+).add_local_file(
     os.path.join(os.path.dirname(__file__), "token.json"),
     "/root/token.json"
 )
