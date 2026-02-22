@@ -1,5 +1,6 @@
 import os
 import sys
+from types import SimpleNamespace
 
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -68,3 +69,83 @@ def test_find_selected_quote_falls_back_when_selected_match_missing():
     selected = p3._find_selected_quote(all_quotes, request)
     assert selected["carrier"] == "COSCO"
     assert selected["match"] == "RFQ-1_agenta@example.com_1_COSCO_oldopt00"
+
+
+class _FakeQuery:
+    def __init__(self):
+        self.values = None
+        self.eq_calls = []
+
+    def update(self, values):
+        self.values = values
+        return self
+
+    def eq(self, column, value):
+        self.eq_calls.append((column, value))
+        return self
+
+    def execute(self):
+        return SimpleNamespace(data=[])
+
+
+class _FakeSupabase:
+    def __init__(self):
+        self.queries = []
+
+    def table(self, _table_name):
+        query = _FakeQuery()
+        self.queries.append(query)
+        return query
+
+
+def test_process_agent_selection_uses_workspace_mailbox_for_notifications(monkeypatch):
+    request = _request()
+    fake_supabase = _FakeSupabase()
+    notified = {}
+
+    monkeypatch.setattr(p3, "get_supabase_client", lambda: fake_supabase)
+    monkeypatch.setattr(
+        p3,
+        "get_gmail_service_for_workspace",
+        lambda _supabase, workspace_id: (object(), f"{workspace_id}@mailbox.test"),
+    )
+    monkeypatch.setattr(
+        p3,
+        "_get_by_filter",
+        lambda _supabase, table, _column, _value, _workspace_id: (
+            [{
+                "rfq_id": "RFQ-1",
+                "thread_id": "thread-1",
+                "customer_email": "customer@example.com",
+                "service_type": "port-to-port",
+                "container_type": "40HQ",
+                "qty": "1",
+                "pol": "SHENZHEN",
+                "pod": "JEBEL ALI",
+            }] if table == "master_rfqs" else [{"match": request.selected_match}]
+        ),
+    )
+    monkeypatch.setattr(p3, "_find_selected_quote", lambda _quotes, _request: {"price": "1000"})
+    monkeypatch.setattr(p3, "_get_table", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        p3,
+        "calculate_full_pricing",
+        lambda *_args, **_kwargs: {
+            "grand_total_aed": 1000,
+            "grand_total_usd": 272,
+            "shipments": [],
+        },
+    )
+    monkeypatch.setattr(p3, "_send_quotation_email", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        p3,
+        "_notify_sales",
+        lambda _gmail, notification_email, *_args, **_kwargs: notified.update(
+            {"email": notification_email}
+        ),
+    )
+
+    result = p3._process_agent_selection(request)
+
+    assert result["success"] is True
+    assert notified["email"] == "ws-1@mailbox.test"

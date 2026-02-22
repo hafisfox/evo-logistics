@@ -12,8 +12,10 @@ UAE_TZ = timezone(timedelta(hours=4))
 import modal
 from pydantic import BaseModel, Field, field_validator
 import openai
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
+from gmail_workspace_auth import (
+    WorkspaceMailboxAuthError,
+    get_gmail_service_for_workspace,
+)
 from tenant_context import (
     audit_ignored_mailbox_event,
     claim_email_event,
@@ -32,6 +34,7 @@ from tenant_context import (
 app = modal.App("rfq-analyzer-phase-1")
 
 image = modal.Image.debian_slim(python_version="3.11").pip_install(
+    "cryptography",
     "google-api-python-client",
     "google-auth-httplib2",
     "google-auth-oauthlib",
@@ -43,12 +46,9 @@ image = modal.Image.debian_slim(python_version="3.11").pip_install(
     os.path.join(os.path.dirname(__file__), "tenant_context.py"),
     "/root/tenant_context.py"
 ).add_local_file(
-    os.path.join(os.path.dirname(__file__), "token.json"),
-    "/root/token.json"
+    os.path.join(os.path.dirname(__file__), "gmail_workspace_auth.py"),
+    "/root/gmail_workspace_auth.py"
 )
-
-ADMIN_EMAIL = "hafisjavad9@gmail.com"
-OWN_EMAIL = os.environ.get("OWN_EMAIL", "yunapink05@gmail.com")
 
 # =====================================================================
 # CONSTANTS
@@ -113,19 +113,6 @@ class ExtractedRFQs(BaseModel):
 # =====================================================================
 # GOOGLE APIS UTILITIES
 # =====================================================================
-def get_google_services():
-    """Initializes Google API clients securely via OAuth 2.0 token."""
-    if not os.path.exists("/root/token.json"):
-        raise Exception("Missing /root/token.json mount. Did you run authenticate_google.py?")
-
-    credentials = Credentials.from_authorized_user_file(
-        "/root/token.json",
-        scopes=["https://www.googleapis.com/auth/gmail.modify"]
-    )
-
-    gmail_service = build('gmail', 'v1', credentials=credentials)
-    return gmail_service
-
 def get_supabase_client():
     from supabase import create_client
     supabase_url = os.environ.get("SUPABASE_URL")
@@ -650,8 +637,10 @@ def send_fallback_reply(gmail_service, to_address, thread_id, message_id, subjec
     )
     send_reply_email(gmail_service, to_address, thread_id, message_id, subject, body)
 
-def send_fallback_admin_notification(gmail_service, rfq_id, email_meta, email_body):
-    """Send detailed fallback alert to admin for manual review."""
+def send_fallback_admin_notification(
+    gmail_service, notification_email, rfq_id, email_meta, email_body
+):
+    """Send detailed fallback alert for manual review."""
     body_html = f"""
     <div style="font-family: Arial, sans-serif; max-width: 700px; border: 2px solid #e74c3c; border-radius: 8px; padding: 24px;">
       <h2 style="color: #e74c3c; margin-top: 0;">⚠️ Fallback Alert — Email Parsing Failed</h2>
@@ -693,8 +682,11 @@ def send_fallback_admin_notification(gmail_service, rfq_id, email_meta, email_bo
       </p>
     </div>
     """
+    if not notification_email:
+        print(f"No notification mailbox configured for fallback alert {rfq_id}")
+        return
     subject = f"[FALLBACK] Email Could Not Be Parsed — Manual Review Required | {rfq_id}"
-    send_email(gmail_service, ADMIN_EMAIL, subject, body_html, content_type="text/html")
+    send_email(gmail_service, notification_email, subject, body_html, content_type="text/html")
 
 # =====================================================================
 # SUPABASE HELPERS
@@ -990,7 +982,6 @@ def gmail_push_phase1(_data: dict):
 )
 def renew_gmail_watch():
     """Renews the Gmail push notification watch on INBOX."""
-    gmail_service = get_google_services()
     supabase = get_supabase_client()
     topic = os.environ["GOOGLE_PUBSUB_TOPIC"]
     mailboxes = (
@@ -1006,39 +997,62 @@ def renew_gmail_watch():
         return
 
     for mailbox in mailboxes:
-        result = gmail_service.users().watch(userId='me', body={
-            'topicName': topic,
-            'labelIds': ['INBOX']
-        }).execute()
-        expiration_ms = result.get("expiration")
-        expiration_iso = None
-        if expiration_ms:
-            try:
-                expiration_iso = datetime.fromtimestamp(
-                    int(expiration_ms) / 1000,
-                    tz=timezone.utc
-                ).isoformat()
-            except Exception:
-                expiration_iso = None
-
         workspace_id = mailbox.get("workspace_id")
-        if workspace_id and workspace_id != "bootstrap":
-            try:
-                supabase.table("workspace_mailboxes").update({
-                    "status": "connected",
-                    "watch_expiration": expiration_iso,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                    "last_error": None,
-                }).eq("workspace_id", workspace_id).execute()
-            except Exception as exc:
-                print(
-                    f"Failed to persist watch expiration for workspace {workspace_id}: {exc}"
-                )
-        print(
-            "Gmail watch renewed for workspace "
-            f"{mailbox.get('workspace_id')} ({mailbox.get('email')}): "
-            f"History ID={result.get('historyId')} Expiry={result.get('expiration')}"
-        )
+        if not workspace_id:
+            continue
+
+        try:
+            gmail_service, mailbox_email = get_gmail_service_for_workspace(
+                supabase, workspace_id
+            )
+            result = gmail_service.users().watch(
+                userId='me',
+                body={
+                    'topicName': topic,
+                    'labelIds': ['INBOX'],
+                },
+            ).execute()
+            expiration_ms = result.get("expiration")
+            expiration_iso = None
+            if expiration_ms:
+                try:
+                    expiration_iso = datetime.fromtimestamp(
+                        int(expiration_ms) / 1000,
+                        tz=timezone.utc
+                    ).isoformat()
+                except Exception:
+                    expiration_iso = None
+
+            supabase.table("workspace_mailboxes").update({
+                "status": "connected",
+                "watch_expiration": expiration_iso,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "last_error": None,
+            }).eq("workspace_id", workspace_id).execute()
+
+            print(
+                "Gmail watch renewed for workspace "
+                f"{workspace_id} ({mailbox_email}): "
+                f"History ID={result.get('historyId')} Expiry={result.get('expiration')}"
+            )
+        except WorkspaceMailboxAuthError as exc:
+            supabase.table("workspace_mailboxes").update({
+                "status": "error",
+                "last_error": str(exc),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("workspace_id", workspace_id).execute()
+            print(
+                f"Failed to renew Gmail watch for workspace {workspace_id}: {exc}"
+            )
+        except Exception as exc:
+            supabase.table("workspace_mailboxes").update({
+                "status": "error",
+                "last_error": str(exc),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("workspace_id", workspace_id).execute()
+            print(
+                f"Unexpected failure during watch renewal for workspace {workspace_id}: {exc}"
+            )
 
 # =====================================================================
 # DEDUPLICATION: Load known threads to avoid reprocessing
@@ -1160,7 +1174,6 @@ def _mark_message_read(gmail_service, msg_id: str):
 # CORE EMAIL PROCESSING LOGIC
 # =====================================================================
 def _process_incoming_rfqs(pubsub_payload=None):
-    gmail_service = get_google_services()
     supabase = get_supabase_client()
     mailbox_email = extract_pubsub_mailbox(pubsub_payload)
     workspace_id = resolve_workspace_id(supabase, mailbox_email)
@@ -1177,11 +1190,28 @@ def _process_incoming_rfqs(pubsub_payload=None):
         )
         return
 
+    try:
+        gmail_service, own_mailbox_email = get_gmail_service_for_workspace(
+            supabase, workspace_id
+        )
+    except WorkspaceMailboxAuthError as exc:
+        audit_ignored_mailbox_event(
+            supabase,
+            source="phase_1_request_analysis",
+            mailbox_email=mailbox_email,
+            reason="mailbox_auth_failed",
+        )
+        print(f"Skipping Phase 1 processing due to mailbox auth error: {exc}")
+        return
+
     # 1. Fetch unread inbox emails only
     # BUG-4 Fix: Exclude agent rate replies (Phase 2 handles those) and our own sent auto-replies
+    gmail_query = 'is:unread -subject:"Ref: RFQ-"'
+    if own_mailbox_email:
+        gmail_query = f"{gmail_query} -from:{own_mailbox_email}"
     results = gmail_service.users().messages().list(
         userId='me',
-        q=f'is:unread -subject:"Ref: RFQ-" -from:{OWN_EMAIL}'
+        q=gmail_query
     ).execute()
     messages = results.get('messages', [])
 
@@ -1243,7 +1273,7 @@ def _process_incoming_rfqs(pubsub_payload=None):
         processed_msg_ids.add(msg_id)
 
         # FIX-1: Hard guard — skip any email sent by our own address to prevent reply loops
-        if OWN_EMAIL in sender.lower():
+        if own_mailbox_email and own_mailbox_email in sender.lower():
             print(f"[{msg_id}] Skipping self-sent email: {subject}")
             continue
 
@@ -1354,6 +1384,7 @@ def _process_incoming_rfqs(pubsub_payload=None):
                     gmail_service,
                     supabase,
                     rfq_id,
+                    own_mailbox_email,
                     sender,
                     thread_id,
                     rfc_message_id,
@@ -1504,6 +1535,7 @@ def _process_incoming_rfqs(pubsub_payload=None):
                     gmail_service,
                     supabase,
                     rfq_id,
+                    own_mailbox_email,
                     sender,
                     thread_id,
                     rfc_message_id,
@@ -1522,10 +1554,10 @@ def _process_incoming_rfqs(pubsub_payload=None):
             pass  # Mark-as-read already done at top of loop
 
 
-def _handle_fallback(gmail_service, supabase, rfq_id, sender, thread_id,
+def _handle_fallback(gmail_service, supabase, rfq_id, notification_email, sender, thread_id,
                      rfc_message_id, subject, email_body, email_meta, now_str, workspace_id,
                      msg_id: str = ""):
-    """Handle emails that couldn't be parsed: log, reply to customer, notify admin."""
+    """Handle emails that couldn't be parsed: log, reply to customer, notify workspace."""
     # Log to sheets with Parse_Error status
     sheet_row = {
         'thread_id': thread_id,
@@ -1556,10 +1588,16 @@ def _handle_fallback(gmail_service, supabase, rfq_id, sender, thread_id,
 
     # Notify admin
     try:
-        send_fallback_admin_notification(gmail_service, rfq_id, email_meta, email_body)
-        print(f"Admin fallback notification sent for {rfq_id}")
+        send_fallback_admin_notification(
+            gmail_service,
+            notification_email,
+            rfq_id,
+            email_meta,
+            email_body,
+        )
+        print(f"Fallback notification sent for {rfq_id}")
     except Exception as e:
-        print(f"Failed to send admin notification: {e}")
+        print(f"Failed to send fallback notification: {e}")
     return True
 
 

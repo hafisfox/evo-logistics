@@ -1,26 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { Settings } from "@/lib/settings";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DollarSign, Mail, Save } from "lucide-react";
+import { AlertTriangle, DollarSign, Link2, Mail, Save, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { useSettings, useUpdateSettings } from "@/hooks/use-settings";
 import {
-  useUpdateWorkspaceMailbox,
+  useDisconnectWorkspaceMailbox,
+  useStartWorkspaceMailboxOAuth,
   useWorkspaceMailbox,
 } from "@/hooks/use-workspace-mailbox";
 
@@ -28,14 +20,23 @@ function formatSliderValue(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
+function formatDateTime(value: string | null) {
+  if (!value) return "Not available";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Invalid date";
+  return date.toLocaleString();
+}
+
 export default function WorkspaceSettingsPage() {
   const { data: savedSettings, isLoading } = useSettings();
   const { mutate: save, isPending: saving } = useUpdateSettings();
   const [draftSettings, setDraftSettings] = useState<Settings | null>(null);
+
   const { data: mailbox, isLoading: mailboxLoading } = useWorkspaceMailbox();
-  const { mutate: updateMailbox, isPending: mailboxSaving } = useUpdateWorkspaceMailbox();
-  const [mailboxEmail, setMailboxEmail] = useState("");
-  const [mailboxStatus, setMailboxStatus] = useState<"connected" | "disconnected">("connected");
+  const { mutate: startMailboxOAuth, isPending: startingMailboxOAuth } =
+    useStartWorkspaceMailboxOAuth();
+  const { mutate: disconnectMailbox, isPending: disconnectingMailbox } =
+    useDisconnectWorkspaceMailbox();
 
   const persistedSettings = useMemo<Settings>(
     () => ({
@@ -47,16 +48,7 @@ export default function WorkspaceSettingsPage() {
 
   const formSettings = draftSettings ?? persistedSettings;
   const hasUnsavedChanges = draftSettings !== null;
-
-  useEffect(() => {
-    if (!mailbox) return;
-    setMailboxEmail(mailbox.email || "");
-    if (mailbox.status === "disconnected") {
-      setMailboxStatus("disconnected");
-      return;
-    }
-    setMailboxStatus("connected");
-  }, [mailbox]);
+  const mailboxConnected = mailbox?.status === "connected";
 
   const updateDraft = <K extends keyof Settings>(key: K, value: Settings[K]) => {
     setDraftSettings((current) => ({
@@ -81,31 +73,34 @@ export default function WorkspaceSettingsPage() {
     });
   };
 
-  const handleMailboxSave = () => {
-    if (!mailboxEmail.trim()) {
-      toast.error("Mailbox email is required");
-      return;
-    }
-
-    updateMailbox(
-      {
-        email: mailboxEmail.trim(),
-        status: mailboxStatus,
+  const handleConnectMailbox = () => {
+    startMailboxOAuth(undefined, {
+      onSuccess: ({ authorizationUrl }) => {
+        window.location.href = authorizationUrl;
       },
-      {
-        onSuccess: () => {
-          toast.success("Mailbox settings updated");
-        },
-        onError: () => {
-          toast.error("Failed to update mailbox settings");
-        },
-      }
-    );
+      onError: () => {
+        toast.error("Failed to start mailbox OAuth flow");
+      },
+    });
+  };
+
+  const handleDisconnectMailbox = () => {
+    disconnectMailbox(undefined, {
+      onSuccess: () => {
+        toast.success("Mailbox disconnected");
+      },
+      onError: () => {
+        toast.error("Failed to disconnect mailbox");
+      },
+    });
   };
 
   return (
     <div>
-      <Header title="Workspace Settings" description="Workspace pricing and threshold configuration" />
+      <Header
+        title="Workspace Settings"
+        description="Workspace pricing and automation mailbox configuration"
+      />
       <div className="max-w-2xl space-y-6 p-6">
         <Card>
           <CardHeader className="pb-3">
@@ -124,10 +119,7 @@ export default function WorkspaceSettingsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <div className="mb-2 mt-1 flex items-center justify-between">
-                    <label
-                      id="profit-margin-label"
-                      className="text-sm text-muted-foreground"
-                    >
+                    <label id="profit-margin-label" className="text-sm text-muted-foreground">
                       Profit Margin (%)
                     </label>
                     <span
@@ -158,10 +150,7 @@ export default function WorkspaceSettingsPage() {
 
                 <div>
                   <div className="mb-2 mt-1 flex items-center justify-between">
-                    <label
-                      id="quote-threshold-label"
-                      className="text-sm text-muted-foreground"
-                    >
+                    <label id="quote-threshold-label" className="text-sm text-muted-foreground">
                       Quote Threshold
                     </label>
                     <span
@@ -193,10 +182,7 @@ export default function WorkspaceSettingsPage() {
             )}
 
             <div className="pt-2">
-              <Button
-                onClick={handleSave}
-                disabled={isLoading || saving || !hasUnsavedChanges}
-              >
+              <Button onClick={handleSave} disabled={isLoading || saving || !hasUnsavedChanges}>
                 {saving ? (
                   "Saving..."
                 ) : (
@@ -208,7 +194,8 @@ export default function WorkspaceSettingsPage() {
             </div>
 
             <p className="border-t pt-4 text-xs text-muted-foreground">
-              These values are passed automatically to the serverless automations and pricing engine calculations.
+              These values are passed automatically to the serverless automations and pricing
+              engine calculations.
             </p>
           </CardContent>
         </Card>
@@ -222,55 +209,60 @@ export default function WorkspaceSettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {mailboxLoading ? (
-              <Skeleton className="h-24" />
+              <Skeleton className="h-28" />
             ) : (
               <>
-                <div className="space-y-2">
-                  <Label htmlFor="mailbox-email">Mailbox Email</Label>
-                  <Input
-                    id="mailbox-email"
-                    value={mailboxEmail}
-                    onChange={(event) => setMailboxEmail(event.target.value)}
-                    placeholder="ops@company.com"
-                  />
+                <div className="rounded border bg-background p-3 text-sm">
+                  <p className="font-medium">
+                    Status: {mailboxConnected ? "Connected" : "Disconnected"}
+                  </p>
+                  <p className="text-muted-foreground">
+                    Mailbox: {mailbox?.email ?? "No mailbox connected"}
+                  </p>
+                  <p className="text-muted-foreground">
+                    Access token expiry: {formatDateTime(mailbox?.token_expires_at ?? null)}
+                  </p>
+                  <p className="text-muted-foreground">
+                    Gmail watch expiry: {formatDateTime(mailbox?.watch_expiration ?? null)}
+                  </p>
+                  {mailbox?.last_error && (
+                    <p className="mt-2 text-destructive">Last error: {mailbox.last_error}</p>
+                  )}
                 </div>
 
-                <div className="max-w-xs space-y-2">
-                  <Label>Status</Label>
-                  <Select
-                    value={mailboxStatus}
-                    onValueChange={(value) =>
-                      setMailboxStatus(value as "connected" | "disconnected")
-                    }
+                {!mailboxConnected && (
+                  <div className="flex items-start gap-2 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <p>
+                      Automations are paused until a mailbox is connected through Google OAuth.
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={handleConnectMailbox}
+                    disabled={startingMailboxOAuth}
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="connected">Connected</SelectItem>
-                      <SelectItem value="disconnected">Disconnected</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <Link2 className="mr-2 h-4 w-4" />
+                    {startingMailboxOAuth
+                      ? "Opening Google OAuth..."
+                      : mailboxConnected
+                        ? "Reconnect Mailbox"
+                        : "Connect Mailbox"}
+                  </Button>
+
+                  {mailbox && (
+                    <Button
+                      variant="outline"
+                      onClick={handleDisconnectMailbox}
+                      disabled={disconnectingMailbox}
+                    >
+                      <Unplug className="mr-2 h-4 w-4" />
+                      {disconnectingMailbox ? "Disconnecting..." : "Disconnect"}
+                    </Button>
+                  )}
                 </div>
-
-                {mailbox?.watch_expiration ? (
-                  <p className="text-xs text-muted-foreground">
-                    Watch expiration:{" "}
-                    {new Date(mailbox.watch_expiration).toLocaleString()}
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Watch expiration: not set yet
-                  </p>
-                )}
-
-                {mailbox?.last_error && (
-                  <p className="text-xs text-destructive">Last error: {mailbox.last_error}</p>
-                )}
-
-                <Button onClick={handleMailboxSave} disabled={mailboxSaving}>
-                  {mailboxSaving ? "Saving..." : "Save Mailbox"}
-                </Button>
               </>
             )}
           </CardContent>

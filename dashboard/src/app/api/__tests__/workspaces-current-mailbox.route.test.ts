@@ -61,6 +61,7 @@ describe("/api/workspaces/current/mailbox route", () => {
       data: {
         email: "ops@example.com",
         status: "connected",
+        token_expires_at: "2026-02-22T00:30:00.000Z",
         watch_expiration: null,
         last_error: null,
         updated_at: "2026-02-22T00:00:00.000Z",
@@ -70,7 +71,8 @@ describe("/api/workspaces/current/mailbox route", () => {
     upsertSingleMock.mockResolvedValue({
       data: {
         email: "ops@example.com",
-        status: "connected",
+        status: "disconnected",
+        token_expires_at: null,
         watch_expiration: null,
         last_error: null,
         updated_at: "2026-02-22T00:00:00.000Z",
@@ -87,6 +89,7 @@ describe("/api/workspaces/current/mailbox route", () => {
       mailbox: {
         email: "ops@example.com",
         status: "connected",
+        token_expires_at: "2026-02-22T00:30:00.000Z",
         watch_expiration: null,
         last_error: null,
         updated_at: "2026-02-22T00:00:00.000Z",
@@ -111,13 +114,31 @@ describe("/api/workspaces/current/mailbox route", () => {
     });
   });
 
-  it("upserts mailbox for owner/admin", async () => {
+  it("rejects manual connected status writes", async () => {
     const request = new Request("http://localhost/api/workspaces/current/mailbox", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email: "Ops@Example.com",
         status: "connected",
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Connected mailbox status must be established through OAuth flow",
+    });
+    expect(upsertMock).not.toHaveBeenCalled();
+  });
+
+  it("upserts disconnected mailbox for owner/admin", async () => {
+    const request = new Request("http://localhost/api/workspaces/current/mailbox", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "Ops@Example.com",
+        status: "disconnected",
       }),
     });
 
@@ -130,12 +151,15 @@ describe("/api/workspaces/current/mailbox route", () => {
     const payload = (firstCall?.[0] ?? {}) as Record<string, unknown>;
     expect(payload.workspace_id).toBe("ws-1");
     expect(payload.email).toBe("ops@example.com");
-    expect(payload.status).toBe("connected");
+    expect(payload.status).toBe("disconnected");
+    expect(payload.gmail_refresh_token_encrypted).toBeNull();
+    expect(payload.gmail_access_token_encrypted).toBeNull();
     await expect(response.json()).resolves.toEqual({
       success: true,
       mailbox: {
         email: "ops@example.com",
-        status: "connected",
+        status: "disconnected",
+        token_expires_at: null,
         watch_expiration: null,
         last_error: null,
         updated_at: "2026-02-22T00:00:00.000Z",

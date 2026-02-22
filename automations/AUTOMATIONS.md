@@ -1,21 +1,21 @@
 # AUTOMATIONS.md — Modal Automations (Workspace-Aware)
 
-Updated: 2026-02-22
+Updated: 2026-02-23
 
 ## 1. Purpose
 
-This directory contains the serverless automation phases that process RFQs, parse agent quotes, and send final pricing actions.
+This directory contains the Modal automation phases that process RFQs, parse agent quotes, run follow-ups, and execute quote-selection outcomes.
 
-The automations are now workspace-aware and align with the dashboard multi-tenant model.
+All Gmail access is now workspace-scoped and OAuth-backed through `workspace_mailboxes`.
 
 ## 2. Runtime Topology
 
-- Platform: Modal.com shared workers
+- Platform: Modal shared workers
 - Trigger style:
-  - Phase 1/2: Gmail Pub/Sub push -> Modal webhook
-  - Phase 3: Dashboard API call -> Modal webhook
-  - Scheduled: Modal cron
-- Database: Supabase PostgreSQL (service-role key)
+  - phase 1/2: Gmail Pub/Sub push -> Modal webhook
+  - phase 3: dashboard API call -> Modal webhook
+  - scheduled tasks: Modal cron
+- Database: Supabase Postgres via service-role key
 
 ## 3. Files
 
@@ -24,12 +24,12 @@ The automations are now workspace-aware and align with the dashboard multi-tenan
 - `phase_3_select_and_quote.py`
 - `scheduled_tasks.py`
 - `tenant_context.py`
-- `authenticate_google.py`
+- `gmail_workspace_auth.py` (workspace Gmail credential resolver + refresh/persist)
+- `authenticate_google.py` (legacy local helper; not used by production flow)
 
 ## 4. Tenant Context and Isolation
 
-### Resolver module
-`automations/tenant_context.py` centralizes:
+Resolver module `automations/tenant_context.py` centralizes:
 
 - mailbox extraction from Pub/Sub payload (`extract_pubsub_mailbox`)
 - workspace lookup via `workspace_mailboxes` (`resolve_workspace_id`)
@@ -39,8 +39,7 @@ The automations are now workspace-aware and align with the dashboard multi-tenan
   - `scoped_upsert`
   - `scoped_update_by_eq`
 
-### Tenant table scope
-The following are treated as tenant-scoped in automation helpers:
+Tenant-scoped tables include:
 
 - `master_rfqs`
 - `agent_outbound_log`
@@ -55,119 +54,113 @@ The following are treated as tenant-scoped in automation helpers:
 - `audit_events`
 
 Constraint note:
-- `agents` must be keyed per workspace (`workspace_id + agent_name`) with per-workspace email uniqueness (`workspace_id + email`).
-- Legacy global constraints are fixed by migration `dashboard/supabase/migrations/20260222_010_fix_agents_workspace_scoping.sql`.
 
-### Unknown mailbox handling
-If mailbox->workspace resolution fails, phase webhooks are ignored by default and an audit row is written.
+- `agents` is keyed per workspace (`workspace_id + agent_name`) with per-workspace email uniqueness (`workspace_id + email`).
+- hardening migration: `dashboard/supabase/migrations/20260222_010_fix_agents_workspace_scoping.sql`.
 
-Optional compatibility mode is still available:
+Unknown mailbox behavior:
 
-- env: `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK=true`
-- fallback workspace env: `BOOTSTRAP_WORKSPACE_ID` (default `00000000-0000-0000-0000-000000000001`)
+- if mailbox -> workspace resolution fails, ingress is ignored and audited.
+- fallback mode is optional and should stay disabled in production:
+  - `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK=true`
+  - `BOOTSTRAP_WORKSPACE_ID=...`
 
-Use compatibility mode only during transitional cutover.
+## 5. Gmail OAuth Model (Current)
 
-## 5. Phase Behavior (Current)
+- One mailbox row per workspace (`workspace_mailboxes` PK on `workspace_id`).
+- `status='connected'` requires encrypted refresh token (DB-enforced).
+- Tokens are encrypted with shared key `MAILBOX_TOKEN_ENCRYPTION_KEY`.
+- `gmail_workspace_auth.py` decrypts tokens, refreshes access tokens when needed, and persists refreshed values.
+- Global `token.json` + global `OWN_EMAIL` runtime dependency is removed from automation phases.
+- Sender filtering and outbound mailbox identity are resolved per workspace mailbox row.
+
+Enforcement migration:
+
+- `dashboard/supabase/migrations/20260223_011_workspace_mailbox_oauth_enforcement.sql`
+
+## 6. Phase Behavior (Current)
 
 ### Phase 1 (`phase_1_request_analysis.py`)
 
-- Resolves workspace from incoming Pub/Sub mailbox metadata.
-- Reads `agents` scoped by workspace.
-- Writes `master_rfqs` and `agent_outbound_log` with workspace context.
-- Avoids cross-workspace thread collisions by querying known threads per workspace.
-- Builds structured prompt input with `EMAIL_METADATA` + `email_received_at` + raw `EMAIL_BODY` for RFQ extraction.
-- Uses hardened extraction rules for door/port detection, date anchoring to email-received date, origin-option splitting (e.g. `NANSHA,YANTIAN`), and duplicate container-mention aggregation.
-- Uses deterministic LLM extraction settings for Phase 1 (`temperature=0`) and normalizes output through existing schema validators.
+- resolves workspace from Pub/Sub mailbox metadata
+- resolves Gmail credentials from workspace mailbox row
+- reads `agents` scoped by workspace
+- writes `master_rfqs` and `agent_outbound_log` with workspace context
+- preserves workspace-safe thread correlation and deterministic extraction behavior
 
 ### Phase 2 (`phase_2_quote_analysis.py`)
 
-- Resolves workspace from incoming Pub/Sub mailbox metadata.
-- Reads/writes quote and RFQ rows in workspace scope.
-- Loads canonical RFQ context (`master_rfqs`) before parsing each agent reply.
-- Trims quoted email history (`Original Message`, `On ... wrote`, `From:`, `Sent:`) and parses only current reply content.
-- Sends structured `RFQ_CONTEXT` (shipment_number/routes/container mix/service type + `email_received_at`) to the LLM prompt.
-- Uses conservative extraction rules:
-  - only explicit ocean-freight rates are accepted
-  - non-ocean extras (EXW/THC/DOC/CUS/ENS/NOC/inspection/TLX/CO/local handling) are excluded from `price`
-  - ambiguous multi-shipment replies are rejected as `Invalid_Quote`
-- Normalizes carrier/date fields and deduplicates identical quote options before persistence.
-- Builds unique quote `match` keys using a short hash over option fields to preserve same-carrier multi-option quotes.
-- Threshold checks run against workspace-scoped quote rows.
+- resolves workspace from Pub/Sub mailbox metadata
+- resolves Gmail credentials from workspace mailbox row
+- parses/normalizes quote replies with workspace-scoped RFQ context
+- writes quote outcomes with workspace scoping and deduplicated `match` identity
 
 ### Phase 3 (`phase_3_select_and_quote.py`)
 
-- Requires `workspace_id` in request payload.
-- Reads RFQ/quote/pricing tables only in that workspace.
-- Refuses selection if RFQ is not found in the provided workspace.
-- Supports exact quote selection via `selected_match`; falls back to legacy agent+carrier+shipment matching if missing.
+- requires `workspace_id` in request payload
+- resolves Gmail credentials from `workspace_id`
+- reads/writes RFQ and quote tables in that workspace only
 
 ### Scheduled Tasks (`scheduled_tasks.py`)
 
-- Reminder/follow-up updates include workspace scoping.
-- Prevents status updates leaking across workspace boundaries.
+- resolves Gmail credentials per workspace row before sending reminders/follow-ups
+- defaults notification targets to the connected workspace mailbox
 
-## 6. Gmail Watch Renewal
+## 7. Gmail Watch Renewal
 
-Both phase 1 and phase 2 include `renew_gmail_watch` that:
+Both phase 1 and phase 2 expose `renew_gmail_watch`:
 
-- loops connected mailbox rows from `workspace_mailboxes`
-- renews watches per mailbox
-- skips renewal if no connected mailbox rows exist
+- loops connected workspace mailbox rows
+- builds Gmail client from workspace OAuth credentials
+- renews Gmail watch per workspace mailbox
+- marks mailbox rows with error state/details when renewal fails
+- skips when no connected rows exist
 
-This supports one mailbox per workspace model.
+## 8. Environment Variables
 
-## 7. OAuth Credential Model
+Required:
 
-### Current state
-
-- Existing token-based Gmail access path remains available for compatibility.
-- Workspace mailbox mapping (`workspace_mailboxes`) is used for routing and watch targeting.
-
-### Hardening backlog
-
-- finalize per-workspace OAuth token lifecycle (connect/rotate/revoke) in dashboard UX
-- enforce encrypted token format shared by dashboard + automations
-- emit audit events for mailbox disconnect/error transitions
-
-## 8. Required Environment Variables
-
-### Common
 - `OPENAI_API_KEY`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `GOOGLE_PUBSUB_TOPIC`
-- `OWN_EMAIL`
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+- `MAILBOX_TOKEN_ENCRYPTION_KEY`
 
-### Optional / compatibility
+Optional:
+
 - `MODAL_LLM_API_KEY`
 - `BOOTSTRAP_WORKSPACE_ID`
 - `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK`
 
+Reference file:
+
+- `automations/.env.example`
+
 ## 9. Deployment
 
 ```bash
-modal deploy automations/phase_1_request_analysis.py
-modal deploy automations/phase_2_quote_analysis.py
-modal deploy automations/phase_3_select_and_quote.py
-modal deploy automations/scheduled_tasks.py
+python3 -m modal deploy automations/phase_1_request_analysis.py
+python3 -m modal deploy automations/phase_2_quote_analysis.py
+python3 -m modal deploy automations/phase_3_select_and_quote.py
+python3 -m modal deploy automations/scheduled_tasks.py
 ```
 
 ## 10. Current Live Endpoints
 
-- Phase 1 webhook:
-  - `https://hafisjavad--rfq-analyzer-phase-1-gmail-push-phase1.modal.run`
-- Phase 2 webhook:
-  - `https://hafisjavad--quote-analysis-phase-2-gmail-push-phase2.modal.run`
-- Phase 3 select endpoint:
-  - `https://hafisjavad--select-and-quote-phase-3-select-agent.modal.run`
+- phase 1 webhook: `https://hafisjavad--rfq-analyzer-phase-1-gmail-push-phase1.modal.run`
+- phase 2 webhook: `https://hafisjavad--quote-analysis-phase-2-gmail-push-phase2.modal.run`
+- phase 3 select endpoint: `https://hafisjavad--select-and-quote-phase-3-select-agent.modal.run`
 
 ## 11. Post-Deploy Operations
 
-- Renew phase 1 watch:
-  - `python3 -m modal run automations/phase_1_request_analysis.py::renew_gmail_watch`
-- Renew phase 2 watch:
-  - `python3 -m modal run automations/phase_2_quote_analysis.py::renew_gmail_watch`
+After each workspace mailbox is connected in dashboard settings:
+
+```bash
+python3 -m modal run automations/phase_1_request_analysis.py::renew_gmail_watch
+python3 -m modal run automations/phase_2_quote_analysis.py::renew_gmail_watch
+```
 
 ## 12. Verification
 
@@ -177,61 +170,3 @@ From repo root:
 PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m py_compile automations/*.py
 python3 -m pytest automations/tests -q
 ```
-
-Operational note:
-- keep `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK=false` in production.
-
-## 13. Prompt Evaluation Harness
-
-Synthetic prompt-eval assets are included for both intake and quote parsing:
-
-### Phase 1 RFQ intake eval
-
-- evaluator script: `automations/tests/eval_phase1_prompt_fixtures.py`
-- fixtures: `automations/tests/fixtures/phase1_prompt_eval_cases.txt`
-
-Run:
-
-```bash
-OPENAI_API_KEY=... python3 automations/tests/eval_phase1_prompt_fixtures.py
-```
-
-Reported metrics include:
-
-- schema-valid rate
-- shipment count accuracy
-- route accuracy (`pol`/`pod`/`pod_hint`)
-- container accuracy
-- service-type accuracy
-- date accuracy
-- routing-action accuracy
-- `complete_expected_but_missing_predicted`
-
-Current strict acceptance gates:
-
-- `schema_invalid_count == 0`
-- `route_accuracy >= 0.95`
-- `container_accuracy >= 0.95`
-- `service_type_accuracy >= 0.95`
-- `date_accuracy >= 0.95`
-- `action_accuracy >= 0.95`
-- `complete_expected_but_missing_predicted == 0`
-
-### Phase 2 quote eval
-
-- evaluator script: `automations/tests/eval_phase2_prompt_fixtures.py`
-- fixtures: `automations/tests/fixtures/phase2_prompt_eval_cases.txt`
-
-Run:
-
-```bash
-OPENAI_API_KEY=... python3 automations/tests/eval_phase2_prompt_fixtures.py
-```
-
-Reported metrics include:
-
-- quote presence precision/recall
-- exact price accuracy
-- shipment mapping accuracy
-- ETD/TT/free-time extraction accuracy
-- same-carrier multi-option preservation rate

@@ -105,7 +105,11 @@ def test_phase1_skips_already_claimed_message(monkeypatch):
     upsert_calls = []
     outreach_calls = []
 
-    monkeypatch.setattr(p1, "get_google_services", lambda: _FakeGmailService(message))
+    monkeypatch.setattr(
+        p1,
+        "get_gmail_service_for_workspace",
+        lambda _supabase, _workspace_id: (_FakeGmailService(message), "yunapink05@gmail.com"),
+    )
     monkeypatch.setattr(p1, "get_supabase_client", lambda: object())
     monkeypatch.setattr(p1, "extract_pubsub_mailbox", lambda _p: "yunapink05@gmail.com")
     monkeypatch.setattr(p1, "resolve_workspace_id", lambda _s, _m: "ws-1")
@@ -140,7 +144,11 @@ def test_phase2_skips_already_claimed_message(monkeypatch):
     )
     upsert_calls = []
 
-    monkeypatch.setattr(p2, "get_google_services", lambda: _FakeGmailService(message))
+    monkeypatch.setattr(
+        p2,
+        "get_gmail_service_for_workspace",
+        lambda _supabase, _workspace_id: (_FakeGmailService(message), "yunapink05@gmail.com"),
+    )
     monkeypatch.setattr(p2, "get_supabase_client", lambda: object())
     monkeypatch.setattr(p2, "extract_pubsub_mailbox", lambda _p: "yunapink05@gmail.com")
     monkeypatch.setattr(p2, "resolve_workspace_id", lambda _s, _m: "ws-1")
@@ -165,7 +173,11 @@ def test_phase2_uses_canonical_alias_for_rfq_id(monkeypatch):
     upsert_rows = []
     alias_lookups = []
 
-    monkeypatch.setattr(p2, "get_google_services", lambda: _FakeGmailService(message))
+    monkeypatch.setattr(
+        p2,
+        "get_gmail_service_for_workspace",
+        lambda _supabase, _workspace_id: (_FakeGmailService(message), "yunapink05@gmail.com"),
+    )
     monkeypatch.setattr(p2, "get_supabase_client", lambda: object())
     monkeypatch.setattr(p2, "extract_pubsub_mailbox", lambda _p: "yunapink05@gmail.com")
     monkeypatch.setattr(p2, "resolve_workspace_id", lambda _s, _m: "ws-1")
@@ -204,3 +216,36 @@ def test_phase2_uses_canonical_alias_for_rfq_id(monkeypatch):
     assert alias_lookups == [("ws-1", "RFQ-OLD")]
     assert upsert_rows
     assert all(row.get("rfq_id") == "RFQ-CANON" for row in upsert_rows)
+
+
+def test_phase2_skips_self_sender_using_workspace_mailbox(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    message = _build_email_message(
+        msg_id="msg-4",
+        thread_id="thread-4",
+        subject="Re: RFQ quote [Ref:RFQ-SELF]",
+        sender="Ops Team <ops@example.com>",
+        body="Internal note",
+    )
+    upsert_calls = []
+
+    monkeypatch.setattr(
+        p2,
+        "get_gmail_service_for_workspace",
+        lambda _supabase, _workspace_id: (_FakeGmailService(message), "ops@example.com"),
+    )
+    monkeypatch.setattr(p2, "get_supabase_client", lambda: object())
+    monkeypatch.setattr(p2, "extract_pubsub_mailbox", lambda _p: "ops@example.com")
+    monkeypatch.setattr(p2, "resolve_workspace_id", lambda _s, _m: "ws-1")
+    monkeypatch.setattr(
+        p2,
+        "claim_email_event",
+        lambda *a, **k: pytest.fail("claim_email_event should not run for self-sent messages"),
+        raising=False,
+    )
+    monkeypatch.setattr(p2.openai, "OpenAI", _DummyOpenAI)
+    monkeypatch.setattr(p2, "_upsert_row", lambda *a, **k: upsert_calls.append((a, k)))
+
+    p2._process_agent_quotes({"message": {"attributes": {"emailAddress": "ops@example.com"}}})
+
+    assert upsert_calls == []

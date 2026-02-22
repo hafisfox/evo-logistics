@@ -96,7 +96,14 @@ create table workspace_mailboxes (
   last_error text,
   watch_expiration timestamptz,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint workspace_mailboxes_connected_requires_refresh_token check (
+    status <> 'connected'
+    or (
+      gmail_refresh_token_encrypted is not null
+      and btrim(gmail_refresh_token_encrypted) <> ''
+    )
+  )
 );
 
 create table audit_events (
@@ -231,6 +238,7 @@ create table app_settings (
 create index idx_workspace_members_user_workspace on workspace_members(user_id, workspace_id);
 create index idx_master_rfqs_workspace_status on master_rfqs(workspace_id, status);
 create index idx_master_rfqs_workspace_deleted_received on master_rfqs(workspace_id, deleted_at, received_at desc);
+create index idx_workspace_mailboxes_status on workspace_mailboxes(status);
 create index idx_processed_email_events_workspace_thread on processed_email_events(workspace_id, thread_id);
 create index idx_rfq_id_aliases_workspace_canonical on rfq_id_aliases(workspace_id, canonical_rfq_id);
 create index idx_agent_outbound_log_workspace_rfq on agent_outbound_log(workspace_id, rfq_id);

@@ -3,8 +3,10 @@ import base64
 from datetime import datetime, timezone, timedelta
 
 import modal
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
+from gmail_workspace_auth import (
+    WorkspaceMailboxAuthError,
+    get_gmail_service_for_workspace,
+)
 from tenant_context import scoped_select, scoped_eq_filter, scoped_update_by_eq
 
 # =====================================================================
@@ -19,6 +21,7 @@ CHINA_TZ = timezone(timedelta(hours=8))
 app = modal.App("scheduled-tasks")
 
 image = modal.Image.debian_slim(python_version="3.11").pip_install(
+    "cryptography",
     "google-api-python-client",
     "google-auth-httplib2",
     "google-auth-oauthlib",
@@ -27,31 +30,13 @@ image = modal.Image.debian_slim(python_version="3.11").pip_install(
     os.path.join(os.path.dirname(__file__), "tenant_context.py"),
     "/root/tenant_context.py"
 ).add_local_file(
-    os.path.join(os.path.dirname(__file__), "token.json"),
-    "/root/token.json"
+    os.path.join(os.path.dirname(__file__), "gmail_workspace_auth.py"),
+    "/root/gmail_workspace_auth.py"
 )
-
-# =====================================================================
-# SECRETS
-# =====================================================================
-ADMIN_EMAIL = "hafisjavad9@gmail.com"
 
 # =====================================================================
 # GOOGLE APIS UTILITIES
 # =====================================================================
-def get_google_services():
-    """Initializes Google API clients securely via OAuth 2.0 token."""
-    if not os.path.exists("/root/token.json"):
-        raise Exception("Missing /root/token.json mount. Did you run authenticate_google.py?")
-
-    credentials = Credentials.from_authorized_user_file(
-        "/root/token.json",
-        scopes=["https://www.googleapis.com/auth/gmail.modify"]
-    )
-
-    gmail_service = build('gmail', 'v1', credentials=credentials)
-    return gmail_service
-
 def get_supabase_client():
     from supabase import create_client
     supabase_url = os.environ.get("SUPABASE_URL")
@@ -76,6 +61,27 @@ def _get_by_filter(supabase, table_name, column, value, workspace_id=None):
         return scoped_eq_filter(supabase, table_name, workspace_id, column, value)
     result = supabase.table(table_name).select("*").eq(column, value).execute()
     return result.data or []
+
+
+def _get_workspace_gmail_client(supabase, workspace_id, cache):
+    if not workspace_id:
+        return None, None
+    if workspace_id in cache:
+        cached = cache[workspace_id]
+        return cached if cached else (None, None)
+
+    try:
+        gmail_service, mailbox_email = get_gmail_service_for_workspace(
+            supabase, workspace_id
+        )
+        cache[workspace_id] = (gmail_service, mailbox_email)
+        return gmail_service, mailbox_email
+    except WorkspaceMailboxAuthError as exc:
+        print(
+            f"Skipping workspace {workspace_id} scheduled emails due to mailbox auth error: {exc}"
+        )
+        cache[workspace_id] = None
+        return None, None
 
 # =====================================================================
 # EMAIL SENDING HELPERS
@@ -148,19 +154,20 @@ def _get_reminder_target_time(sent_at_utc: datetime) -> datetime:
 )
 def check_agent_reminders():
     """Send agent reminders based on China business hours."""
-    gmail_service = get_google_services()
     supabase = get_supabase_client()
+    workspace_mailbox_cache = {}
     
     now_utc = datetime.now(timezone.utc)
     
     # Get all 'Processing' RFQ IDs
     all_rfqs = _get_table(supabase, "master_rfqs")
-    processing_rfq_ids = {
-        row['rfq_id'] for row in all_rfqs
-        if row.get('status') == 'Processing' and row.get('rfq_id')
+    processing_rfq_keys = {
+        (row.get('workspace_id'), row.get('rfq_id'))
+        for row in all_rfqs
+        if row.get('status') == 'Processing' and row.get('rfq_id') and row.get('workspace_id')
     }
                 
-    if not processing_rfq_ids:
+    if not processing_rfq_keys:
         print("No active RFQs to process for reminders.")
         return
         
@@ -176,7 +183,8 @@ def check_agent_reminders():
         agent_email = row.get('agent_email', '')
         agent_name = row.get('agent_name', 'Agent')
         
-        if rfq_id not in processing_rfq_ids or status != "Requested" or not sent_at_str or not agent_email:
+        rfq_key = (workspace_id, rfq_id)
+        if rfq_key not in processing_rfq_keys or status != "Requested" or not sent_at_str or not agent_email:
             continue
             
         try:
@@ -188,6 +196,12 @@ def check_agent_reminders():
             target_time_utc = _get_reminder_target_time(sent_at_utc).astimezone(timezone.utc)
             
             if now_utc >= target_time_utc:
+                workspace_gmail_service, workspace_mailbox_email = _get_workspace_gmail_client(
+                    supabase, workspace_id, workspace_mailbox_cache
+                )
+                if not workspace_gmail_service:
+                    continue
+
                 subject = f"REMINDER: Quote Request [Ref:{rfq_id}]"
                 body = (
                     f"Dear {agent_name},\n\n"
@@ -196,7 +210,7 @@ def check_agent_reminders():
                     f"would appreciate receiving your quotation as soon as possible.\n\n"
                     f"Regards,\nPricing Team"
                 )
-                send_email(gmail_service, agent_email, subject, body)
+                send_email(workspace_gmail_service, agent_email, subject, body)
                 
                 match_key = f"{rfq_id}_{agent_email}"
                 if workspace_id:
@@ -208,7 +222,10 @@ def check_agent_reminders():
                         "match",
                         match_key,
                     )
-                print(f"Sent reminder for RFQ {rfq_id} to {agent_email}")
+                print(
+                    f"Sent reminder for RFQ {rfq_id} to {agent_email} "
+                    f"from {workspace_mailbox_email}"
+                )
                 reminders_sent += 1
                 
         except Exception as e:
@@ -226,8 +243,8 @@ def check_agent_reminders():
 )
 def check_customer_followups():
     """Send follow-ups to customers 24 hours after quotation if no response."""
-    gmail_service = get_google_services()
     supabase = get_supabase_client()
+    workspace_mailbox_cache = {}
     
     now_uae = datetime.now(UAE_TZ)
     
@@ -249,6 +266,12 @@ def check_customer_followups():
             quoted_at_uae = quoted_at_naive.replace(tzinfo=UAE_TZ)
             
             if now_uae >= quoted_at_uae + timedelta(hours=24):
+                workspace_gmail_service, workspace_mailbox_email = _get_workspace_gmail_client(
+                    supabase, workspace_id, workspace_mailbox_cache
+                )
+                if not workspace_gmail_service:
+                    continue
+
                 rfq_id = row.get('rfq_id', '')
                 customer_email = row.get('customer_email', '')
                 thread_id = row.get('thread_id', '')
@@ -260,7 +283,13 @@ def check_customer_followups():
                     f"Please feel free to reach out if you have any questions or if you want to proceed with the booking.\n\n"
                     f"Best regards,\nPricing Team"
                 )
-                send_reply_email(gmail_service, customer_email, thread_id, subject, body)
+                send_reply_email(
+                    workspace_gmail_service,
+                    customer_email,
+                    thread_id,
+                    subject,
+                    body,
+                )
                 
                 if workspace_id:
                     scoped_update_by_eq(
@@ -271,7 +300,10 @@ def check_customer_followups():
                         "rfq_id",
                         rfq_id,
                     )
-                print(f"Sent 24-hour follow-up for RFQ {rfq_id} to {customer_email}")
+                print(
+                    f"Sent 24-hour follow-up for RFQ {rfq_id} to {customer_email} "
+                    f"from {workspace_mailbox_email}"
+                )
                 followups_sent += 1
         except Exception as e:
             rfq_id = row.get('rfq_id', 'Unknown')

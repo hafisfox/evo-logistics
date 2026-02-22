@@ -8,8 +8,10 @@ UAE_TZ = timezone(timedelta(hours=4))
 
 import modal
 from pydantic import BaseModel
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
+from gmail_workspace_auth import (
+    WorkspaceMailboxAuthError,
+    get_gmail_service_for_workspace,
+)
 from tenant_context import scoped_select, scoped_eq_filter
 
 # =====================================================================
@@ -18,6 +20,7 @@ from tenant_context import scoped_select, scoped_eq_filter
 app = modal.App("select-and-quote-phase-3")
 
 image = modal.Image.debian_slim(python_version="3.11").pip_install(
+    "cryptography",
     "google-api-python-client",
     "google-auth-httplib2",
     "google-auth-oauthlib",
@@ -28,8 +31,8 @@ image = modal.Image.debian_slim(python_version="3.11").pip_install(
     os.path.join(os.path.dirname(__file__), "tenant_context.py"),
     "/root/tenant_context.py"
 ).add_local_file(
-    os.path.join(os.path.dirname(__file__), "token.json"),
-    "/root/token.json"
+    os.path.join(os.path.dirname(__file__), "gmail_workspace_auth.py"),
+    "/root/gmail_workspace_auth.py"
 )
 
 # =====================================================================
@@ -57,19 +60,6 @@ class SelectAgentResponse(BaseModel):
 # =====================================================================
 # GOOGLE APIS UTILITIES
 # =====================================================================
-def get_google_services():
-    """Initializes Google API clients securely via OAuth 2.0 token."""
-    if not os.path.exists("/root/token.json"):
-        raise Exception("Missing /root/token.json mount. Did you run authenticate_google.py?")
-
-    credentials = Credentials.from_authorized_user_file(
-        "/root/token.json",
-        scopes=["https://www.googleapis.com/auth/gmail.modify"]
-    )
-
-    gmail_service = build('gmail', 'v1', credentials=credentials)
-    return gmail_service
-
 def get_supabase_client():
     from supabase import create_client
     supabase_url = os.environ.get("SUPABASE_URL")
@@ -500,9 +490,20 @@ def _send_quotation_email(gmail_service, customer_email, thread_id, rfq_id, rfq_
     print(f"Quotation email sent to {customer_email} on thread {thread_id}")
 
 
-def _notify_sales(gmail_service, rfq_id, rfq_data, pricing, customer_email, carrier, agent_name):
-    """Send enriched notification email to sales team after quotation."""
-    sales_email = "hafisjavad9@gmail.com"
+def _notify_sales(
+    gmail_service,
+    notification_email,
+    rfq_id,
+    rfq_data,
+    pricing,
+    customer_email,
+    carrier,
+    agent_name,
+):
+    """Send enriched notification email to workspace mailbox after quotation."""
+    if not notification_email:
+        print(f"No workspace notification mailbox configured for {rfq_id}")
+        return
     total_aed = pricing["grand_total_aed"]
     total_usd = pricing["grand_total_usd"]
 
@@ -551,7 +552,7 @@ def _notify_sales(gmail_service, rfq_id, rfq_data, pricing, customer_email, carr
     </div>"""
 
     message = (
-        f"To: {sales_email}\n"
+        f"To: {notification_email}\n"
         f"Subject: {subject}\n"
         f"Content-Type: text/html; charset=utf-8\n\n{body_html}"
     )
@@ -582,9 +583,16 @@ def select_agent(request: SelectAgentRequest) -> dict:
 # CORE PROCESSING LOGIC
 # =====================================================================
 def _process_agent_selection(request: SelectAgentRequest) -> dict:
-    gmail_service = get_google_services()
     supabase = get_supabase_client()
     workspace_id = request.workspace_id
+    try:
+        gmail_service, workspace_mailbox_email = get_gmail_service_for_workspace(
+            supabase, workspace_id
+        )
+    except WorkspaceMailboxAuthError as exc:
+        raise Exception(
+            f"Workspace mailbox authentication failed for {workspace_id}: {exc}"
+        ) from exc
 
     # 1. Fetch the RFQ from Supabase
     rfq_rows = _get_by_filter(supabase, "master_rfqs", "rfq_id", request.rfq_id, workspace_id)
@@ -648,9 +656,16 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
         print(f"Warning: Missing thread_id or customer_email, skipping quotation email")
 
     # 8. Notify sales team
-    _notify_sales(gmail_service, request.rfq_id, rfq_data, pricing,
-                  customer_email or "N/A", request.selected_carrier,
-                  request.selected_agent)
+    _notify_sales(
+        gmail_service,
+        workspace_mailbox_email,
+        request.rfq_id,
+        rfq_data,
+        pricing,
+        customer_email or "N/A",
+        request.selected_carrier,
+        request.selected_agent,
+    )
 
     return {
         "success": True,

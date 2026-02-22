@@ -1,6 +1,6 @@
 # ACTION_PLAN.md — Workspace-Centric Logistics SaaS
 
-Updated: 2026-02-22
+Updated: 2026-02-23
 
 ## Objective
 Ship a workspace-based logistics dashboard + automation system where each authenticated user only sees and mutates data for workspaces they belong to, while still supporting team collaboration with roles.
@@ -71,7 +71,7 @@ Legacy tenant-hardening patch is in `dashboard/supabase/migrations/20260222_010_
   - profile updates, MFA flag toggle, global session revoke, soft-delete request.
 - Workspace settings:
   - `dashboard/src/app/settings/workspace/page.tsx`
-  - pricing constants and workspace mailbox configuration UI.
+  - pricing constants + workspace mailbox OAuth connect/reconnect/disconnect UI.
 - Members/invites UI:
   - `dashboard/src/app/settings/members/page.tsx`
 - Header workspace switcher + user menu + sign out:
@@ -88,11 +88,19 @@ Implemented routes:
 - `GET/POST /api/workspaces`
 - `GET/POST /api/workspaces/current`
 - `GET/POST /api/workspaces/current/mailbox`
+- `GET /api/workspaces/current/mailbox/oauth/start`
+- `GET /api/workspaces/current/mailbox/oauth/callback`
+- `POST /api/workspaces/current/mailbox/disconnect`
 - `GET/PATCH /api/workspaces/[workspaceId]/members`
 - `GET/POST /api/workspaces/[workspaceId]/invites`
 - `POST /api/workspaces/invites/accept`
 
 All operational API routes are now workspace-scoped and role-gated through context helpers.
+
+Mailbox hardening:
+
+- manual mailbox writes cannot set `status='connected'`.
+- connected state is established only through OAuth callback token exchange.
 
 ### 5. Modal selection payload hardening
 
@@ -142,27 +150,22 @@ The system currently runs in a phased dual-mode:
 
 ## Known Hardening Follow-Ups
 
-1. Per-workspace Gmail OAuth credential lifecycle is not fully closed-loop in dashboard UX yet.
-2. Audit events are schema-ready but not yet emitted comprehensively in all mutation paths.
-3. Keep `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK` disabled in production except controlled emergency rollback windows.
-4. Add comprehensive automation pytest suite under `automations/tests` for cross-workspace regression coverage.
-5. Expand prompt-eval benchmark from synthetic fixtures to production paired RFQ/reply datasets and track drift over time.
+1. Expand audit event coverage for mailbox disconnect/error transitions and OAuth failures.
+2. Keep `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK` disabled in production except controlled rollback windows.
+3. Expand prompt-eval benchmark from synthetic fixtures to production paired RFQ/reply datasets and track drift over time.
 
 ## Verification Gate (latest run)
 
 Executed from this workspace branch:
 
-- `cd dashboard && npm run lint` ✅
+- `cd dashboard && npm run lint` ⚠️ pre-existing lint issue in `dashboard/scripts/prod_authenticated_smoke.js` (CommonJS `require()` in TS-eslint context)
 - `cd dashboard && npm run typecheck` ✅
 - `cd dashboard && npm run test` ✅
-- `cd dashboard && npm run test:e2e` ✅
 - `cd dashboard && npm run build` ✅ (webpack mode)
 - `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m py_compile automations/*.py` ✅
 - `python3 -m pytest automations/tests -q` ✅
-- `OPENAI_API_KEY=... python3 automations/tests/eval_phase1_prompt_fixtures.py` ✅
-  - strict gates passed (schema, route, container, service, date, action, complete-routing)
 
-## Production Validation (2026-02-22)
+## Production Validation (2026-02-23)
 
 - Dashboard deployed and aliased to:
   - `https://evo-logistics.vercel.app`
@@ -172,22 +175,27 @@ Executed from this workspace branch:
   - phase 1: `https://hafisjavad--rfq-analyzer-phase-1-gmail-push-phase1.modal.run`
   - phase 2: `https://hafisjavad--quote-analysis-phase-2-gmail-push-phase2.modal.run`
   - phase 3: `https://hafisjavad--select-and-quote-phase-3-select-agent.modal.run`
-- Gmail watch renewed successfully for active mailbox.
-- Gmail watch renewed successfully for both active workspace mailboxes.
-- Automated production smoke passed:
-  - login/signup reachable
-  - auth confirm session bootstrap works
-  - workspace create + switch works
-  - mailbox set/get works
-  - logout and post-logout `401` behavior works
+- scheduled app deployed: `https://modal.com/apps/hafisjavad/main/deployed/scheduled-tasks`
+- mailbox OAuth enforcement migration applied:
+  - `workspace_mailboxes_connected_requires_refresh_token` check blocks token-less `connected` updates
+- manual renew operations currently skip because no workspace mailboxes are connected yet:
+  - `python3 -m modal run automations/phase_1_request_analysis.py::renew_gmail_watch`
+  - `python3 -m modal run automations/phase_2_quote_analysis.py::renew_gmail_watch`
 
 ## Source of Truth Files
 
 - `dashboard/supabase/migrations/20260222_001_multitenant_workspaces.sql`
 - `dashboard/supabase/migrations/20260222_010_fix_agents_workspace_scoping.sql`
+- `dashboard/supabase/migrations/20260223_011_workspace_mailbox_oauth_enforcement.sql`
 - `dashboard/supabase_schema.sql`
 - `dashboard/src/lib/workspace-context.ts`
 - `dashboard/src/lib/workspaces.ts`
 - `dashboard/src/app/api/workspaces/current/mailbox/route.ts`
+- `dashboard/src/app/api/workspaces/current/mailbox/oauth/start/route.ts`
+- `dashboard/src/app/api/workspaces/current/mailbox/oauth/callback/route.ts`
+- `dashboard/src/app/api/workspaces/current/mailbox/disconnect/route.ts`
+- `dashboard/src/lib/mailbox-crypto.ts`
+- `dashboard/src/lib/google-gmail-oauth.ts`
+- `automations/gmail_workspace_auth.py`
 - `dashboard/src/hooks/use-workspace-mailbox.ts`
 - `automations/tenant_context.py`

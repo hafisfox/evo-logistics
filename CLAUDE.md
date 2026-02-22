@@ -11,7 +11,7 @@
 - **Workflow changes** — after modifying python code in `automations/`, reflect logical changes in ACTION_PLAN.md
 - **New phases** — add new python scripts to the `automations/` directory
 - **New skills** — when adding a skill, register it in `SKILLS.md` and place it in `.agents/skills/` (mirror to `.claude/skills/` for parity in this repo)
-- **Credentials** — never store secrets in any markdown file; reference the `.env` file and `token.json` only
+- **Credentials** — never store secrets in any markdown file; reference `.env` files and secret managers only
 
 ## On-Demand Skill Loading
 
@@ -20,4 +20,3 @@ To keep the context window clean and avoid token bloat, **skills must be loaded 
 2. **Fetch**: Use your file reading tools (like `list_dir` and `view_file`) to inspect the relevant skill folder in `.agents/skills/` or `.claude/skills/`.
 3. **Read**: View the specific `.md` or `.mdc` files that apply to your exact task (e.g., `react.mdc` when writing React components).
 4. **Apply**: Follow the best practices outlined in the skill document. Do not guess or assume the rules—read the file and apply them.
-

@@ -12,8 +12,10 @@ UAE_TZ = timezone(timedelta(hours=4))
 import modal
 from pydantic import BaseModel, Field, field_validator
 import openai
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
+from gmail_workspace_auth import (
+    WorkspaceMailboxAuthError,
+    get_gmail_service_for_workspace,
+)
 from tenant_context import (
     audit_ignored_mailbox_event,
     claim_email_event,
@@ -31,6 +33,7 @@ from tenant_context import (
 app = modal.App("quote-analysis-phase-2")
 
 image = modal.Image.debian_slim(python_version="3.11").pip_install(
+    "cryptography",
     "google-api-python-client",
     "google-auth-httplib2",
     "google-auth-oauthlib",
@@ -42,12 +45,9 @@ image = modal.Image.debian_slim(python_version="3.11").pip_install(
     os.path.join(os.path.dirname(__file__), "tenant_context.py"),
     "/root/tenant_context.py"
 ).add_local_file(
-    os.path.join(os.path.dirname(__file__), "token.json"),
-    "/root/token.json"
+    os.path.join(os.path.dirname(__file__), "gmail_workspace_auth.py"),
+    "/root/gmail_workspace_auth.py"
 )
-
-ADMIN_EMAIL = "hafisjavad9@gmail.com"
-OWN_EMAIL = os.environ.get("OWN_EMAIL", "yunapink05@gmail.com")
 QUOTE_THRESHOLD = 2  # Minimum valid quotes before notifying manager
 
 # =====================================================================
@@ -407,16 +407,6 @@ def build_quote_match_key(rfq_id: str, agent_email: str, quote: QuoteData) -> st
 # =====================================================================
 # GOOGLE APIS
 # =====================================================================
-def get_google_services():
-    if not os.path.exists("/root/token.json"):
-        raise Exception("Missing /root/token.json mount. Did you run authenticate_google.py?")
-    credentials = Credentials.from_authorized_user_file(
-        "/root/token.json",
-        scopes=["https://www.googleapis.com/auth/gmail.modify"]
-    )
-    gmail_service = build('gmail', 'v1', credentials=credentials)
-    return gmail_service
-
 def get_supabase_client():
     from supabase import create_client
     supabase_url = os.environ.get("SUPABASE_URL")
@@ -750,8 +740,8 @@ def build_quote_summary(rfq, all_quote_rows: list) -> dict:
 # =====================================================================
 # MANAGER NOTIFICATION EMAIL
 # =====================================================================
-def send_manager_notification(gmail_service, summary: dict):
-    """Send enriched quote summary email to manager."""
+def send_manager_notification(gmail_service, to_address: str, summary: dict):
+    """Send enriched quote summary email to workspace mailbox."""
     rfq_ref = summary['rfq_ref']
     quote_count = summary['quote_count']
     best_price = summary['best_price']
@@ -815,7 +805,10 @@ def send_manager_notification(gmail_service, summary: dict):
 </div>
 """
     subject = f"RFQ {rfq_ref} - {quote_count} Quotes Received - Best: USD {best_price}"
-    send_email(gmail_service, ADMIN_EMAIL, subject, body_html, content_type="text/html")
+    if not to_address:
+        print(f"No workspace notification mailbox configured for {rfq_ref}")
+        return
+    send_email(gmail_service, to_address, subject, body_html, content_type="text/html")
 
 # =====================================================================
 # EXTRACT REF ID FROM EMAIL SUBJECT
@@ -866,7 +859,6 @@ def gmail_push_phase2(_data: dict):
 )
 def renew_gmail_watch():
     """Renews the Gmail push notification watch on INBOX."""
-    gmail_service = get_google_services()
     supabase = get_supabase_client()
     topic = os.environ["GOOGLE_PUBSUB_TOPIC"]
     mailboxes = (
@@ -882,45 +874,67 @@ def renew_gmail_watch():
         return
 
     for mailbox in mailboxes:
-        result = gmail_service.users().watch(userId='me', body={
-            'topicName': topic,
-            'labelIds': ['INBOX']
-        }).execute()
-        expiration_ms = result.get("expiration")
-        expiration_iso = None
-        if expiration_ms:
-            try:
-                expiration_iso = datetime.fromtimestamp(
-                    int(expiration_ms) / 1000,
-                    tz=timezone.utc
-                ).isoformat()
-            except Exception:
-                expiration_iso = None
-
         workspace_id = mailbox.get("workspace_id")
-        if workspace_id and workspace_id != "bootstrap":
-            try:
-                supabase.table("workspace_mailboxes").update({
-                    "status": "connected",
-                    "watch_expiration": expiration_iso,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                    "last_error": None,
-                }).eq("workspace_id", workspace_id).execute()
-            except Exception as exc:
-                print(
-                    f"Failed to persist watch expiration for workspace {workspace_id}: {exc}"
-                )
-        print(
-            "Gmail watch renewed for workspace "
-            f"{mailbox.get('workspace_id')} ({mailbox.get('email')}): "
-            f"History ID={result.get('historyId')} Expiry={result.get('expiration')}"
-        )
+        if not workspace_id:
+            continue
+
+        try:
+            gmail_service, mailbox_email = get_gmail_service_for_workspace(
+                supabase, workspace_id
+            )
+            result = gmail_service.users().watch(
+                userId='me',
+                body={
+                    'topicName': topic,
+                    'labelIds': ['INBOX'],
+                },
+            ).execute()
+            expiration_ms = result.get("expiration")
+            expiration_iso = None
+            if expiration_ms:
+                try:
+                    expiration_iso = datetime.fromtimestamp(
+                        int(expiration_ms) / 1000,
+                        tz=timezone.utc
+                    ).isoformat()
+                except Exception:
+                    expiration_iso = None
+
+            supabase.table("workspace_mailboxes").update({
+                "status": "connected",
+                "watch_expiration": expiration_iso,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "last_error": None,
+            }).eq("workspace_id", workspace_id).execute()
+
+            print(
+                "Gmail watch renewed for workspace "
+                f"{workspace_id} ({mailbox_email}): "
+                f"History ID={result.get('historyId')} Expiry={result.get('expiration')}"
+            )
+        except WorkspaceMailboxAuthError as exc:
+            supabase.table("workspace_mailboxes").update({
+                "status": "error",
+                "last_error": str(exc),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("workspace_id", workspace_id).execute()
+            print(
+                f"Failed to renew Gmail watch for workspace {workspace_id}: {exc}"
+            )
+        except Exception as exc:
+            supabase.table("workspace_mailboxes").update({
+                "status": "error",
+                "last_error": str(exc),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("workspace_id", workspace_id).execute()
+            print(
+                f"Unexpected failure during watch renewal for workspace {workspace_id}: {exc}"
+            )
 
 # =====================================================================
 # CORE QUOTE PROCESSING LOGIC
 # =====================================================================
 def _process_agent_quotes(pubsub_payload=None):
-    gmail_service = get_google_services()
     supabase = get_supabase_client()
     mailbox_email = extract_pubsub_mailbox(pubsub_payload)
     workspace_id = resolve_workspace_id(supabase, mailbox_email)
@@ -937,9 +951,26 @@ def _process_agent_quotes(pubsub_payload=None):
         )
         return
 
+    try:
+        gmail_service, own_mailbox_email = get_gmail_service_for_workspace(
+            supabase, workspace_id
+        )
+    except WorkspaceMailboxAuthError as exc:
+        audit_ignored_mailbox_event(
+            supabase,
+            source="phase_2_quote_analysis",
+            mailbox_email=mailbox_email,
+            reason="mailbox_auth_failed",
+        )
+        print(f"Skipping Phase 2 processing due to mailbox auth error: {exc}")
+        return
+
     # BUG-4 Fix: Only fetch agent rate replies to prevent race condition with Phase 1
+    gmail_query = 'is:unread subject:"Ref: RFQ-"'
+    if own_mailbox_email:
+        gmail_query = f"{gmail_query} -from:{own_mailbox_email}"
     results = _gmail_call_with_backoff(
-        gmail_service.users().messages().list(userId='me', q='is:unread subject:"Ref: RFQ-"')
+        gmail_service.users().messages().list(userId='me', q=gmail_query)
     )
     messages = results.get('messages', [])
 
@@ -963,7 +994,7 @@ def _process_agent_quotes(pubsub_payload=None):
         received_at = headers_dict.get('date', '')
 
         # Self-sender guard: skip emails from our own address
-        if OWN_EMAIL in sender.lower():
+        if own_mailbox_email and own_mailbox_email in sender.lower():
             print(f"Skipping self-sent email: {subject}")
             _gmail_call_with_backoff(
                 gmail_service.users().messages().modify(
@@ -1130,6 +1161,7 @@ def _process_agent_quotes(pubsub_payload=None):
                 supabase,
                 canonical_ref_id,
                 workspace_id,
+                own_mailbox_email,
             )
 
         except Exception as e:
@@ -1151,7 +1183,13 @@ def _process_agent_quotes(pubsub_payload=None):
                 pass
 
 
-def _check_threshold_and_notify(gmail_service, supabase, ref_id: str, workspace_id: str):
+def _check_threshold_and_notify(
+    gmail_service,
+    supabase,
+    ref_id: str,
+    workspace_id: str,
+    notification_email: str,
+):
     """Check if enough valid quotes received and notify manager."""
     # Get the master RFQ
     master_rows = _get_rows_by_filter(supabase, "master_rfqs", "rfq_id", ref_id, workspace_id)
@@ -1172,7 +1210,7 @@ def _check_threshold_and_notify(gmail_service, supabase, ref_id: str, workspace_
 
         # Send manager notification
         try:
-            send_manager_notification(gmail_service, summary)
+            send_manager_notification(gmail_service, notification_email, summary)
             print(f"Manager notification sent for {ref_id}")
         except Exception as e:
             print(f"Failed to send manager notification: {e}")

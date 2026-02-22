@@ -1,6 +1,6 @@
 # DASHBOARD.md — Evo Logistics Dashboard (Workspace Multi-Tenant)
 
-Updated: 2026-02-22
+Updated: 2026-02-23
 
 ## 1. Architecture
 
@@ -52,12 +52,12 @@ File: `dashboard/src/lib/supabase/middleware.ts`
 
 ### Settings and account
 - `/settings` -> redirects to `/settings/workspace`
-- `/settings/workspace` (workspace-level pricing/settings + mailbox configuration)
+- `/settings/workspace` (workspace-level pricing/settings + mailbox OAuth connection)
 - `/settings/account` (profile, session revoke, MFA flag, soft delete request)
 - `/settings/members` (members + invites)
 
 ### Onboarding
-- `/onboarding` with setup checklist for workspace/mailbox/config prep
+- `/onboarding` with setup checklist for workspace/mailbox OAuth/config prep
 
 ## 4. Workspace UX Model
 
@@ -88,6 +88,9 @@ Context resolver: `dashboard/src/lib/workspace-context.ts`
 - `POST /api/workspaces/current`
 - `GET /api/workspaces/current/mailbox`
 - `POST /api/workspaces/current/mailbox`
+- `GET /api/workspaces/current/mailbox/oauth/start`
+- `GET /api/workspaces/current/mailbox/oauth/callback`
+- `POST /api/workspaces/current/mailbox/disconnect`
 - `GET /api/workspaces/[workspaceId]/members`
 - `PATCH /api/workspaces/[workspaceId]/members`
 - `GET /api/workspaces/[workspaceId]/invites`
@@ -105,6 +108,11 @@ Context resolver: `dashboard/src/lib/workspace-context.ts`
 - `/api/analytics`
 
 All routes now require workspace context and filter by `workspace_id`.
+
+Mailbox endpoint behavior:
+
+- `POST /api/workspaces/current/mailbox` cannot set `status="connected"` manually.
+- connected state is established only by OAuth callback token exchange.
 
 ## 6. Role Enforcement
 
@@ -144,6 +152,7 @@ Migration: `dashboard/supabase/migrations/20260222_001_multitenant_workspaces.sq
 
 Legacy-constraint hardening:
 - `dashboard/supabase/migrations/20260222_010_fix_agents_workspace_scoping.sql`
+- `dashboard/supabase/migrations/20260223_011_workspace_mailbox_oauth_enforcement.sql`
 - Drops old global agent constraints and enforces:
   - `primary key (workspace_id, agent_name)`
   - `unique (workspace_id, email)`
@@ -183,10 +192,15 @@ Required for dashboard runtime:
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `NEXT_PUBLIC_SITE_URL`
 - `MODAL_WEBHOOK_SELECT_AGENT`
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+- `MAILBOX_TOKEN_ENCRYPTION_KEY`
 
 Optional hardening:
 - `MODAL_WEBHOOK_SECRET`
 - `MODAL_WEBHOOK_TIMEOUT_MS`
+- `GOOGLE_OAUTH_REDIRECT_URI`
+- `MAILBOX_OAUTH_STATE_SECRET`
 
 ## 10. Quality Gates
 

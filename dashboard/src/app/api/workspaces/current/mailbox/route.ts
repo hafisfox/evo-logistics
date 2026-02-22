@@ -3,11 +3,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireWorkspaceApiContext } from "@/lib/workspace-context";
 
-type MailboxStatus = "connected" | "disconnected";
-
 interface MailboxPayload {
   email: string;
-  status?: MailboxStatus;
+  status?: "connected" | "disconnected";
 }
 
 function sanitizeEmail(value: string) {
@@ -26,7 +24,7 @@ function parseMailboxPayload(body: unknown): { data?: MailboxPayload; error?: st
   const email =
     "email" in body && typeof body.email === "string" ? sanitizeEmail(body.email) : "";
   const status =
-    "status" in body && typeof body.status === "string" ? body.status : "connected";
+    "status" in body && typeof body.status === "string" ? body.status : "disconnected";
 
   if (!email || !isValidEmail(email)) {
     return { error: "Invalid mailbox payload" };
@@ -51,7 +49,7 @@ export async function GET() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("workspace_mailboxes")
-    .select("email, status, watch_expiration, last_error, updated_at")
+    .select("email, status, token_expires_at, watch_expiration, last_error, updated_at")
     .eq("workspace_id", scope.context.workspaceId)
     .maybeSingle();
 
@@ -83,6 +81,12 @@ export async function POST(request: Request) {
   if (!parsed.data) {
     return NextResponse.json({ error: parsed.error || "Invalid mailbox payload" }, { status: 400 });
   }
+  if (parsed.data.status === "connected") {
+    return NextResponse.json(
+      { error: "Connected mailbox status must be established through OAuth flow" },
+      { status: 400 }
+    );
+  }
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -92,12 +96,16 @@ export async function POST(request: Request) {
         workspace_id: scope.context.workspaceId,
         email: parsed.data.email,
         status: parsed.data.status,
-        last_error: parsed.data.status === "connected" ? null : undefined,
+        gmail_refresh_token_encrypted: null,
+        gmail_access_token_encrypted: null,
+        token_expires_at: null,
+        watch_expiration: null,
+        last_error: null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "workspace_id" }
     )
-    .select("email, status, watch_expiration, last_error, updated_at")
+    .select("email, status, token_expires_at, watch_expiration, last_error, updated_at")
     .single();
 
   if (error) {

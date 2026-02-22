@@ -84,7 +84,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
           </p>
           <ol className="list-decimal space-y-2 pl-5 text-sm">
             <li>Create or join a workspace.</li>
-            <li>Connect a workspace mailbox for automations.</li>
+            <li>Connect a workspace mailbox via Google OAuth in Workspace Settings.</li>
             <li>Verify workspace settings, pricing tables, and agents.</li>
           </ol>
           <div className="rounded border bg-background p-3 text-sm">
