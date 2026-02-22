@@ -11,6 +11,7 @@ export type ValidationResult<T> =
 
 export interface SelectAgentBody {
   selected_agent: string;
+  selected_match: string;
   selected_carrier: string;
   shipment_number?: string;
   selected_by?: string;
@@ -224,6 +225,10 @@ export function validateSelectAgentBody(body: unknown): ValidationResult<SelectA
     details.push("selected_agent is required.");
   }
 
+  if (!isNonEmptyString(body.selected_match)) {
+    details.push("selected_match is required.");
+  }
+
   if (!isNonEmptyString(body.selected_carrier)) {
     details.push("selected_carrier is required.");
   }
@@ -248,6 +253,7 @@ export function validateSelectAgentBody(body: unknown): ValidationResult<SelectA
     success: true,
     data: {
       selected_agent: String(body.selected_agent).trim(),
+      selected_match: String(body.selected_match).trim(),
       selected_carrier: String(body.selected_carrier).trim(),
       shipment_number: isNonEmptyString(body.shipment_number)
         ? body.shipment_number.trim()

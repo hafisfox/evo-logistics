@@ -64,6 +64,7 @@ export interface RFQDetail extends MasterRFQ {
 export interface SelectAgentPayload {
   rfq_id: string;
   selected_agent: string;
+  selected_match: string;
   selected_carrier: string;
   shipment_number: string;
   selected_by: string;

@@ -35,7 +35,10 @@ describe("/api/rfqs/[rfqId]/select route", () => {
     const request = new Request("http://localhost/api/rfqs/RFQ-1/select", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ selected_carrier: "COSCO" }),
+      body: JSON.stringify({
+        selected_agent: "Alpha Logistics",
+        selected_carrier: "COSCO",
+      }),
     });
 
     const response = await POST(request, {
@@ -58,6 +61,7 @@ describe("/api/rfqs/[rfqId]/select route", () => {
       body: JSON.stringify({
         selected_agent: "Alpha Logistics",
         selected_carrier: "COSCO",
+        selected_match: "RFQ-1_agent@example.com_1_COSCO_ab12cd34",
       }),
     });
 
@@ -72,6 +76,7 @@ describe("/api/rfqs/[rfqId]/select route", () => {
       selected_by_user_id: "user-1",
       selected_agent: "Alpha Logistics",
       selected_carrier: "COSCO",
+      selected_match: "RFQ-1_agent@example.com_1_COSCO_ab12cd34",
       shipment_number: "1",
       selected_by: "user-1",
       margin: 0.15,
@@ -92,6 +97,7 @@ describe("/api/rfqs/[rfqId]/select route", () => {
       body: JSON.stringify({
         selected_agent: "Alpha Logistics",
         selected_carrier: "COSCO",
+        selected_match: "RFQ-1_agent@example.com_1_COSCO_ab12cd34",
       }),
     });
 

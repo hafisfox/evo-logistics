@@ -40,6 +40,7 @@ class SelectAgentRequest(BaseModel):
     workspace_id: str
     selected_by_user_id: str = "dashboard"
     selected_agent: str
+    selected_match: str = ""
     selected_carrier: str
     shipment_number: str = "1"
     selected_by: str = "dashboard"
@@ -660,7 +661,19 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
 
 
 def _find_selected_quote(all_quotes: list, request: SelectAgentRequest) -> dict:
-    """Find the single selected quote matching agent/carrier/shipment."""
+    """Find the single selected quote.
+
+    Prefers exact match-key lookup. Falls back to legacy agent/carrier/shipment
+    lookup for backward compatibility.
+    """
+    selected_match = (request.selected_match or "").strip()
+    if selected_match:
+        for q in all_quotes:
+            if q.get("rfq_id") != request.rfq_id:
+                continue
+            if (q.get("match") or "").strip() == selected_match:
+                return q
+
     for q in all_quotes:
         if q.get("rfq_id") != request.rfq_id:
             continue
@@ -672,8 +685,8 @@ def _find_selected_quote(all_quotes: list, request: SelectAgentRequest) -> dict:
             continue
         return q
     raise Exception(
-        f"No quote found for rfq_id={request.rfq_id}, agent={request.selected_agent}, "
-        f"carrier={request.selected_carrier}, shipment={request.shipment_number}"
+        f"No quote found for rfq_id={request.rfq_id}, selected_match={request.selected_match}, "
+        f"agent={request.selected_agent}, carrier={request.selected_carrier}, shipment={request.shipment_number}"
     )
 
 

@@ -13,6 +13,7 @@ Workspace-centric Next.js control plane for RFQ operations, pricing, and automat
 - In-app workspace creation from header user menu.
 - Role-aware API guards for `owner`, `admin`, and `member`.
 - Workspace-scoped RFQ/pricing/settings APIs.
+- Quote selection uses exact quote `match` key (`selected_match`) to support same-carrier multi-option offers safely.
 - Workspace-scoped agent uniqueness (`workspace_id + agent_name`, `workspace_id + email`) via migration `20260222_010_fix_agents_workspace_scoping.sql`.
 - Workspace mailbox management API + UI in workspace settings.
 - Invite links that carry token through auth callback and auto-accept membership.
@@ -69,6 +70,7 @@ Notes:
 - `src/app/api/workspaces/current/mailbox/route.ts` — workspace mailbox get/update endpoint.
 - `src/hooks/use-workspace-mailbox.ts` — mailbox query/mutation hooks.
 - `src/app/api/rfqs/[rfqId]/select/route.ts` — workspace-aware Modal handoff.
+- `src/lib/validation.ts` — select-agent payload validation (`selected_match` required).
 
 ## Migration Notes
 

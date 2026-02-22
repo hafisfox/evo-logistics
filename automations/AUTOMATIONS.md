@@ -76,11 +76,23 @@ Use compatibility mode only during transitional cutover.
 - Reads `agents` scoped by workspace.
 - Writes `master_rfqs` and `agent_outbound_log` with workspace context.
 - Avoids cross-workspace thread collisions by querying known threads per workspace.
+- Builds structured prompt input with `EMAIL_METADATA` + `email_received_at` + raw `EMAIL_BODY` for RFQ extraction.
+- Uses hardened extraction rules for door/port detection, date anchoring to email-received date, origin-option splitting (e.g. `NANSHA,YANTIAN`), and duplicate container-mention aggregation.
+- Uses deterministic LLM extraction settings for Phase 1 (`temperature=0`) and normalizes output through existing schema validators.
 
 ### Phase 2 (`phase_2_quote_analysis.py`)
 
 - Resolves workspace from incoming Pub/Sub mailbox metadata.
 - Reads/writes quote and RFQ rows in workspace scope.
+- Loads canonical RFQ context (`master_rfqs`) before parsing each agent reply.
+- Trims quoted email history (`Original Message`, `On ... wrote`, `From:`, `Sent:`) and parses only current reply content.
+- Sends structured `RFQ_CONTEXT` (shipment_number/routes/container mix/service type + `email_received_at`) to the LLM prompt.
+- Uses conservative extraction rules:
+  - only explicit ocean-freight rates are accepted
+  - non-ocean extras (EXW/THC/DOC/CUS/ENS/NOC/inspection/TLX/CO/local handling) are excluded from `price`
+  - ambiguous multi-shipment replies are rejected as `Invalid_Quote`
+- Normalizes carrier/date fields and deduplicates identical quote options before persistence.
+- Builds unique quote `match` keys using a short hash over option fields to preserve same-carrier multi-option quotes.
 - Threshold checks run against workspace-scoped quote rows.
 
 ### Phase 3 (`phase_3_select_and_quote.py`)
@@ -88,6 +100,7 @@ Use compatibility mode only during transitional cutover.
 - Requires `workspace_id` in request payload.
 - Reads RFQ/quote/pricing tables only in that workspace.
 - Refuses selection if RFQ is not found in the provided workspace.
+- Supports exact quote selection via `selected_match`; falls back to legacy agent+carrier+shipment matching if missing.
 
 ### Scheduled Tasks (`scheduled_tasks.py`)
 
@@ -167,3 +180,58 @@ python3 -m pytest automations/tests -q
 
 Operational note:
 - keep `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK=false` in production.
+
+## 13. Prompt Evaluation Harness
+
+Synthetic prompt-eval assets are included for both intake and quote parsing:
+
+### Phase 1 RFQ intake eval
+
+- evaluator script: `automations/tests/eval_phase1_prompt_fixtures.py`
+- fixtures: `automations/tests/fixtures/phase1_prompt_eval_cases.txt`
+
+Run:
+
+```bash
+OPENAI_API_KEY=... python3 automations/tests/eval_phase1_prompt_fixtures.py
+```
+
+Reported metrics include:
+
+- schema-valid rate
+- shipment count accuracy
+- route accuracy (`pol`/`pod`/`pod_hint`)
+- container accuracy
+- service-type accuracy
+- date accuracy
+- routing-action accuracy
+- `complete_expected_but_missing_predicted`
+
+Current strict acceptance gates:
+
+- `schema_invalid_count == 0`
+- `route_accuracy >= 0.95`
+- `container_accuracy >= 0.95`
+- `service_type_accuracy >= 0.95`
+- `date_accuracy >= 0.95`
+- `action_accuracy >= 0.95`
+- `complete_expected_but_missing_predicted == 0`
+
+### Phase 2 quote eval
+
+- evaluator script: `automations/tests/eval_phase2_prompt_fixtures.py`
+- fixtures: `automations/tests/fixtures/phase2_prompt_eval_cases.txt`
+
+Run:
+
+```bash
+OPENAI_API_KEY=... python3 automations/tests/eval_phase2_prompt_fixtures.py
+```
+
+Reported metrics include:
+
+- quote presence precision/recall
+- exact price accuracy
+- shipment mapping accuracy
+- ETD/TT/free-time extraction accuracy
+- same-carrier multi-option preservation rate

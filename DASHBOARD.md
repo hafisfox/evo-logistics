@@ -161,6 +161,7 @@ Payload now includes server-derived tenancy keys:
   "workspace_id": "uuid",
   "selected_by_user_id": "uuid",
   "selected_agent": "...",
+  "selected_match": "RFQ-..._agent@email_1_CARRIER_ab12cd34",
   "selected_carrier": "...",
   "shipment_number": "1",
   "selected_by": "...",
@@ -168,6 +169,10 @@ Payload now includes server-derived tenancy keys:
   "quote_threshold": 2
 }
 ```
+
+Selection behavior:
+- UI and API now select by exact quote `match` key to avoid ambiguity when one agent sends multiple options for the same carrier/shipment.
+- Legacy `selected_carrier` + `shipment_number` fields are still forwarded for backward-compatible fallback in Phase 3.
 
 ## 9. Environment Variables
 

@@ -44,6 +44,7 @@ export default function AgentSelectionPage() {
       await selectMutation.mutateAsync({
         rfq_id: rfqId,
         selected_agent: selectedQuote.agent_name,
+        selected_match: selectedQuote.match,
         selected_carrier: selectedQuote.carrier,
         shipment_number: selectedQuote.shipment_number || "1",
         selected_by: "dashboard",
@@ -125,10 +126,7 @@ export default function AgentSelectionPage() {
                 key={quote.match || `${quote.agent_email}-${quote.carrier}`}
                 quote={quote}
                 rank={idx + 1}
-                isSelected={
-                  selectedQuote?.agent_email === quote.agent_email &&
-                  selectedQuote?.carrier === quote.carrier
-                }
+                isSelected={selectedQuote?.match === quote.match}
                 onSelect={() => setSelectedQuote(quote)}
               />
             ))}

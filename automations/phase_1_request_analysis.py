@@ -4,6 +4,7 @@ import json
 import base64
 import hashlib
 from datetime import datetime, timezone, timedelta
+from email.utils import parsedate_to_datetime
 from typing import List, Optional
 
 UAE_TZ = timezone(timedelta(hours=4))
@@ -538,6 +539,34 @@ def extract_email_body(payload) -> str:
         return re.sub(r'<[^>]+>', '', raw)
     return ""
 
+def parse_email_received_date(received_at: str) -> datetime:
+    """Parse RFC2822 date header and return timezone-aware datetime in UAE TZ."""
+    if not received_at:
+        return datetime.now(UAE_TZ)
+    try:
+        parsed = parsedate_to_datetime(received_at)
+        if parsed is None:
+            return datetime.now(UAE_TZ)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(UAE_TZ)
+    except Exception:
+        return datetime.now(UAE_TZ)
+
+def build_phase1_extraction_prompt(subject: str, sender: str, email_body: str, received_at: str) -> str:
+    """Build structured extraction prompt for Phase 1 RFQ parsing."""
+    email_received_at = parse_email_received_date(received_at).strftime('%Y-%m-%d')
+    return (
+        "EMAIL_METADATA\n"
+        f"email_received_at: {email_received_at}\n"
+        f"subject: {subject}\n"
+        f"from: {sender}\n\n"
+        "EMAIL_BODY\n"
+        "\"\"\"\n"
+        f"{email_body}\n"
+        "\"\"\""
+    )
+
 # =====================================================================
 # EMAIL SENDING HELPERS
 # =====================================================================
@@ -771,140 +800,145 @@ def _send_agent_outreach(gmail_service, supabase, workspace_id, rfq_id, shipment
 # =====================================================================
 # AI SYSTEM PROMPT (ported from n8n)
 # =====================================================================
-AI_SYSTEM_PROMPT = """You are an expert logistics data extractor specializing in container shipping. Extract shipment details from emails and return ONLY a valid JSON object.
+AI_SYSTEM_PROMPT = """You are a Freight RFQ Intake Parser for container shipping.
 
-## CHAIN OF THOUGHT REASONING
-Before extracting the shipments, you MUST write an `extraction_reasoning` paragraph.
-Think step-by-step:
-1. Does the sender explicitly request a rate/freight quote?
-2. What are the loading ports/cities mentioned?
-3. What are the destination ports/cities requested? Are they confirmed or just options?
-4. How many distinct routes (origin→destination pairs) are there?
-5. For each route, what container types and quantities are requested?
+You receive:
+1) EMAIL_METADATA
+- email_received_at (YYYY-MM-DD)
+- subject
+- from
+2) EMAIL_BODY (raw customer message)
 
-**OUTPUT FORMAT** (return exactly this structure):
-
-{"extraction_reasoning":"Your step-by-step thoughts...","multi":false,"count":1,"shipments":[{"pol":null,"pod":null,"pod_hint":[],"containers":[{"qty":null,"type":null}],"date":null,"delivery_deadline":null,"service_type":"port-to-port","pickup_address":null,"delivery_address":null}]}
-
-## FIELD RULES
-
-### pol — Port of Loading
-- Always UPPERCASE port or city name
-- Only extract if a port is explicitly stated (e.g. "FOB Yantian", "loading from Shanghai port")
-- If the email only provides a pickup address or city name, set pol to null
-- Exception: if a well-known FOB term is used (e.g. "FOB Shenzhen"), use that port directly
-
-### pod — Port of Discharge
-- Always UPPERCASE port or city name
-- Only set if the customer explicitly confirms a single port destination
-- If the customer mentions destination ports as options, set pod to null and capture in pod_hint
-
-### pod_hint — Port of Discharge Options
-- Array of UPPERCASE port name strings
-- Populate when customer mentions multiple possible ports but hasn't confirmed one
-
-### containers — Array of container items
-Each item has:
-- **qty**: Container count as INTEGER. Parse: 3X40FT → 3, three containers → 3. null if unknown.
-- **type**: Must be one of: 20FT, 40FT, 40HC, 40HQ, 45FT, 20OT, 40OT
-
-Examples:
-- "2x40FT and 1x20FT" → containers: [{"qty":2,"type":"40FT"},{"qty":1,"type":"20FT"}]
-- "3x40HC" → containers: [{"qty":3,"type":"40HC"}]
-- "some containers from Shanghai" → containers: [{"qty":null,"type":null}]
-
-### date — Cargo Ready Date
-- Format: YYYY-MM-DD, must be year 2024 or later
-- Parse natural language dates
-
-### delivery_deadline — Required Delivery Date
-- Format: YYYY-MM-DD
-- Trigger phrases: "delivered before", "must arrive by", "need it by", "deadline"
-
-### service_type
-- port-to-port (default), door-to-port, port-to-door, door-to-door
-- Triggers for door-to-port: EXW, ex-works, collect from, pick up from
-- Triggers for port-to-door: deliver to, door delivery, trucking to, to our warehouse
-- Triggers for door-to-door: both above present
-
-### pickup_address / delivery_address
-- Full address as written, do NOT convert to a port name
-- null if no physical address exists
-
-## PORT CONVERSIONS (pod and pod_hint only)
-
-| Mentioned | Resolves To |
-|---|---|
-| Dubai / Jebel Ali / Al Quoz | JEBEL ALI |
-| Qatar / Doha | HAMAD PORT |
-| UAQ / Umm Al Quwain | UMM AL QUWAIN |
-| Abu Dhabi / Musaffah | KHALIFA PORT |
-| Oman / Muscat / Sohar | SOHAR |
-| Baghdad / Iraq / Basra | UMM QASR |
-| Sharjah | SHARJAH |
-| Ras Al Khaimah / RAK | RAS AL KHAIMAH |
-| Fujairah | FUJAIRAH |
-| Ajman | AJMAN |
-| Jeddah | JEDDAH |
-| Dammam | DAMMAM |
-| Riyadh (no port specified) | null — set pod_hint: ["JEDDAH", "DAMMAM"] |
-
-## MULTI-SHIPMENT RULES
-- A SHIPMENT is defined by its ROUTE (origin → destination). One route = one shipment.
-- Different routes → separate shipment objects
-- Mixed container types on the SAME route → single shipment with multiple containers
-- Same route, same type → single shipment, single container with total qty
-
-## OUTPUT RULES
-- Return ONLY raw JSON — no markdown, no backticks
-- Use null for unknown values — never "TBD", "N/A", or ""
-- qty must be integer or null
-- pod_hint must always be an array
-- containers must always be an array with at least one item
-- shipments array must always contain at least one object
-
-## FEW-SHOT EXAMPLE
-**Input:**
-Subject: Freight quote required
-Body: Hi Team, please quote me for 2x40HC and 1x20FT from Shanghai to Dubai or Doha. Also I need 1x40FT from Jebel Ali to Umm Qasr door to door. Factory is at Dubai Investment Park and delivery to Basra warehouse.
-
-**Output:**
-```json
+Return ONLY raw JSON matching:
 {
-  "extraction_reasoning": "Two distinct routes. Route 1: Shanghai to Dubai/Doha with mixed containers (2x40HC + 1x20FT). Destination is an option so pod is null with pod_hint. Route 2: Jebel Ali to Umm Qasr, door-to-door, 1x40FT. Pickup at Dubai Investment Park, delivery to Basra warehouse.",
-  "multi": true,
-  "count": 2,
+  "extraction_reasoning": "concise deterministic summary",
+  "multi": false,
+  "count": 1,
   "shipments": [
     {
-      "pol": "SHANGHAI",
+      "pol": null,
       "pod": null,
-      "pod_hint": ["JEBEL ALI", "HAMAD PORT"],
-      "containers": [
-        {"qty": 2, "type": "40HC"},
-        {"qty": 1, "type": "20FT"}
-      ],
+      "pod_hint": [],
+      "containers": [{"qty": null, "type": null}],
       "date": null,
       "delivery_deadline": null,
       "service_type": "port-to-port",
       "pickup_address": null,
       "delivery_address": null
-    },
-    {
-      "pol": "JEBEL ALI",
-      "pod": "UMM QASR",
-      "pod_hint": [],
-      "containers": [
-        {"qty": 1, "type": "40FT"}
-      ],
-      "date": null,
-      "delivery_deadline": null,
-      "service_type": "door-to-door",
-      "pickup_address": "Dubai Investment Park",
-      "delivery_address": "Basra warehouse"
     }
   ]
 }
-```"""
+
+STRICT OUTPUT RULES:
+- Raw JSON only (no markdown/backticks/explanations).
+- count MUST equal len(shipments).
+- multi = true iff len(shipments) > 1.
+- Use null for unknown values.
+- pod_hint must always be an array.
+- containers must always be a non-empty array.
+- Container type must be one of: 20FT, 40FT, 40HC, 40HQ, 45FT, 20OT, 40OT.
+- pol/pod/pod_hint values must be UPPERCASE.
+- extraction_reasoning must be concise deterministic summary (max 2 short sentences).
+
+EXTRACTION LOGIC:
+1) Identify all distinct shipment route statements.
+2) Parse containers per route, combining repeated same-type mentions.
+3) Parse service_type.
+4) Parse addresses.
+5) Parse dates using email_received_at anchor.
+6) Populate structured output.
+
+ROUTE SPLITTING RULES:
+- One explicit origin->destination route = one shipment.
+- Same route with mixed container types = one shipment with multiple container items.
+- Same route repeated across lines = merge container quantities by type.
+- If a summary line and a detailed line both mention the same container on the same shipment, sum quantities instead of overwriting.
+- If destination is an option in one statement (e.g., "Dubai or Doha"), keep one shipment: pod=null, pod_hint includes mapped options.
+- If origin alternatives are listed in one statement (e.g., "NANSHA,YANTIAN"), SPLIT into multiple shipments (duplicate shared details into each split).
+
+FIELD RULES:
+
+pol (origin):
+- Accept explicit ports or explicit origin cities from phrases like "from SHANGHAI", "pickup point ... DONGGUAN", "FOB SHENZHEN".
+- If only pickup address exists, derive origin city from the address text when clear; use that city as pol.
+- Uppercase result.
+
+pod (destination):
+- Set when destination is clearly single.
+- If multiple destination options in one statement, set pod=null and use pod_hint.
+
+pod/pod_hint controlled destination mapping:
+- DUBAI, JEBEL ALI, DEIRA, AL QUOZ -> JEBEL ALI
+- QATAR, DOHA, HAMAD -> HAMAD PORT
+- UAQ, UMM AL QUWAIN -> UMM AL QUWAIN
+- ABU DHABI, MUSAFFAH -> KHALIFA PORT
+- OMAN, MUSCAT, SOHAR -> SOHAR
+- BASRA, IRAQ, UMM QASR -> UMM QASR
+- SHARJAH -> SHARJAH
+- RAK, RAS AL KHAIMAH -> RAS AL KHAIMAH
+- FUJAIRAH -> FUJAIRAH
+- AJMAN -> AJMAN
+- JEDDAH -> JEDDAH
+- DAMMAM -> DAMMAM
+- RIYADH (without port) -> pod=null, pod_hint=["JEDDAH","DAMMAM"]
+
+containers:
+- Parse forms like 1x40, 1X40FT, 1 x 40' container, 2X40FTHQ, 3x40HC.
+- 40 or 40FT implies type 40FT unless HC/HQ explicitly present.
+- Repeated fragments like "1x40 1x40" -> qty 2, type 40FT.
+- qty must be integer or null.
+
+date (cargo ready date):
+- Output YYYY-MM-DD.
+- Parse explicit dates (DD/MM/YYYY, YYYY-MM-DD, 28th July, 25TH JAN).
+- If year missing, infer from email_received_at.
+- If only day is provided (e.g., "ready on 22nd"), infer nearest future valid date from email_received_at context.
+- If "ready to load" / "goods are ready" and no explicit date, set date = email_received_at.
+- If unresolved, set null.
+
+delivery_deadline:
+- Parse phrases like "must arrive by", "delivered before", "need by", "deadline".
+
+service_type:
+- door-to-door if both pickup and delivery are requested or explicitly stated.
+- door-to-port if pickup/collection is requested and destination is port.
+- port-to-door if delivery to warehouse/door is requested from FOB/port origin.
+- FOB + DOOR must map to port-to-door.
+- otherwise port-to-port.
+
+pickup_address / delivery_address:
+- Capture full textual address blocks exactly as written (including warehouse names and map URLs if present).
+- Do not convert full addresses into port names.
+
+OUT-OF-SCHEMA DETAILS:
+- Commodity, weight, urgency, direct vessel request, dem/det requirement, SOC restrictions, ETD/ETA/TT request fields are not structured fields here.
+- Mention them briefly in extraction_reasoning if relevant to interpretation.
+
+FEW-SHOT PATTERN A (door-to-port):
+Input: "Door to Jebel Ali port, 1x20FT, loading point in Dongguan address, cargo ready 26th December."
+Output intent: service_type=door-to-port, pickup_address captured, pod=JEBEL ALI, pol=DONGGUAN.
+
+FEW-SHOT PATTERN B (door-to-door):
+Input: "1x20FT door to door, pickup in Houjie Dongguan, delivery Al Quoz Dubai warehouse."
+Output intent: service_type=door-to-door, pol=DONGGUAN, pod=JEBEL ALI, both addresses captured.
+
+FEW-SHOT PATTERN C (multi-route list):
+Input: "5x40 Wuhan to Jebel Ali, 2x40 Wuhan to Qatar, 3x40 Shanghai to Jebel Ali."
+Output intent: three shipments with mapped pod for Qatar as HAMAD PORT.
+
+FEW-SHOT PATTERN D (FOB to Door):
+Input: "FOB Shenzhen to Door (Deira warehouse), 1x40FT, pickup date 22/11/2025."
+Output intent: service_type=port-to-door, pol=SHENZHEN, pod=JEBEL ALI, delivery_address captured.
+
+FEW-SHOT PATTERN E (origin alternatives):
+Input: "POL NANSHA,YANTIAN POD JEBEL ALI 2X40FTHQ ready 29/1/2026 delivery UAQ store."
+Output intent: split into two shipments (NANSHA->JEBEL ALI and YANTIAN->JEBEL ALI) with duplicated shared details.
+
+FEW-SHOT PATTERN F (duplicate mentions across lines):
+Input:
+"Let me know the rates for 1x40
+1x40 going to be ready on 22nd from Shanghai"
+Output intent: one shipment with containers=[{"qty":2,"type":"40FT"}], not qty=1."""
 
 # =====================================================================
 # HELPERS
@@ -1180,6 +1214,7 @@ def _process_incoming_rfqs(pubsub_payload=None):
         headers_dict = {h['name'].lower(): h['value'] for h in email_data['payload']['headers']}
         subject = headers_dict.get('subject', '')
         sender = headers_dict.get('from', '')
+        received_at_header = headers_dict.get('date', '')
         # RFC 2822 Message-ID is needed for proper threading (not the Gmail internal ID)
         rfc_message_id = headers_dict.get('message-id', '')
 
@@ -1293,11 +1328,11 @@ def _process_incoming_rfqs(pubsub_payload=None):
         now_str = datetime.now(UAE_TZ).strftime('%Y-%m-%d %I:%M %p')
 
         # 3. Ask OpenAI to extract structured data
-        prompt = (
-            f"EXTRACT SHIPMENT DATA FROM THIS EMAIL:\n\n"
-            f"Subject: {subject}\n"
-            f"From: {sender}\n\n"
-            f"--- EMAIL BODY ---\n{email_body}\n--- END ---"
+        prompt = build_phase1_extraction_prompt(
+            subject=subject,
+            sender=sender,
+            email_body=email_body,
+            received_at=received_at_header,
         )
 
         try:
@@ -1307,6 +1342,7 @@ def _process_incoming_rfqs(pubsub_payload=None):
                     {"role": "system", "content": AI_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt}
                 ],
+                temperature=0,
                 response_format=ExtractedRFQs
             )
             extracted = response.choices[0].message.parsed

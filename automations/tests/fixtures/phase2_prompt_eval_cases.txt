@@ -1,0 +1,159 @@
+[
+  {
+    "id": "narrative_with_extras",
+    "rfq": {
+      "pol": "SHENZHEN",
+      "pod": "JEBEL ALI",
+      "container_type": "40HQ",
+      "qty": "1",
+      "service_type": "port-to-port"
+    },
+    "email": {
+      "subject": "Re: RFQ quote [Ref:RFQ-EVAL-001]",
+      "received_at": "Wed, 18 Dec 2025 10:00:00 +0400",
+      "body": "Shenzhen to Jebel Ali\nUSD1900/40HQ BY SSL\n14 days free time\nExw is USD650/40HQ all in"
+    },
+    "expected": {
+      "quotes": [
+        {
+          "shipment_number": 1,
+          "price": 1900,
+          "carrier": "SSL",
+          "etd": null,
+          "transit_time": null,
+          "free_time": 14,
+          "validity": null
+        }
+      ]
+    }
+  },
+  {
+    "id": "table_row_format",
+    "rfq": {
+      "pol": "QINGDAO",
+      "pod": "JEBEL ALI",
+      "container_type": "40HQ",
+      "qty": "1",
+      "service_type": "port-to-port"
+    },
+    "email": {
+      "subject": "Re: RFQ quote [Ref:RFQ-EVAL-002]",
+      "received_at": "Thu, 09 Jan 2026 08:00:00 +0400",
+      "body": "POL | POD | Carrier | 40HQ($) | Cut off | ETD | Routing | T/T | Free Time\nQingdao | Jebel Ali | SSL | 2050 | 11-Jan | 14-Jan | DIR | 31 | 14"
+    },
+    "expected": {
+      "quotes": [
+        {
+          "shipment_number": 1,
+          "price": 2050,
+          "carrier": "SSL",
+          "etd": "2026-01-14",
+          "transit_time": 31,
+          "free_time": 14,
+          "validity": null
+        }
+      ]
+    }
+  },
+  {
+    "id": "same_carrier_multi_option",
+    "rfq": {
+      "pol": "QINGDAO",
+      "pod": "JEBEL ALI",
+      "container_type": "40HQ",
+      "qty": "1",
+      "service_type": "port-to-port"
+    },
+    "email": {
+      "subject": "Re: RFQ quote [Ref:RFQ-EVAL-003]",
+      "received_at": "Sun, 07 Dec 2025 10:00:00 +0400",
+      "body": "Qingdao to Jebel Ali SSL USD1850/40HQ ETD 19-Dec TT 31 14 days free time\nQingdao to Jebel Ali SSL USD1875/40HQ ETD 11-Dec TT 25 14 days free time"
+    },
+    "expected": {
+      "quotes": [
+        {
+          "shipment_number": 1,
+          "price": 1850,
+          "carrier": "SSL",
+          "etd": "2025-12-19",
+          "transit_time": 31,
+          "free_time": 14,
+          "validity": null
+        },
+        {
+          "shipment_number": 1,
+          "price": 1875,
+          "carrier": "SSL",
+          "etd": "2025-12-11",
+          "transit_time": 25,
+          "free_time": 14,
+          "validity": null
+        }
+      ]
+    }
+  },
+  {
+    "id": "no_rate_no_space",
+    "rfq": {
+      "pol": "NINGBO",
+      "pod": "JEBEL ALI",
+      "container_type": "40HQ",
+      "qty": "1",
+      "service_type": "port-to-port"
+    },
+    "email": {
+      "subject": "Re: RFQ quote [Ref:RFQ-EVAL-004]",
+      "received_at": "Thu, 18 Dec 2025 11:00:00 +0400",
+      "body": "WADI BANI KHALID 002W there is a 1*40HQ only. EVER LOVELY have space but SI was closed. CSCL INDIAN closed."
+    },
+    "expected": {
+      "quotes": []
+    }
+  },
+  {
+    "id": "mixed_abbreviations",
+    "rfq": {
+      "pol": "SHANGHAI",
+      "pod": "JEBEL ALI",
+      "container_type": "40HQ",
+      "qty": "1",
+      "service_type": "port-to-port"
+    },
+    "email": {
+      "subject": "Re: RFQ quote [Ref:RFQ-EVAL-005]",
+      "received_at": "Thu, 15 Jan 2026 10:00:00 +0400",
+      "body": "Dear Ruben, Please use below one firstly: O/F: USD1950/40HQ BY UNIFEEDER ETD: 1/20 14days free time detention at POD T/T about 27days"
+    },
+    "expected": {
+      "quotes": [
+        {
+          "shipment_number": 1,
+          "price": 1950,
+          "carrier": "UNIFEEDER",
+          "etd": "2026-01-20",
+          "transit_time": 27,
+          "free_time": 14,
+          "validity": null
+        }
+      ]
+    }
+  },
+  {
+    "id": "ambiguous_multi_shipment",
+    "rfq": {
+      "pol": "SHENZHEN\nNINGBO",
+      "pod": "JEBEL ALI\nJEBEL ALI",
+      "container_type": "40HQ\n40HQ",
+      "qty": "1\n1",
+      "service_type": "port-to-port"
+    },
+    "email": {
+      "subject": "Re: RFQ quote [Ref:RFQ-EVAL-006]",
+      "received_at": "Fri, 19 Dec 2025 10:00:00 +0400",
+      "body": "Our best offer is USD2000/40HQ by SSL, 14 days free time."
+    },
+    "expected": {
+      "quotes": []
+    }
+  }
+]

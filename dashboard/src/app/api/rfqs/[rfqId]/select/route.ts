@@ -43,6 +43,7 @@ export async function POST(
       workspace_id: workspaceId,
       selected_by_user_id: userId,
       selected_agent: validation.data.selected_agent,
+      selected_match: validation.data.selected_match,
       selected_carrier: validation.data.selected_carrier,
       shipment_number: validation.data.shipment_number || "1",
       selected_by: validation.data.selected_by || userId,

@@ -58,6 +58,7 @@ export async function selectAgent(payload: {
   workspace_id: string;
   selected_by_user_id: string;
   selected_agent: string;
+  selected_match: string;
   selected_carrier: string;
   shipment_number: string;
   selected_by: string;

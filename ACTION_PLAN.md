@@ -100,6 +100,7 @@ All operational API routes are now workspace-scoped and role-gated through conte
 
 - `workspace_id`
 - `selected_by_user_id`
+- `selected_match` (exact quote identity key)
 
 These are derived server-side to prevent client-side tenant spoofing.
 
@@ -120,9 +121,16 @@ Current behavior:
 
 - Gmail Pub/Sub payload mailbox is used to resolve workspace context.
 - DB reads/writes are workspace-scoped for tenant tables.
+- Phase 1 request parser now sends structured `EMAIL_METADATA` + `email_received_at` + raw body to the LLM intake prompt.
+- Phase 1 prompt hardening is in place for: controlled destination mapping, date anchoring, door/port service inference, origin-option splitting, and duplicate container mention aggregation.
+- Phase 1 intake extraction now runs deterministically (`temperature=0`) with schema-gated parsing.
+- Phase 2 quote parser now uses RFQ-grounded context + trimmed current-reply content before LLM extraction.
+- Phase 2 applies conservative sanitization (explicit ocean freight only, ambiguous multi-shipment rejection, date normalization, quote dedupe).
+- Quote logging now preserves same-carrier multi-option replies via hashed `match` keys.
 - Watch renewal loops through active `workspace_mailboxes` rows.
 - Unknown/disconnected mailbox events are ignored by default and logged to `audit_events`.
 - Optional fallback can be enabled with `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK=true` during cutover.
+- Phase 3 quote selection now supports exact lookup by `selected_match` with legacy fallback.
 
 ## Dual-Mode Cutover (Active)
 
@@ -138,6 +146,7 @@ The system currently runs in a phased dual-mode:
 2. Audit events are schema-ready but not yet emitted comprehensively in all mutation paths.
 3. Keep `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK` disabled in production except controlled emergency rollback windows.
 4. Add comprehensive automation pytest suite under `automations/tests` for cross-workspace regression coverage.
+5. Expand prompt-eval benchmark from synthetic fixtures to production paired RFQ/reply datasets and track drift over time.
 
 ## Verification Gate (latest run)
 
@@ -150,6 +159,8 @@ Executed from this workspace branch:
 - `cd dashboard && npm run build` ✅ (webpack mode)
 - `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m py_compile automations/*.py` ✅
 - `python3 -m pytest automations/tests -q` ✅
+- `OPENAI_API_KEY=... python3 automations/tests/eval_phase1_prompt_fixtures.py` ✅
+  - strict gates passed (schema, route, container, service, date, action, complete-routing)
 
 ## Production Validation (2026-02-22)
 

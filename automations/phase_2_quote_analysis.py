@@ -2,7 +2,9 @@ import os
 import re
 import json
 import base64
+import hashlib
 from datetime import datetime, timezone, timedelta
+from email.utils import parsedate_to_datetime
 from typing import List, Optional
 
 UAE_TZ = timezone(timedelta(hours=4))
@@ -117,6 +119,291 @@ def normalize_carrier(carrier: str) -> str:
         return 'ZIM'
     return c
 
+
+_MONTHS = {
+    "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
+    "JUL": 7, "AUG": 8, "SEP": 9, "SEPT": 9, "OCT": 10, "NOV": 11, "DEC": 12,
+}
+
+_QUOTE_HISTORY_MARKERS = [
+    re.compile(r'^\s*-{2,}\s*Original Message\s*-{2,}\s*$', re.IGNORECASE | re.MULTILINE),
+    re.compile(r'^\s*-----\s*Forwarded message\s*-----\s*$', re.IGNORECASE | re.MULTILINE),
+    re.compile(r'^\s*On\s.+wrote:\s*$', re.IGNORECASE | re.MULTILINE),
+    re.compile(r'^\s*From:\s.+$', re.IGNORECASE | re.MULTILINE),
+    re.compile(r'^\s*Sent:\s.+$', re.IGNORECASE | re.MULTILINE),
+]
+
+_CONTEXTUAL_VALIDITY_NULL_PATTERNS = [
+    re.compile(r'\bVALID\s+TO\s+TH(?:I|S)\s+VSL\b', re.IGNORECASE),
+    re.compile(r'\bSUBJECT\s+TO\s+V(?:ESSEL|SL)\b', re.IGNORECASE),
+]
+
+
+def trim_agent_reply(body: str) -> str:
+    """Trim quoted email history and keep only the current reply content."""
+    if not body:
+        return ""
+
+    cut_idx = len(body)
+    for marker in _QUOTE_HISTORY_MARKERS:
+        match = marker.search(body)
+        if match:
+            cut_idx = min(cut_idx, match.start())
+
+    trimmed = body[:cut_idx].strip()
+    lines = trimmed.splitlines()
+    clean_lines = []
+    for line in lines:
+        if line.strip().startswith(">"):
+            break
+        clean_lines.append(line)
+    return "\n".join(clean_lines).strip()
+
+
+def parse_email_received_date(received_at: str) -> datetime:
+    """Parse RFC2822 date header and return timezone-aware datetime."""
+    if not received_at:
+        return datetime.now(UAE_TZ)
+    try:
+        parsed = parsedate_to_datetime(received_at)
+        if parsed is None:
+            return datetime.now(UAE_TZ)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(UAE_TZ)
+    except Exception:
+        return datetime.now(UAE_TZ)
+
+
+def _parse_positive_int(value, default: int = 1) -> int:
+    try:
+        num = int(str(value).strip())
+        return num if num > 0 else default
+    except (ValueError, TypeError):
+        return default
+
+
+def _normalize_container_type(container_type: str) -> str:
+    if not container_type:
+        return "UNKNOWN"
+    cleaned = str(container_type).upper().replace("'", "").replace(" ", "")
+    return cleaned or "UNKNOWN"
+
+
+def build_shipment_context(rfq: dict) -> dict:
+    """Build shipment-level context from master RFQ row."""
+    pols = parse_multi_value(rfq.get("pol"))
+    pods = parse_multi_value(rfq.get("pod"))
+    container_types = parse_multi_value(rfq.get("container_type"))
+    qtys = parse_multi_value(rfq.get("qty"))
+
+    service_type = (rfq.get("service_type") or "port-to-port").strip().lower()
+    route_groups = []
+    prev_key = None
+
+    for idx in range(len(container_types)):
+        pol = pols[idx] if idx < len(pols) else (pols[-1] if pols else "N/A")
+        pod = pods[idx] if idx < len(pods) else (pods[-1] if pods else "N/A")
+        route_key = f"{pol}|{pod}"
+        if route_key != prev_key:
+            route_groups.append({
+                "shipment_number": len(route_groups) + 1,
+                "pol": pol,
+                "pod": pod,
+                "service_type": service_type,
+                "containers": [],
+            })
+            prev_key = route_key
+
+        route_groups[-1]["containers"].append({
+            "qty": _parse_positive_int(qtys[idx] if idx < len(qtys) else 1, 1),
+            "type": _normalize_container_type(container_types[idx]),
+        })
+
+    if not route_groups:
+        route_groups = [{
+            "shipment_number": 1,
+            "pol": pols[0] if pols else "N/A",
+            "pod": pods[0] if pods else "N/A",
+            "service_type": service_type,
+            "containers": [{
+                "qty": _parse_positive_int(qtys[0], 1) if qtys else 1,
+                "type": _normalize_container_type(container_types[0]) if container_types else "UNKNOWN",
+            }],
+        }]
+
+    return {
+        "shipment_count": len(route_groups),
+        "shipments": route_groups,
+    }
+
+
+def format_shipment_context_for_prompt(context: dict) -> str:
+    parts = []
+    for shipment in context.get("shipments", []):
+        containers = ", ".join(
+            f"{c.get('qty', 1)}x{c.get('type', 'UNKNOWN')}"
+            for c in shipment.get("containers", [])
+        )
+        parts.append(
+            f"Shipment {shipment.get('shipment_number')}: "
+            f"{shipment.get('pol', 'N/A')} -> {shipment.get('pod', 'N/A')} | "
+            f"{containers or 'UNKNOWN'} | service={shipment.get('service_type', 'port-to-port')}"
+        )
+    return "\n".join(parts).strip()
+
+
+def detect_explicit_shipment_mapping(email_body: str) -> bool:
+    return bool(re.search(r'\bSHIPMENT\s*\d+\b', email_body or "", flags=re.IGNORECASE))
+
+
+def _normalize_contextual_validity(value: Optional[str]) -> Optional[str]:
+    if not value or not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    for pattern in _CONTEXTUAL_VALIDITY_NULL_PATTERNS:
+        if pattern.search(text):
+            return None
+    return text
+
+
+def normalize_partial_date(value: Optional[str], anchor_date: datetime) -> Optional[str]:
+    """Normalize date-like strings into YYYY-MM-DD when possible."""
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text or text.upper() in {"N/A", "NA", "TBD", "NONE", "NULL"}:
+        return None
+
+    iso_match = re.match(r'^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$', text)
+    if iso_match:
+        year, month, day = map(int, iso_match.groups())
+        try:
+            return datetime(year, month, day).strftime('%Y-%m-%d')
+        except ValueError:
+            return None
+
+    compact_match = re.match(r'^(\d{1,2})\s*[-/]\s*(\d{1,2})$', text)
+    if compact_match:
+        first, second = map(int, compact_match.groups())
+        if first > 12 and second <= 12:
+            day, month = first, second
+        else:
+            month, day = first, second
+        try:
+            return datetime(anchor_date.year, month, day).strftime('%Y-%m-%d')
+        except ValueError:
+            return None
+
+    cleaned = re.sub(r'[,;]', ' ', text)
+    cleaned = re.sub(r'(\d+)(ST|ND|RD|TH)\b', r'\1', cleaned, flags=re.IGNORECASE)
+    tokens = [tok for tok in cleaned.split() if tok]
+
+    for i, tok in enumerate(tokens):
+        mon_key = tok[:3].upper()
+        if mon_key not in _MONTHS:
+            continue
+        month = _MONTHS[mon_key]
+        day = None
+        year = anchor_date.year
+
+        if i > 0 and tokens[i - 1].isdigit():
+            day = int(tokens[i - 1])
+        elif i + 1 < len(tokens) and tokens[i + 1].isdigit():
+            day = int(tokens[i + 1])
+
+        if i + 1 < len(tokens) and re.fullmatch(r'\d{4}', tokens[i + 1]):
+            year = int(tokens[i + 1])
+        elif i + 2 < len(tokens) and re.fullmatch(r'\d{4}', tokens[i + 2]):
+            year = int(tokens[i + 2])
+
+        if day is None:
+            continue
+        try:
+            return datetime(year, month, day).strftime('%Y-%m-%d')
+        except ValueError:
+            continue
+
+    return None
+
+
+def sanitize_extracted_quotes(
+    parsed_quotes: List[QuoteData],
+    shipment_count: int,
+    anchor_date: datetime,
+    has_explicit_shipment_mapping: bool,
+) -> List[QuoteData]:
+    """Deterministically sanitize parser output before persistence."""
+    if shipment_count > 1 and not has_explicit_shipment_mapping:
+        valid_candidate_shipments = {
+            int(q.shipment_number)
+            for q in parsed_quotes
+            if q.price is not None and q.price > 0
+        }
+        if valid_candidate_shipments in (set(), {1}):
+            return []
+
+    cleaned: List[QuoteData] = []
+    seen = set()
+    for quote in parsed_quotes:
+        try:
+            shipment_number = int(quote.shipment_number)
+        except (ValueError, TypeError):
+            continue
+
+        if shipment_number < 1 or shipment_number > max(shipment_count, 1):
+            continue
+
+        price = quote.price
+        if price is None or price <= 0:
+            continue
+
+        carrier = normalize_carrier(quote.carrier)
+        etd = normalize_partial_date(quote.etd, anchor_date)
+        validity_text = _normalize_contextual_validity(quote.validity)
+        validity = normalize_partial_date(validity_text, anchor_date)
+
+        sanitized = QuoteData(
+            shipment_number=shipment_number,
+            price=float(price),
+            currency="USD",
+            carrier=carrier,
+            validity=validity,
+            transit_time=quote.transit_time,
+            free_time=quote.free_time,
+            etd=etd,
+        )
+
+        dedupe_key = (
+            sanitized.shipment_number,
+            sanitized.carrier,
+            sanitized.price,
+            sanitized.etd,
+            sanitized.transit_time,
+            sanitized.free_time,
+            sanitized.validity,
+        )
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        cleaned.append(sanitized)
+
+    return cleaned
+
+
+def build_quote_match_key(rfq_id: str, agent_email: str, quote: QuoteData) -> str:
+    fingerprint = (
+        f"{quote.price}|{quote.etd or ''}|{quote.transit_time or ''}|"
+        f"{quote.free_time or ''}|{quote.validity or ''}"
+    )
+    short_hash = hashlib.sha1(fingerprint.encode("utf-8")).hexdigest()[:8]
+    return (
+        f"{rfq_id}_{agent_email}_{quote.shipment_number}_"
+        f"{normalize_carrier(quote.carrier)}_{short_hash}"
+    )
+
 # =====================================================================
 # GOOGLE APIS
 # =====================================================================
@@ -222,144 +509,73 @@ def _gmail_call_with_backoff(request, retries=4, base_delay=2):
 # =====================================================================
 # AI SYSTEM PROMPT (ported from n8n)
 # =====================================================================
-AI_SYSTEM_PROMPT = """You are a Freight Rate Parser. Extract shipping rate data from freight agent reply emails. The original request may have contained ONE or MULTIPLE distinct shipments.
+AI_SYSTEM_PROMPT = """You are a Freight Rate Parser.
 
-## CRITICAL CONCEPT: What is a "Shipment"?
+Your input includes authoritative RFQ context and one trimmed agent reply.
+Return ocean freight quotes only, with conservative extraction rules.
 
-A shipment is a distinct ROUTING block (POL → POD), NOT an individual container. Mixed container types on the same route are ONE shipment — the agent quotes a combined total price for all containers on that route.
+CONSERVATIVE RULES:
+1) Extract only explicit ocean-freight quotes (O/F, Ocean Freight, Our rate, best offer, USDxxxx/20GP, USDxxxx/40HQ, table columns like 40HQ($)).
+2) If no explicit ocean-freight amount is present, return quotes: [].
+3) If multiple shipments exist and mapping to shipment_number is ambiguous, return quotes: [] for ambiguous content.
+4) Mixed container types on the same route are one shipment. If quote is per container type, multiply by RFQ quantities and sum into one total shipment price.
+5) If one message contains multiple valid options for the same shipment/carrier (different ETD/vessel/price), return all options as separate quote objects.
 
-| Scenario | Shipment Count |
-|---|---|
-| 3 x 40FT, one route | **1 shipment** |
-| 2 x 40FT + 1 x 20FT, same route | **1 shipment** (mixed containers, one route) |
-| 1 x 20FT SHANGHAI→JEBEL ALI + 2 x 40HC NINGBO→HAMAD PORT | **2 shipments** (different routes) |
-| Original email shows "[Shipment 1 of 3]" through "[Shipment 3 of 3]" | **3 shipments** |
+EXCLUDE THESE FROM PRICE (never add into ocean-freight total):
+EXW, THC, DOC, CUS, ENS, NOC, COMMODITY INSPECTION, INSPECTION, TLX, CO, handling fee, local charges, POD local charges.
 
-**Container quantity or type mix within a single route NEVER creates multiple shipments.**
+DATE RULES:
+1) Normalize dates as YYYY-MM-DD.
+2) If year is omitted, infer from email_received_at.
+3) If only contextual validity is provided (e.g., "valid to this vessel", "subject to vessel"), set validity to null.
+4) ETD range: choose earlier date.
 
-## CHAIN OF THOUGHT REASONING
-Before extracting the shipments, you MUST write an `extraction_reasoning` paragraph.
-Think step-by-step:
-1. Did the agent quote or decline?
-2. If quoted: What shipments are they quoting (Shipment 1, 2, etc)? Match the shipment_number from the original "[Shipment X of Y]" blocks.
-3. Is the quote provided as a total amount, or per-container? If per container, state the math (e.g. $1000 x 2 = $2000 total).
-4. If the route has mixed container types (e.g. 2x40FT + 1x20FT), sum ALL per-container costs into ONE total price for that shipment.
-5. Identify the Carrier and map it to the recognized UPPERCASE shorthand (e.g. Cosco Shipping -> COSCO).
-6. Extract validity, transit, and free days.
+TIME RULES:
+1) Parse transit time from TT/T,T/transit days.
+2) Parse free time from phrases like "14 days free", "14 FT", "free time 14".
 
-## OUTPUT FORMAT
-
-Return exactly this JSON structure. No markdown, no backticks, no explanation text — raw JSON only.
-
-```json
+OUTPUT SCHEMA (RAW JSON ONLY):
 {
-  "extraction_reasoning": "Your step-by-step thoughts...",
-  "quotes": [
-    {
-      "shipment_number": 1,
-      "price": 1200,
-      "currency": "USD",
-      "carrier": "COSCO",
-      "validity": "2026-03-13",
-      "transit_time": 22,
-      "free_time": 14,
-      "etd": "2026-03-15"
-    }
-  ]
-}
-```
-
-## FIELD RULES
-
-**shipment_number**: Integer matching the "[Shipment X of Y]" block number from the original request (1, 2, 3...). If the original had no numbered blocks, use 1.
-
-**price**: Total ocean freight amount quoted for that shipment (all containers combined).
-null if agent declines or provides no rate. If the agent gives a per-container rate, multiply by each container's quantity and SUM all container types to get the total shipment price.
-
-**currency**: Always "USD".
-
-**carrier**: UPPERCASE. Normalize: "Cosco Shipping"→"COSCO", "Evergreen Line"→"EVERGREEN", "Ocean Network Express"→"ONE", "Mediterranean Shipping"→"MSC", "Hapag-Lloyd"→"HAPAG-LLOYD", "CMA CGM"→"CMA CGM", "Yang Ming"→"YANG MING", "HMM"→"HMM", "PIL"→"PIL", "ZIM"→"ZIM".
-
-**validity**: Quote expiry as YYYY-MM-DD. null if not specified.
-**transit_time**: Integer days port-to-port. null if not specified.
-**free_time**: Integer days free detention/demurrage. null if not specified.
-**etd**: Estimated departure as YYYY-MM-DD. null if not specified.
-
-## MULTI-SHIPMENT HANDLING
-
-- Agent gives ONE price covering ALL shipments → create one quote object per shipment number with identical values
-- Agent gives DIFFERENT prices per shipment → create one quote object per shipment with respective values
-- Shared fields (carrier, validity, transit_time, free_time) stated once → copy to all quote objects
-- Agent offers multiple carriers for same shipment → Return ALL options as separate quote objects with the same shipment_number
-
-## SPECIAL CASES
-
-| Scenario | Action |
-|---|---|
-| Agent declines all or has no space | Return {"quotes": []} |
-| Rate is per CBM or per ton | Return {"extraction_reasoning": "...", "quotes": []} |
-| Agent gives rate "per container" explicitly | Multiply by each container type's quantity and sum all into one total shipment price |
-| ETD given as a range | Use the earlier/first date |
-
-## FEW-SHOT EXAMPLES
-
-**Example 1: Single container type**
-**Input:**
-Subject: Re: RFQ: 3x40HC Shanghai to Jebel Ali [Ref:RFQ-20260221-A9B]
-Body:
-Hi,
-For Shipment 1, we can offer Cosco Shipping at USD 1,500/40HC.
-Valid till 15th March. TT is 18 days. Free time 14 days dest.
-Regards
-
-**Output:**
-```json
-{
-  "extraction_reasoning": "The agent is quoting 'Shipment 1'. The rate given is 'USD 1,500/40HC', which means it is per container. The original subject says '3x40HC'. So the math is 1500 * 3 = 4500. The total price for the shipment is 4500. Carrier is 'Cosco Shipping', normalized to 'COSCO'. Validity is '2026-03-15'. Transit time is '18'. Free time is '14'.",
-  "quotes": [
-    {
-      "shipment_number": 1,
-      "price": 4500,
-      "currency": "USD",
-      "carrier": "COSCO",
-      "validity": "2026-03-15",
-      "transit_time": 18,
-      "free_time": 14,
-      "etd": null
-    }
-  ]
-}
-```
-
-**Example 2: Mixed container types on same route (1 shipment)**
-**Input:**
-Subject: Re: RFQ: 2x40FT+1x20FT Shenzen to Jebel Ali [Ref:RFQ-20260222-B3C]
-Body:
-Hi,
-40FT: RCL USD 900/ctr, 20FT: RCL USD 600/ctr
-ETD 29 Mar, TT 20 days, free time 10 days, valid 20 Mar
-Regards
-
-**Output:**
-```json
-{
-  "extraction_reasoning": "The original request has 1 route (Shenzen→Jebel Ali) with mixed containers: 2x40FT + 1x20FT. This is 1 shipment. Agent quotes 40FT at $900/ctr and 20FT at $600/ctr. Total = (900*2) + (600*1) = 1800 + 600 = 2400. Carrier is 'RCL'. ETD is 2026-03-29. Transit 20 days. Free time 10 days. Validity 2026-03-20.",
+  "extraction_reasoning": "brief deterministic reasoning",
   "quotes": [
     {
       "shipment_number": 1,
       "price": 2400,
       "currency": "USD",
-      "carrier": "RCL",
-      "validity": "2026-03-20",
-      "transit_time": 20,
-      "free_time": 10,
-      "etd": "2026-03-29"
+      "carrier": "SSL",
+      "validity": null,
+      "transit_time": 15,
+      "free_time": 14,
+      "etd": "2026-01-20"
     }
   ]
 }
-```
 
-CRITICAL: Return ONLY the raw JSON object. No markdown, no backticks, no explanation text."""
+FEW-SHOT PATTERNS:
+1) Narrative with extras:
+Input: "Shenzhen to Jebel Ali USD2350/40HQ ... EXW USD550 ... export license USD200"
+Output: price=2350 only, EXW/license excluded.
+
+2) Table row format:
+Input row: POL=Qingdao POD=Jebel Ali Carrier=SSL 40HQ($)=2050 Cut off=11-Jan ETD=14-Jan T/T=31 Free Time=14
+Output: one quote with price=2050, carrier=SSL, etd, transit_time=31, free_time=14.
+
+3) Same-carrier multi-option:
+Input includes two SSL offers for same shipment with different ETD/price.
+Output: two quote objects with same shipment_number and carrier, different fields.
+
+4) No-rate / no-space:
+Input: "space full", "no slot", "closed", no amount.
+Output: quotes=[].
+
+5) Mixed abbreviations:
+Input: "ETD 1/20 ... TT about 27days ... 14 FT"
+Output: etd normalized with inferred year, transit_time=27, free_time=14.
+
+CRITICAL:
+- Use RFQ_CONTEXT shipment numbering.
+- currency must be USD.
+- Return only raw JSON, no markdown/backticks/text."""
 
 # =====================================================================
 # QUOTE COUNTING & SUMMARY BUILDER
@@ -796,21 +1012,44 @@ def _process_agent_quotes(pubsub_payload=None):
                 f"[{msg_id}] RFQ alias resolved: {ref_id} -> {canonical_ref_id}"
             )
 
+        master_rows = _get_rows_by_filter(
+            supabase, "master_rfqs", "rfq_id", canonical_ref_id, workspace_id
+        )
+        if not master_rows:
+            print(f"No master RFQ row found for {canonical_ref_id}, skipping message.")
+            continue
+        rfq_row = master_rows[0]
+        shipment_context = build_shipment_context(rfq_row)
+        shipment_context_text = format_shipment_context_for_prompt(shipment_context)
+
         agent_name, agent_email = extract_agent_info(sender)
 
         # Extract body
         email_body = extract_email_body(email_data['payload'])
         if not email_body.strip():
             email_body = email_data.get('snippet', '')
+        trimmed_body = trim_agent_reply(email_body)
+        if not trimmed_body:
+            trimmed_body = email_body.strip()
+
+        received_dt = parse_email_received_date(received_at)
+        has_explicit_shipment_mapping = detect_explicit_shipment_mapping(trimmed_body)
 
         print(f"Processing agent quote: {subject} from {agent_name} ({agent_email})")
 
         # Call AI to parse quotes
         prompt = (
-            f"AGENT EMAIL:\n"
-            f"Agent: {agent_name}\n"
-            f"\"\"\"\n{email_body}\n\"\"\"\n\n"
-            f"Today is: {datetime.now(UAE_TZ).strftime('%Y-%m-%d')}"
+            f"RFQ_CONTEXT\n"
+            f"rfq_id: {canonical_ref_id}\n"
+            f"email_received_at: {received_dt.strftime('%Y-%m-%d')}\n"
+            f"subject: {subject}\n"
+            f"shipment_count: {shipment_context.get('shipment_count', 1)}\n"
+            f"{shipment_context_text}\n\n"
+            f"AGENT_EMAIL_METADATA\n"
+            f"agent_name: {agent_name}\n"
+            f"agent_email: {agent_email}\n\n"
+            f"AGENT_REPLY_CURRENT_MESSAGE\n"
+            f"\"\"\"\n{trimmed_body}\n\"\"\""
         )
 
         try:
@@ -825,10 +1064,16 @@ def _process_agent_quotes(pubsub_payload=None):
             extracted = response.choices[0].message.parsed
 
             now_str = datetime.now(UAE_TZ).strftime('%Y-%m-%d %I:%M %p')
+            sanitized_quotes = sanitize_extracted_quotes(
+                parsed_quotes=extracted.quotes,
+                shipment_count=shipment_context.get("shipment_count", 1),
+                anchor_date=received_dt,
+                has_explicit_shipment_mapping=has_explicit_shipment_mapping,
+            )
 
-            if not extracted.quotes:
-                # Agent declined or no quotes — log as invalid
-                match_key = f"{canonical_ref_id}_{agent_email}"
+            if not sanitized_quotes:
+                # Agent declined, ambiguous, or no valid quotes — log as invalid
+                match_key = f"{canonical_ref_id}_{agent_email}_invalid_{msg_id}"
                 log_data = {
                     'rfq_id': canonical_ref_id,
                     'match': match_key,
@@ -849,7 +1094,7 @@ def _process_agent_quotes(pubsub_payload=None):
                 continue
 
             # Process each quote
-            for quote in extracted.quotes:
+            for quote in sanitized_quotes:
                 carrier = normalize_carrier(quote.carrier)
                 price = quote.price
                 is_valid = (
@@ -858,9 +1103,7 @@ def _process_agent_quotes(pubsub_payload=None):
                     price > 0
                 )
 
-                match_key = (
-                    f"{canonical_ref_id}_{agent_email}_{carrier}_{quote.shipment_number}"
-                )
+                match_key = build_quote_match_key(canonical_ref_id, agent_email, quote)
                 log_data = {
                     'rfq_id': canonical_ref_id,
                     'match': match_key,
@@ -870,7 +1113,7 @@ def _process_agent_quotes(pubsub_payload=None):
                     'shipment_number': str(quote.shipment_number),
                     'carrier': carrier,
                     'price': str(price) if is_valid else 'N/A',
-                    'currency': quote.currency,
+                    'currency': quote.currency or 'USD',
                     'etd': quote.etd or 'N/A',
                     'transit_time': str(quote.transit_time) if quote.transit_time else 'N/A',
                     'free_time': str(quote.free_time) if quote.free_time else 'N/A',
@@ -893,7 +1136,7 @@ def _process_agent_quotes(pubsub_payload=None):
             print(f"Error processing quote from {agent_name}: {e}")
             # Log error but continue processing other messages
             try:
-                match_key = f"{canonical_ref_id}_{agent_email}"
+                match_key = f"{canonical_ref_id}_{agent_email}_error_{msg_id}"
                 _upsert_row(supabase, "agent_outbound_log", {
                     'rfq_id': canonical_ref_id,
                     'match': match_key,

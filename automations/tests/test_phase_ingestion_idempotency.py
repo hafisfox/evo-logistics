@@ -170,6 +170,20 @@ def test_phase2_uses_canonical_alias_for_rfq_id(monkeypatch):
     monkeypatch.setattr(p2, "extract_pubsub_mailbox", lambda _p: "yunapink05@gmail.com")
     monkeypatch.setattr(p2, "resolve_workspace_id", lambda _s, _m: "ws-1")
     monkeypatch.setattr(p2, "claim_email_event", lambda *a, **k: True, raising=False)
+    monkeypatch.setattr(
+        p2,
+        "_get_rows_by_filter",
+        lambda _s, table, _fcol, _fval, _w: (
+            [{
+                "rfq_id": "RFQ-CANON",
+                "pol": "SHENZHEN",
+                "pod": "JEBEL ALI",
+                "container_type": "40HQ",
+                "qty": "1",
+                "service_type": "port-to-port",
+            }] if table == "master_rfqs" else []
+        ),
+    )
     monkeypatch.setattr(p2.openai, "OpenAI", _OpenAIWithEmptyQuotes)
     monkeypatch.setattr(
         p2,

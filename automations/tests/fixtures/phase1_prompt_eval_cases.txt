@@ -1,0 +1,324 @@
+[
+  {
+    "id": "door_to_jebel_ali_port_dongguan_20ft",
+    "email": {
+      "subject": "Door to Jebel Ali port rate request",
+      "from": "customer1@example.com",
+      "received_at": "Sat, 20 Dec 2025 10:00:00 +0400",
+      "body": "Dear Niyas,\nOffer the best door to Jebel Ali port rates for 1x20ft containers, cargo will be ready by 26th December for loading need earliest sailing.\nCommodity: Furnitures\nGross weight: 500kgs\nLOADING POINT\nSIBEI DRAGON INTERNATIONAL TRADING COMPANY\nYiFan Plaza,HouJie Road, Houjie Town,\nDongguan City, GD province, China"
+    },
+    "expected": {
+      "shipments": [
+        {
+          "pol": "DONGGUAN",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 1, "type": "20FT"}],
+          "date": "2025-12-26",
+          "service_type": "door-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "door_to_door_dongguan_to_al_quoz_20ft",
+    "email": {
+      "subject": "Door to door quote request",
+      "from": "customer2@example.com",
+      "received_at": "Sun, 20 Jul 2025 09:00:00 +0400",
+      "body": "Hi Niyas,\nOffer the best rates for 1X20FT container door to door the cargo will be ready to load on 28th July Monday, share me the schedule.\nPICK-UP POINT\nRoom 706, Fuxin Building,\nFukang Road, Houjie Town,\nDongguan China\nDELIVERY-POINT\nInterior360 General Trading - Warehouse\n13 Street 18A - Al Quoz - Al Quoz Industrial Area 4 - Dubai\nhttps://maps.app.goo.gl/fhjJNR4Cyxc3n4Kn6"
+    },
+    "expected": {
+      "shipments": [
+        {
+          "pol": "DONGGUAN",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 1, "type": "20FT"}],
+          "date": "2025-07-28",
+          "service_type": "door-to-door"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "door_to_door_sun_lounger_40ft",
+    "email": {
+      "subject": "Door to door 40FT quote request",
+      "from": "customer3@example.com",
+      "received_at": "Sat, 20 Sep 2025 10:00:00 +0400",
+      "body": "Dear Niyas,\nOffer the best door to door rates for 1X40FT container, cargo will be ready for loading on 24th Wednesday, share the schedules.\nCommodity: Sun lounger\nGross weight: 3500Kgs\nPICK-UP LOCATION\nRoom 706, Fuxin Building, Fukang Road,\nHoujie Town, Dongguan, China\nDELIVERY LOCATION\nInterior360 General Trading - Warehouse\n13 Street 18A - Al Quoz - Al Quoz Industrial Area 4 - Dubai\nhttps://maps.app.goo.gl/fhjJNR4Cyxc3n4Kn6"
+    },
+    "expected": {
+      "shipments": [
+        {
+          "pol": "DONGGUAN",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 1, "type": "40FT"}],
+          "date": "2025-09-24",
+          "service_type": "door-to-door"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "shanghai_missing_destination_repeat_1x40",
+    "email": {
+      "subject": "Rates needed for 1x40",
+      "from": "customer4@example.com",
+      "received_at": "Wed, 20 Aug 2025 10:00:00 +0400",
+      "body": "Dear Biju,\nLet me know the rates for 1x40\n1x40 going to be ready on 22nd from shanghai\nWeight - 26T"
+    },
+    "expected": {
+      "shipments": [
+        {
+          "pol": "SHANGHAI",
+          "pod": null,
+          "pod_hint": [],
+          "containers": [{"qty": 2, "type": "40FT"}],
+          "date": "2025-08-22",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "need_port_data"
+    }
+  },
+  {
+    "id": "multi_route_gloves_qingdao_portklang_penang_wuhan_shanghai",
+    "email": {
+      "subject": "Freight charges for multiple shipments",
+      "from": "customer5@example.com",
+      "received_at": "Mon, 20 Oct 2025 10:00:00 +0400",
+      "body": "Dear Team,\nKindly provide us with the freight charges for the following shipments:\n3 x 40' containers – Qingdao to Jebel Ali\nItem: Vinyl gloves\nStatus: Ready to load\n3 x 40' containers – Port Klang to Jebel Ali\nItem: Latex gloves\nReady Date: 28/10/2025\n1 x 40' container – Penang Port to Jebel Ali\nItem: Latex gloves\nReady Date: 28/10/2025\n5 x 40' containers – Wuhan to Jebel Ali\nItem: N/W items\nStatus: Ready to load\n1 x 40' container – Shanghai to Jebel Ali\nStatus: Ready to load"
+    },
+    "expected": {
+      "shipments": [
+        {
+          "pol": "QINGDAO",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 3, "type": "40FT"}],
+          "date": "2025-10-20",
+          "service_type": "port-to-port"
+        },
+        {
+          "pol": "PORT KLANG",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 3, "type": "40FT"}],
+          "date": "2025-10-28",
+          "service_type": "port-to-port"
+        },
+        {
+          "pol": "PENANG PORT",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 1, "type": "40FT"}],
+          "date": "2025-10-28",
+          "service_type": "port-to-port"
+        },
+        {
+          "pol": "WUHAN",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 5, "type": "40FT"}],
+          "date": "2025-10-20",
+          "service_type": "port-to-port"
+        },
+        {
+          "pol": "SHANGHAI",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 1, "type": "40FT"}],
+          "date": "2025-10-20",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "multi_route_wuhan_qingdao_shanghai_qatar",
+    "email": {
+      "subject": "Best sea freight rates from various ports",
+      "from": "customer6@example.com",
+      "received_at": "Wed, 15 Oct 2025 09:30:00 +0400",
+      "body": "Dear Team,\nPlease provide us with your best sea freight rates from the various ports as listed below:\n5 × 40 ft containers from Wuhan to Jebel Ali\n2 × 40 ft containers from Wuhan to Qatar (Hamad Port)\n5 × 40 ft containers from Qingdao to Jebel Ali\n1 × 40 ft container from Qingdao to Qatar\n3 × 40 ft containers from Shanghai to Jebel Ali\n3 × 40 ft containers from Port Klang to Jebel Ali"
+    },
+    "expected": {
+      "shipments": [
+        {
+          "pol": "WUHAN",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 5, "type": "40FT"}],
+          "date": null,
+          "service_type": "port-to-port"
+        },
+        {
+          "pol": "WUHAN",
+          "pod": "HAMAD PORT",
+          "pod_hint": [],
+          "containers": [{"qty": 2, "type": "40FT"}],
+          "date": null,
+          "service_type": "port-to-port"
+        },
+        {
+          "pol": "QINGDAO",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 5, "type": "40FT"}],
+          "date": null,
+          "service_type": "port-to-port"
+        },
+        {
+          "pol": "QINGDAO",
+          "pod": "HAMAD PORT",
+          "pod_hint": [],
+          "containers": [{"qty": 1, "type": "40FT"}],
+          "date": null,
+          "service_type": "port-to-port"
+        },
+        {
+          "pol": "SHANGHAI",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 3, "type": "40FT"}],
+          "date": null,
+          "service_type": "port-to-port"
+        },
+        {
+          "pol": "PORT KLANG",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 3, "type": "40FT"}],
+          "date": null,
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "need_port_data"
+    }
+  },
+  {
+    "id": "fob_shenzhen_to_door_deira",
+    "email": {
+      "subject": "FOB to DOOR quote request",
+      "from": "customer7@example.com",
+      "received_at": "Tue, 18 Nov 2025 09:30:00 +0400",
+      "body": "Dear Team,\nKindly quote your best rate for Fob to DOOR (1 x 40 FT) (DEIRA warehouse).\nPickup Date- 22/11/2025\nPort-Shenzhen\nDelivery Location – DEIRA Warehouse\nGoods – tissues."
+    },
+    "expected": {
+      "shipments": [
+        {
+          "pol": "SHENZHEN",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 1, "type": "40FT"}],
+          "date": "2025-11-22",
+          "service_type": "port-to-door"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "fob_guangzhou_to_door_fairlink_deira",
+    "email": {
+      "subject": "FOB Guangzhou to Door delivery",
+      "from": "customer8@example.com",
+      "received_at": "Mon, 10 Nov 2025 10:00:00 +0400",
+      "body": "Dear Team,\nPlease quote for FOB Guangzhou to Door delivery at Fairlink Warehouse Deira.\nItem: Janitorial tools\nContainer: FCL 1x40fthc\nPOL: Guangzhou\nPOD: Jebel Ali\nGood are ready for collection."
+    },
+    "expected": {
+      "shipments": [
+        {
+          "pol": "GUANGZHOU",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 1, "type": "40HC"}],
+          "date": "2025-11-10",
+          "service_type": "port-to-door"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "nansha_yantian_to_jebel_ali_with_uaq_delivery_split_origins",
+    "email": {
+      "subject": "Urgent shipment quote request",
+      "from": "customer9@example.com",
+      "received_at": "Thu, 22 Jan 2026 08:45:00 +0400",
+      "body": "Dear Team,\nPlease quote your best rate. Details are given below.\nCONTAINER TYPE\n2X40FTHQ\nGOODS READY DATE\n29/1/2026\nETD\n3/2/2026\nPOL\nNANSHA,YANTIAN\nPOD\nJEBEL ALI\nINCO TERMS\nFOB\nDELIVERY ADDRESS\nFAIRLINK MACHINE STORE UAQ\nThis is an urgent shipment. No delay is acceptable."
+    },
+    "expected": {
+      "shipments": [
+        {
+          "pol": "NANSHA",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 2, "type": "40HC"}],
+          "date": "2026-01-29",
+          "service_type": "port-to-door"
+        },
+        {
+          "pol": "YANTIAN",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 2, "type": "40HC"}],
+          "date": "2026-01-29",
+          "service_type": "port-to-door"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "urgent_fob_qingdao_jebel_ali_14_days_dem_det_no_soc",
+    "email": {
+      "subject": "Urgent FOB Qingdao shipment",
+      "from": "customer10@example.com",
+      "received_at": "Tue, 20 Jan 2026 09:30:00 +0400",
+      "body": "Dear Valued Business Partner,\nlet us know the best suited Ocean Freight for the following Shipments.\nThis Shipment is Very Urgent.\nFOB QINGDAO (CHINA) to JEBEL ALI.\nVolume of Shipment: 1X40FT CONTAINER\nMaterial Specifications: 48 MIC\nCargo readiness date: 25TH JAN\nType of Shipment: Direct\n14 days DEM & DET free time is must.\nNOTE: PLEASE NEVER USE SOC CONTAINERS"
+    },
+    "expected": {
+      "shipments": [
+        {
+          "pol": "QINGDAO",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 1, "type": "40FT"}],
+          "date": "2026-01-25",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "urgent_fob_shenzhen_jebel_ali_3x40_empty_can",
+    "email": {
+      "subject": "Urgent FOB Shenzhen shipment",
+      "from": "customer11@example.com",
+      "received_at": "Tue, 20 Jan 2026 10:00:00 +0400",
+      "body": "Dear Valued Business Partner,\nlet us know the best suited Ocean Freight for the following Shipments.\nNOTE: This Shipment is Urgent.\nFOB SHENZHEN (CHINA) to JEBEL ALI.\nVolume of Shipment: 3X40FT CONTAINER\nMaterial Specifications: EMPTY CAN\nCargo readiness date: 31ST JAN\nType of Shipment: Direct\n14 days DEM & DET free time is must"
+    },
+    "expected": {
+      "shipments": [
+        {
+          "pol": "SHENZHEN",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [{"qty": 3, "type": "40FT"}],
+          "date": "2026-01-31",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  }
+]
