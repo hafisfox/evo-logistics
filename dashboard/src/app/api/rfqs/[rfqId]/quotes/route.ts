@@ -2,8 +2,22 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { AgentQuote } from "@/types/rfq";
 import { requireWorkspaceApiContext } from "@/lib/workspace-context";
+import { mapNormalizedQuoteToLegacy } from "@/lib/rfq-normalization";
 
 export const dynamic = "force-dynamic";
+
+function isMissingRelationError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = "code" in error ? String((error as { code?: string }).code || "") : "";
+  const message =
+    "message" in error ? String((error as { message?: string }).message || "") : "";
+  return (
+    code === "PGRST205" ||
+    code === "42P01" ||
+    message.includes("Could not find the table") ||
+    (message.includes("relation") && message.includes("does not exist"))
+  );
+}
 
 export async function GET(
   _request: Request,
@@ -22,14 +36,31 @@ export async function GET(
     const { rfqId } = await params;
     const supabase = await createClient();
 
-    const { data, error } = await supabase
-      .from('agent_outbound_log')
-      .select('*')
+    const normalizedRes = await supabase
+      .from("agent_quotes")
+      .select("*")
       .eq('workspace_id', workspaceId)
       .eq('rfq_id', rfqId);
 
-    if (error) throw error;
-    const quotes = (data || []) as AgentQuote[];
+    let rows: Record<string, unknown>[] = [];
+    if (!normalizedRes.error && (normalizedRes.data || []).length > 0) {
+      rows = (normalizedRes.data || []) as Record<string, unknown>[];
+    } else {
+      if (normalizedRes.error && !isMissingRelationError(normalizedRes.error)) {
+        throw normalizedRes.error;
+      }
+
+      const legacyRes = await supabase
+        .from("agent_outbound_log")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .eq("rfq_id", rfqId);
+
+      if (legacyRes.error) throw legacyRes.error;
+      rows = (legacyRes.data || []) as Record<string, unknown>[];
+    }
+
+    const quotes = rows.map(mapNormalizedQuoteToLegacy) as AgentQuote[];
 
     // Sort by price ascending (cheapest first)
     quotes.sort((a, b) => {

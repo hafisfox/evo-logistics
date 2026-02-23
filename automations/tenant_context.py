@@ -13,11 +13,18 @@ ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK = os.environ.get(
 
 TENANT_TABLES = {
     "master_rfqs",
+    "rfq_shipments",
+    "rfq_shipment_containers",
     "agent_outbound_log",
+    "agent_quotes",
     "agents",
     "do_charges",
     "destination_charges",
     "transportation_charges",
+    "do_charge_profiles",
+    "do_charge_rates",
+    "destination_charge_items",
+    "destination_charge_rates",
     "app_settings",
     "workspace_mailboxes",
     "workspace_invites",

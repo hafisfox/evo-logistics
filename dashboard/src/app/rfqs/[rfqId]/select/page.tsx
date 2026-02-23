@@ -87,8 +87,8 @@ export default function AgentSelectionPage() {
       {rfq && (
         <div className="flex items-center gap-4 flex-wrap bg-muted/50 rounded-lg p-4">
           <StatusBadge status={rfq.status} />
-          <RouteDisplay pol={rfq.pol} pod={rfq.pod} />
-          <ContainerBadge type={rfq.container_type} qty={rfq.qty} />
+          <RouteDisplay pol={rfq.pol} pod={rfq.pod} shipments={rfq.shipments} />
+          <ContainerBadge type={rfq.container_type} qty={rfq.qty} shipments={rfq.shipments} />
           <span className="text-sm text-muted-foreground">
             {rfq.service_type}
           </span>

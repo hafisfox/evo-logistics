@@ -49,6 +49,9 @@ image = modal.Image.debian_slim(python_version="3.11").pip_install(
     "/root/gmail_workspace_auth.py"
 )
 QUOTE_THRESHOLD = 2  # Minimum valid quotes before notifying manager
+RFQ_NORMALIZED_DUAL_WRITE = os.environ.get(
+    "RFQ_NORMALIZED_DUAL_WRITE", "true"
+).lower() in {"1", "true", "yes", "on"}
 
 # =====================================================================
 # CORE DATA MODELS
@@ -435,6 +438,150 @@ def _upsert_row(supabase, table_name, row_data: dict, workspace_id=None):
         scoped_upsert(supabase, table_name, workspace_id, row_data)
     else:
         supabase.table(table_name).upsert(row_data).execute()
+
+
+def _normalize_iso_date(value: Optional[str]) -> Optional[str]:
+    if not value or not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    if not cleaned or cleaned.upper() in {"N/A", "NO_QUOTE", "TBD"}:
+        return None
+    match = re.match(r"^(\\d{4}-\\d{2}-\\d{2})", cleaned)
+    if match:
+        return match.group(1)
+    return None
+
+
+def _parse_nullable_int(value: Optional[str]) -> Optional[int]:
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    if not cleaned or cleaned.upper() in {"N/A", "NO_QUOTE", "TBD"}:
+        return None
+    try:
+        parsed = int(cleaned)
+        return parsed if parsed > 0 else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_nullable_price(value: Optional[str]) -> Optional[float]:
+    if value is None:
+        return None
+    cleaned = str(value).replace(",", "").strip()
+    if not cleaned or cleaned.upper() in {"N/A", "NO_QUOTE", "TBD"}:
+        return None
+    try:
+        parsed = float(cleaned)
+        return parsed if parsed > 0 else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _ensure_quote_shipment_row(supabase, workspace_id: str, rfq_row: dict, shipment_number: int):
+    existing = (
+        supabase.table("rfq_shipments")
+        .select("shipment_number")
+        .eq("workspace_id", workspace_id)
+        .eq("rfq_id", rfq_row.get("rfq_id"))
+        .eq("shipment_number", shipment_number)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if existing:
+        return
+
+    context = build_shipment_context(rfq_row)
+    shipment = next(
+        (s for s in context.get("shipments", []) if int(s.get("shipment_number", 0)) == shipment_number),
+        None,
+    )
+    if shipment is None:
+        shipment = {
+            "shipment_number": shipment_number,
+            "pol": parse_multi_value(rfq_row.get("pol"))[0] if parse_multi_value(rfq_row.get("pol")) else "TBD",
+            "pod": parse_multi_value(rfq_row.get("pod"))[0] if parse_multi_value(rfq_row.get("pod")) else "TBD",
+            "service_type": (rfq_row.get("service_type") or "port-to-port").lower().strip(),
+            "containers": [{"qty": 1, "type": "40HQ"}],
+        }
+
+    scoped_upsert(
+        supabase,
+        "rfq_shipments",
+        workspace_id,
+        {
+            "rfq_id": rfq_row.get("rfq_id"),
+            "shipment_number": shipment_number,
+            "pol": shipment.get("pol") or "TBD",
+            "pod": shipment.get("pod") or "TBD",
+            "ready_date": _normalize_iso_date(str(rfq_row.get("ready_date") or "")),
+            "delivery_deadline": _normalize_iso_date(str(rfq_row.get("delivery_deadline") or "")),
+            "service_type": shipment.get("service_type") or "port-to-port",
+            "pickup_address": rfq_row.get("pickup_address"),
+            "delivery_address": rfq_row.get("delivery_address"),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+
+    containers = shipment.get("containers") or [{"qty": 1, "type": "40HQ"}]
+    for idx, container in enumerate(containers):
+        scoped_upsert(
+            supabase,
+            "rfq_shipment_containers",
+            workspace_id,
+            {
+                "rfq_id": rfq_row.get("rfq_id"),
+                "shipment_number": shipment_number,
+                "line_number": idx + 1,
+                "container_type": _normalize_container_type(container.get("type")),
+                "qty": _parse_positive_int(container.get("qty"), 1),
+            },
+        )
+
+
+def _dual_write_agent_quote(
+    supabase,
+    workspace_id: str,
+    rfq_row: dict,
+    log_data: dict,
+    *,
+    source: str,
+):
+    if not RFQ_NORMALIZED_DUAL_WRITE:
+        return
+    try:
+        shipment_number = _parse_positive_int(log_data.get("shipment_number"), 1)
+        _ensure_quote_shipment_row(supabase, workspace_id, rfq_row, shipment_number)
+
+        payload = {
+            "workspace_id": workspace_id,
+            "rfq_id": rfq_row.get("rfq_id"),
+            "shipment_number": shipment_number,
+            "match": log_data.get("match"),
+            "agent_name": log_data.get("agent_name") or "Unknown",
+            "agent_email": log_data.get("agent_email") or "unknown@example.com",
+            "carrier": log_data.get("carrier") or "N/A",
+            "price": _parse_nullable_price(log_data.get("price")),
+            "currency": (log_data.get("currency") or "USD"),
+            "etd": _normalize_iso_date(log_data.get("etd")),
+            "transit_time": _parse_nullable_int(log_data.get("transit_time")),
+            "free_time": _parse_nullable_int(log_data.get("free_time")),
+            "validity": _normalize_iso_date(log_data.get("validity")),
+            "status": log_data.get("status") or "Invalid_Quote",
+            "sent_at": log_data.get("sent_at"),
+            "received_at": log_data.get("received_at"),
+            "raw_meta": {"source": source},
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        supabase.table("agent_quotes").upsert(
+            payload,
+            on_conflict="workspace_id,match",
+        ).execute()
+    except Exception as exc:
+        print(f"Warning: normalized quote dual-write failed for {log_data.get('match')}: {exc}")
 
 def _get_rows_by_filter(supabase, table_name, filter_column, filter_value, workspace_id=None):
     """Get all rows where filter_column == filter_value."""
@@ -1129,6 +1276,13 @@ def _process_agent_quotes(pubsub_payload=None):
                     'received_at': now_str,
                 }
                 _upsert_row(supabase, "agent_outbound_log", log_data, workspace_id)
+                _dual_write_agent_quote(
+                    supabase,
+                    workspace_id,
+                    rfq_row,
+                    log_data,
+                    source="phase_2_quote_analysis_invalid",
+                )
                 print(f"No valid quotes from {agent_name}, logged as Invalid_Quote")
                 continue
 
@@ -1161,6 +1315,13 @@ def _process_agent_quotes(pubsub_payload=None):
                 }
 
                 _upsert_row(supabase, "agent_outbound_log", log_data, workspace_id)
+                _dual_write_agent_quote(
+                    supabase,
+                    workspace_id,
+                    rfq_row,
+                    log_data,
+                    source="phase_2_quote_analysis_valid",
+                )
                 print(f"Quote logged: {agent_name} / {carrier} / ${price} (shipment {quote.shipment_number})")
 
             # After logging all quotes, check threshold
@@ -1187,6 +1348,22 @@ def _process_agent_quotes(pubsub_payload=None):
                     'shipment_number': '1',
                     'received_at': datetime.now(UAE_TZ).strftime('%Y-%m-%d %I:%M %p'),
                 }, workspace_id)
+                _dual_write_agent_quote(
+                    supabase,
+                    workspace_id,
+                    rfq_row,
+                    {
+                        'rfq_id': canonical_ref_id,
+                        'match': match_key,
+                        'status': 'Invalid_Quote',
+                        'agent_name': agent_name,
+                        'agent_email': agent_email,
+                        'carrier': 'N/A',
+                        'shipment_number': '1',
+                        'received_at': datetime.now(UAE_TZ).strftime('%Y-%m-%d %I:%M %p'),
+                    },
+                    source="phase_2_quote_analysis_exception",
+                )
             except Exception:
                 pass
 

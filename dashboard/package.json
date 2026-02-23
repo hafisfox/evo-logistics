@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "backfill:rfq-normalized": "npx tsx scripts/backfill_rfq_normalized.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",

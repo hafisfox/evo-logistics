@@ -150,13 +150,36 @@ Current behavior:
 - `scheduled_tasks.py` handles strict cross-tenant data isolation by looping explicitly and uses idempotent exact updates matching `rfq_id` + `agent_email`.
 - `phase_2_quote_analysis.py` triggers exact-match manager notifications without repeating identical thresholds.
 
-## Dual-Mode Cutover (Active)
+### 7. RFQ + Pricing Normalization (Production)
 
-The system currently runs in a phased dual-mode:
+Implemented and deployed:
 
-- Existing legacy data is backfilled into bootstrap workspace `00000000-0000-0000-0000-000000000001`.
-- Missing workspace context in automation ingress no longer routes by default; strict ignore + audit is active.
-- New dashboard paths and APIs are workspace-native.
+- Migration: `dashboard/supabase/migrations/20260223_012_rfq_and_pricing_normalization.sql`
+- Normalized RFQ tables:
+  - `rfq_shipments`
+  - `rfq_shipment_containers`
+  - `agent_quotes`
+- Normalized pricing tables:
+  - `do_charge_profiles`
+  - `do_charge_rates`
+  - `destination_charge_items`
+  - `destination_charge_rates`
+- Compatibility views:
+  - `v_master_rfq_legacy_projection`
+  - `v_do_charges_legacy`
+  - `v_destination_charges_legacy`
+- Historical backfill script:
+  - `dashboard/scripts/backfill_rfq_normalized.ts`
+- Dashboard APIs and UI are normalization-aware while preserving existing route contracts.
+
+## Cutover Mode (Current)
+
+The system now runs with normalized reads active and dual-write retained:
+
+- `RFQ_NORMALIZED_DUAL_WRITE=true`
+- `RFQ_NORMALIZED_READ_SOURCE=normalized`
+- Historical backfill completed.
+- Post-backfill and post-deploy quote parity checks are clean (`agent_outbound_log` vs `agent_quotes`: zero unmatched rows).
 
 ## Known Hardening Follow-Ups
 
@@ -193,16 +216,35 @@ Executed from this workspace branch:
 - scheduled app deployed: `https://modal.com/apps/hafisjavad/main/deployed/scheduled-tasks`
 - mailbox OAuth enforcement migration applied:
   - `workspace_mailboxes_connected_requires_refresh_token` check blocks token-less `connected` updates
-- manual renew operations currently skip because no workspace mailboxes are connected yet:
-  - `python3 -m modal run automations/phase_1_request_analysis.py::renew_gmail_watch`
-  - `python3 -m modal run automations/phase_2_quote_analysis.py::renew_gmail_watch`
+- RFQ/pricing normalization migration applied:
+  - `dashboard/supabase/migrations/20260223_012_rfq_and_pricing_normalization.sql`
+- backfill completed:
+  - `rfqsRead=2`
+  - `shipmentsUpserted=7`
+  - `containersUpserted=7`
+  - `quotesRead=2`
+  - `quotesUpserted=2`
+  - `doProfilesUpserted=3`
+  - `doRatesUpserted=9`
+  - `destinationItemsUpserted=2`
+  - `destinationRatesUpserted=4`
+- Modal secret `evo-logistics-env` updated with:
+  - `RFQ_NORMALIZED_DUAL_WRITE=true`
+  - `RFQ_NORMALIZED_READ_SOURCE=normalized`
+- Modal apps redeployed (phase 1/2/3 + scheduled tasks).
+- Gmail watches renewed successfully for connected mailbox:
+  - `yunapink05@gmail.com`
+- webhook endpoint smoke probes (`GET`) return `405` as expected for POST-only handlers.
 
 ## Source of Truth Files
 
 - `dashboard/supabase/migrations/20260222_001_multitenant_workspaces.sql`
 - `dashboard/supabase/migrations/20260222_010_fix_agents_workspace_scoping.sql`
 - `dashboard/supabase/migrations/20260223_011_workspace_mailbox_oauth_enforcement.sql`
+- `dashboard/supabase/migrations/20260223_012_rfq_and_pricing_normalization.sql`
 - `dashboard/supabase_schema.sql`
+- `dashboard/scripts/backfill_rfq_normalized.ts`
+- `dashboard/src/lib/rfq-normalization.ts`
 - `dashboard/src/lib/workspace-context.ts`
 - `dashboard/src/lib/workspaces.ts`
 - `dashboard/src/app/api/workspaces/current/mailbox/route.ts`

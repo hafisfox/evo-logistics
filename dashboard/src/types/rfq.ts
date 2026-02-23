@@ -17,6 +17,24 @@ export type ServiceType =
   | "port-to-door"
   | "door-to-door";
 
+export interface RFQShipmentContainer {
+  line_number: number;
+  container_type: string;
+  qty: number;
+}
+
+export interface RFQShipment {
+  shipment_number: number;
+  pol: string;
+  pod: string;
+  ready_date: string | null;
+  delivery_deadline: string | null;
+  service_type: ServiceType;
+  pickup_address: string | null;
+  delivery_address: string | null;
+  containers: RFQShipmentContainer[];
+}
+
 export interface MasterRFQ {
   rfq_id: string;
   thread_id: string;
@@ -36,6 +54,8 @@ export interface MasterRFQ {
   final_price_usd: string | null;
   final_price_aed: string | null;
   quoted_at: string | null;
+  shipments?: RFQShipment[];
+  shipment_count?: number;
   deleted_at?: string | null;
 }
 

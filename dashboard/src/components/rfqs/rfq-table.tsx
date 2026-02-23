@@ -64,7 +64,10 @@ export function RFQTable({ rfqs }: RFQTableProps) {
         </TableHeader>
         <TableBody>
           {rfqs.map((rfq) => (
-            <TableRow key={rfq.rfq_id} className="group border-b border-black/5 dark:border-white/5 hover:bg-black/[0.015] dark:hover:bg-white/[0.015] transition-all cursor-pointer">
+            <TableRow
+              key={rfq.rfq_id}
+              className="group border-b border-black/5 dark:border-white/5 hover:bg-black/[0.015] dark:hover:bg-white/[0.015] transition-all cursor-pointer"
+            >
               <TableCell className="font-mono text-sm py-4">
                 <Link
                   href={`/rfqs/${rfq.rfq_id}`}
@@ -77,17 +80,19 @@ export function RFQTable({ rfqs }: RFQTableProps) {
                 {rfq.customer_email}
               </TableCell>
               <TableCell className="py-4">
-                <RouteDisplay pol={rfq.pol} pod={rfq.pod} />
+                <RouteDisplay pol={rfq.pol} pod={rfq.pod} shipments={rfq.shipments} />
               </TableCell>
               <TableCell className="py-4">
-                <ContainerBadge type={rfq.container_type} qty={rfq.qty} />
+                <ContainerBadge type={rfq.container_type} qty={rfq.qty} shipments={rfq.shipments} />
               </TableCell>
-              <TableCell className="text-sm font-medium text-muted-foreground py-4">{rfq.service_type}</TableCell>
+              <TableCell className="text-sm font-medium text-muted-foreground py-4">
+                {rfq.shipments?.[0]?.service_type || rfq.service_type}
+              </TableCell>
               <TableCell className="py-4">
                 <StatusBadge status={rfq.status} />
               </TableCell>
               <TableCell className="text-sm font-medium text-muted-foreground py-4">
-                {formatDate(rfq.ready_date)}
+                {formatDate(rfq.shipments?.[0]?.ready_date || rfq.ready_date)}
               </TableCell>
               <TableCell className="py-4 cursor-default">
                 {rfq.final_price_aed ? (

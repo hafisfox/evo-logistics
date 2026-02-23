@@ -140,9 +140,16 @@ Primary helpers:
 Tenant-scoped operational tables:
 - `master_rfqs`
 - `agent_outbound_log`
+- `rfq_shipments`
+- `rfq_shipment_containers`
+- `agent_quotes`
 - `agents`
 - `do_charges`
+- `do_charge_profiles`
+- `do_charge_rates`
 - `destination_charges`
+- `destination_charge_items`
+- `destination_charge_rates`
 - `transportation_charges`
 - `app_settings`
 
@@ -159,10 +166,21 @@ Migration: `dashboard/supabase/migrations/20260222_001_multitenant_workspaces.sq
 Legacy-constraint hardening:
 - `dashboard/supabase/migrations/20260222_010_fix_agents_workspace_scoping.sql`
 - `dashboard/supabase/migrations/20260223_011_workspace_mailbox_oauth_enforcement.sql`
+- `dashboard/supabase/migrations/20260223_012_rfq_and_pricing_normalization.sql`
 - Drops old global agent constraints and enforces:
   - `primary key (workspace_id, agent_name)`
   - `unique (workspace_id, email)`
 This prevents "Agent already exists" conflicts across different workspaces.
+
+Compatibility views for stable API contracts:
+- `v_master_rfq_legacy_projection`
+- `v_do_charges_legacy`
+- `v_destination_charges_legacy`
+
+Cutover status:
+- normalized read source is live in automations (`RFQ_NORMALIZED_READ_SOURCE=normalized`)
+- dual-write remains enabled (`RFQ_NORMALIZED_DUAL_WRITE=true`) for rollback safety
+- historical backfill completed with quote parity (`agent_outbound_log` vs `agent_quotes`) at zero unmatched rows
 
 Postgres Performance Tuning (via Supabase Best Practices):
 - **RLS Query Plan Fixing**: `auth.uid()` and `auth.jwt()` logic wrapped in `(SELECT ...)` caching subqueries.

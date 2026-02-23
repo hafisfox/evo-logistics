@@ -16,6 +16,10 @@ Workspace-centric Next.js control plane for RFQ operations, pricing, and automat
 - In-app workspace creation from header user menu.
 - Role-aware API guards for `owner`, `admin`, and `member`.
 - Workspace-scoped RFQ/pricing/settings APIs.
+- RFQ and pricing normalization is live behind compatibility APIs:
+  - normalized RFQ tables: `rfq_shipments`, `rfq_shipment_containers`, `agent_quotes`
+  - normalized pricing tables: `do_charge_profiles/rates`, `destination_charge_items/rates`
+  - compatibility views: `v_master_rfq_legacy_projection`, `v_do_charges_legacy`, `v_destination_charges_legacy`
 - Quote selection uses exact quote `match` key (`selected_match`) to support same-carrier multi-option offers safely.
 - Workspace-scoped agent uniqueness (`workspace_id + agent_name`, `workspace_id + email`) via migration `20260222_010_fix_agents_workspace_scoping.sql`.
 - Workspace mailbox OAuth connect/reconnect/disconnect in workspace settings.
@@ -65,6 +69,7 @@ npm run typecheck
 npm run test
 npm run test:e2e
 npm run build
+npm run backfill:rfq-normalized
 ```
 
 Notes:
@@ -93,6 +98,7 @@ Notes:
 - RFQ soft delete + index: `../dashboard/supabase/migrations/20260222_009_dashboard_crud_rfq_soft_delete.sql`
 - Legacy agent global-constraint fix: `../dashboard/supabase/migrations/20260222_010_fix_agents_workspace_scoping.sql`
 - Mailbox OAuth enforcement: `../dashboard/supabase/migrations/20260223_011_workspace_mailbox_oauth_enforcement.sql`
+- RFQ + pricing normalization (zero-downtime): `../dashboard/supabase/migrations/20260223_012_rfq_and_pricing_normalization.sql`
 
 ## Related Docs
 

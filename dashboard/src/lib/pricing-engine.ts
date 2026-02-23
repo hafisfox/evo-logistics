@@ -19,6 +19,58 @@ export function parseMultiValue(value: string | null | undefined): string[] {
   return [value];
 }
 
+interface StructuredRFQShipment {
+  shipment_number: number;
+  pol: string;
+  pod: string;
+  service_type: string;
+  pickup_address: string | null;
+  delivery_address: string | null;
+  containers: Array<{
+    container_type: string;
+    qty: number;
+  }>;
+}
+
+function flattenStructuredShipments(shipments: StructuredRFQShipment[]) {
+  const polLines: string[] = [];
+  const podLines: string[] = [];
+  const containerTypeLines: string[] = [];
+  const qtyLines: string[] = [];
+  let serviceType = "port-to-port";
+  let deliveryAddress: string | null = null;
+
+  for (const shipment of shipments) {
+    if (shipment.service_type) {
+      serviceType = shipment.service_type;
+    }
+    if (!deliveryAddress && shipment.delivery_address) {
+      deliveryAddress = shipment.delivery_address;
+    }
+
+    const containers =
+      shipment.containers && shipment.containers.length > 0
+        ? shipment.containers
+        : [{ container_type: "40HQ", qty: 1 }];
+
+    for (const container of containers) {
+      polLines.push(shipment.pol || "N/A");
+      podLines.push(shipment.pod || "N/A");
+      containerTypeLines.push(container.container_type || "40HQ");
+      qtyLines.push(String(container.qty || 1));
+    }
+  }
+
+  return {
+    pol: polLines.join("\n"),
+    pod: podLines.join("\n"),
+    container_type: containerTypeLines.join("\n"),
+    qty: qtyLines.join("\n"),
+    service_type: serviceType,
+    delivery_address: deliveryAddress,
+  };
+}
+
 function parsePositiveInteger(value: string | undefined, fallback = 1): number {
   const parsed = Number.parseInt(value || String(fallback), 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -171,6 +223,7 @@ export function calculateFullPricing(params: {
     pod: string;
     service_type: string;
     delivery_address: string | null;
+    shipments?: StructuredRFQShipment[];
   };
   quote: {
     carrier: string;
@@ -182,15 +235,22 @@ export function calculateFullPricing(params: {
   settings: PricingSettings;
 }): PricingResult {
   const { rfq, quote, doCharges, destCharges, transpCharges, settings } = params;
+  const rfqForCalculation =
+    rfq.shipments && rfq.shipments.length > 0
+      ? {
+          ...rfq,
+          ...flattenStructuredShipments(rfq.shipments),
+        }
+      : rfq;
 
-  const containerTypes = parseMultiValue(rfq.container_type);
-  const quantities = parseMultiValue(rfq.qty);
-  const pols = parseMultiValue(rfq.pol);
-  const pods = parseMultiValue(rfq.pod);
+  const containerTypes = parseMultiValue(rfqForCalculation.container_type);
+  const quantities = parseMultiValue(rfqForCalculation.qty);
+  const pols = parseMultiValue(rfqForCalculation.pol);
+  const pods = parseMultiValue(rfqForCalculation.pod);
   const carriers = parseMultiValue(quote.carrier);
   const prices = parseMultiValue(quote.price);
 
-  const serviceType = (rfq.service_type || "port-to-port").toLowerCase().trim();
+  const serviceType = (rfqForCalculation.service_type || "port-to-port").toLowerCase().trim();
   const isPortOnly = serviceType === "port-to-port";
   const hasDelivery =
     serviceType === "port-to-door" || serviceType === "door-to-door";
@@ -246,7 +306,7 @@ export function calculateFullPricing(params: {
         qty,
         containerType,
         carrier,
-        deliveryAddress: hasDelivery ? rfq.delivery_address : null,
+        deliveryAddress: hasDelivery ? rfqForCalculation.delivery_address : null,
         doCharges,
         destCharges,
         transpCharges,

@@ -1,13 +1,34 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import type { MasterRFQ, AgentQuote } from "@/types/rfq";
+import type { MasterRFQ, AgentQuote, RFQShipment } from "@/types/rfq";
 import { requireWorkspaceApiContext } from "@/lib/workspace-context";
 import type { ApiErrorPayload } from "@/lib/validation";
+import {
+  buildRFQWithShipments,
+  buildShipmentsByRfq,
+  mapMasterRFQRow,
+  mapNormalizedQuoteToLegacy,
+  type RFQShipmentContainerRow,
+  type RFQShipmentRow,
+} from "@/lib/rfq-normalization";
 
 export const dynamic = "force-dynamic";
 
 function jsonError(payload: ApiErrorPayload, status: number) {
   return NextResponse.json(payload, { status });
+}
+
+function isMissingRelationError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = "code" in error ? String((error as { code?: string }).code || "") : "";
+  const message =
+    "message" in error ? String((error as { message?: string }).message || "") : "";
+  return (
+    code === "PGRST205" ||
+    code === "42P01" ||
+    message.includes("Could not find the table") ||
+    (message.includes("relation") && message.includes("does not exist"))
+  );
 }
 
 export async function GET(
@@ -27,37 +48,87 @@ export async function GET(
     const { rfqId } = await params;
     const supabase = await createClient();
 
-    // Splitting queries to avoid Promise.all never inference issues with .single()
-    const [rfqRes, quotesRes] = await Promise.all([
-      supabase
-        .from('master_rfqs')
-        .select('*')
-        .eq('workspace_id', workspaceId)
-        .eq('rfq_id', rfqId)
-        .is('deleted_at', null)
-        .single(),
-      supabase
-        .from('agent_outbound_log')
-        .select('*')
-        .eq('workspace_id', workspaceId)
-        .eq('rfq_id', rfqId)
-    ]);
+    const rfqRes = await supabase
+      .from("master_rfqs")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .eq("rfq_id", rfqId)
+      .is("deleted_at", null)
+      .single();
 
-    if (rfqRes.error && rfqRes.error.code !== 'PGRST116') {
+    if (rfqRes.error && rfqRes.error.code !== "PGRST116") {
       throw rfqRes.error;
     }
 
-    if (quotesRes.error) throw quotesRes.error;
-
-    const rfqData = rfqRes.data as unknown as MasterRFQ;
+    const rfqData = rfqRes.data as Record<string, unknown> | null;
 
     if (!rfqData) {
       return NextResponse.json({ error: "RFQ not found" }, { status: 404 });
     }
 
+    const baseRfq = mapMasterRFQRow(rfqData);
+    let normalizedShipments: RFQShipment[] | undefined;
+
+    try {
+      const [shipmentsRes, containersRes] = await Promise.all([
+        supabase
+          .from("rfq_shipments")
+          .select(
+            "workspace_id, rfq_id, shipment_number, pol, pod, ready_date, delivery_deadline, service_type, pickup_address, delivery_address"
+          )
+          .eq("workspace_id", workspaceId)
+          .eq("rfq_id", rfqId),
+        supabase
+          .from("rfq_shipment_containers")
+          .select("workspace_id, rfq_id, shipment_number, line_number, container_type, qty")
+          .eq("workspace_id", workspaceId)
+          .eq("rfq_id", rfqId),
+      ]);
+
+      if (shipmentsRes.error) throw shipmentsRes.error;
+      if (containersRes.error) throw containersRes.error;
+
+      const shipmentMap = buildShipmentsByRfq(
+        (shipmentsRes.data || []) as RFQShipmentRow[],
+        (containersRes.data || []) as RFQShipmentContainerRow[]
+      );
+      normalizedShipments = shipmentMap.get(rfqId);
+    } catch (error) {
+      if (!isMissingRelationError(error)) {
+        throw error;
+      }
+    }
+
+    const quotesFromNormalized = await supabase
+      .from("agent_quotes")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .eq("rfq_id", rfqId);
+
+    let quotesRows: Record<string, unknown>[] = [];
+
+    if (!quotesFromNormalized.error && (quotesFromNormalized.data || []).length > 0) {
+      quotesRows = (quotesFromNormalized.data || []) as Record<string, unknown>[];
+    } else {
+      if (quotesFromNormalized.error && !isMissingRelationError(quotesFromNormalized.error)) {
+        throw quotesFromNormalized.error;
+      }
+
+      const quotesLegacyRes = await supabase
+        .from("agent_outbound_log")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .eq("rfq_id", rfqId);
+
+      if (quotesLegacyRes.error) throw quotesLegacyRes.error;
+      quotesRows = (quotesLegacyRes.data || []) as Record<string, unknown>[];
+    }
+
+    const quotes = quotesRows.map(mapNormalizedQuoteToLegacy);
+
     return NextResponse.json({
-      rfq: rfqData as MasterRFQ,
-      quotes: (quotesRes.data || []) as AgentQuote[]
+      rfq: buildRFQWithShipments(baseRfq, normalizedShipments),
+      quotes: quotes as AgentQuote[],
     });
   } catch (error) {
     console.error("Failed to fetch RFQ detail:", error);

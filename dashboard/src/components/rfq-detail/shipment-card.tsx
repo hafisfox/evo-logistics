@@ -5,6 +5,7 @@ import { RouteDisplay } from "@/components/ui/route-display";
 import { ContainerBadge } from "@/components/ui/container-badge";
 import { StatusBadge } from "@/components/rfqs/status-badge";
 import { formatDate } from "@/lib/utils";
+import { buildLegacyShipmentsFromRFQ } from "@/lib/rfq-normalization";
 import type { MasterRFQ } from "@/types/rfq";
 import { MapPin, Calendar, Truck } from "lucide-react";
 
@@ -13,6 +14,11 @@ interface ShipmentCardProps {
 }
 
 export function ShipmentCard({ rfq }: ShipmentCardProps) {
+  const shipments =
+    rfq.shipments && rfq.shipments.length > 0
+      ? rfq.shipments
+      : buildLegacyShipmentsFromRFQ(rfq);
+
   return (
     <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
       <CardHeader className="pb-4 px-6 pt-6">
@@ -22,59 +28,73 @@ export function ShipmentCard({ rfq }: ShipmentCardProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4 px-6 pb-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Route</p>
-            <RouteDisplay pol={rfq.pol} pod={rfq.pod} />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Containers</p>
-            <ContainerBadge type={rfq.container_type} qty={rfq.qty} />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Service Type</p>
-            <p className="text-sm font-medium">{rfq.service_type}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Ready Date</p>
-            <div className="flex items-center gap-1">
-              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-              <p className="text-sm font-medium">{formatDate(rfq.ready_date)}</p>
-            </div>
-          </div>
-          {rfq.delivery_deadline ? (
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Delivery Deadline</p>
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3.5 w-3.5 text-red-500" />
-                <p className="text-sm font-medium text-red-600">{formatDate(rfq.delivery_deadline)}</p>
+        <div className="space-y-3">
+          {shipments.map((shipment) => (
+            <div
+              key={shipment.shipment_number}
+              className="rounded-2xl border border-white/20 dark:border-white/10 bg-white/40 dark:bg-black/20 px-4 py-4"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Shipment {shipment.shipment_number}
+                </p>
+                <span className="text-xs font-medium text-muted-foreground">
+                  {shipment.service_type}
+                </span>
               </div>
-            </div>
-          ) : null}
-        </div>
 
-        {(rfq.pickup_address || rfq.delivery_address) ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t">
-            {rfq.pickup_address ? (
-              <div className="flex items-start gap-2">
-                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                 <div>
-                  <p className="text-xs text-muted-foreground">Pickup</p>
-                  <p className="text-sm">{rfq.pickup_address}</p>
+                  <p className="mb-1 text-xs text-muted-foreground">Route</p>
+                  <RouteDisplay shipments={[shipment]} showShipmentCount={false} />
+                </div>
+                <div>
+                  <p className="mb-1 text-xs text-muted-foreground">Containers</p>
+                  <ContainerBadge shipments={[shipment]} maxChips={6} />
+                </div>
+                <div>
+                  <p className="mb-1 text-xs text-muted-foreground">Ready Date</p>
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                    <p className="text-sm font-medium">{formatDate(shipment.ready_date)}</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1 text-xs text-muted-foreground">Delivery Deadline</p>
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5 text-red-500" />
+                    <p className="text-sm font-medium text-red-600">
+                      {formatDate(shipment.delivery_deadline)}
+                    </p>
+                  </div>
                 </div>
               </div>
-            ) : null}
-            {rfq.delivery_address ? (
-              <div className="flex items-start gap-2">
-                <Truck className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Delivery</p>
-                  <p className="text-sm">{rfq.delivery_address}</p>
+
+              {shipment.pickup_address || shipment.delivery_address ? (
+                <div className="mt-4 grid grid-cols-1 gap-4 border-t pt-3 md:grid-cols-2">
+                  {shipment.pickup_address ? (
+                    <div className="flex items-start gap-2">
+                      <MapPin className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Pickup</p>
+                        <p className="text-sm">{shipment.pickup_address}</p>
+                      </div>
+                    </div>
+                  ) : null}
+                  {shipment.delivery_address ? (
+                    <div className="flex items-start gap-2">
+                      <Truck className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Delivery</p>
+                        <p className="text-sm">{shipment.delivery_address}</p>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+              ) : null}
+            </div>
+          ))}
+        </div>
 
         <div className="flex items-center gap-4 pt-2 border-t text-sm">
           <div>

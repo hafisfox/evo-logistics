@@ -73,6 +73,10 @@ def get_supabase_client():
 # =====================================================================
 
 EXCHANGE_RATE = 3.685
+RFQ_NORMALIZED_READ_SOURCE = os.environ.get(
+    "RFQ_NORMALIZED_READ_SOURCE", "shadow"
+).strip().lower()
+USE_NORMALIZED_READ = RFQ_NORMALIZED_READ_SOURCE in {"normalized", "shadow"}
 
 
 def parse_multi_value(value):
@@ -388,6 +392,172 @@ def _get_by_filter(supabase, table_name, column, value, workspace_id=None):
     return result.data or []
 
 
+def _get_workspace_rows(supabase, table_name: str, workspace_id: str):
+    result = (
+        supabase.table(table_name)
+        .select("*")
+        .eq("workspace_id", workspace_id)
+        .execute()
+    )
+    return result.data or []
+
+
+def _load_normalized_shipments(supabase, workspace_id: str, rfq_id: str) -> list:
+    shipments = (
+        supabase.table("rfq_shipments")
+        .select("*")
+        .eq("workspace_id", workspace_id)
+        .eq("rfq_id", rfq_id)
+        .order("shipment_number")
+        .execute()
+        .data
+        or []
+    )
+    if not shipments:
+        return []
+
+    containers = (
+        supabase.table("rfq_shipment_containers")
+        .select("*")
+        .eq("workspace_id", workspace_id)
+        .eq("rfq_id", rfq_id)
+        .order("shipment_number")
+        .order("line_number")
+        .execute()
+        .data
+        or []
+    )
+
+    containers_by_shipment = {}
+    for c in containers:
+        key = int(c.get("shipment_number") or 1)
+        containers_by_shipment.setdefault(key, []).append(c)
+
+    for s in shipments:
+        key = int(s.get("shipment_number") or 1)
+        s["containers"] = containers_by_shipment.get(key, [])
+
+    return shipments
+
+
+def _build_legacy_rfq_projection(rfq_data: dict, shipments: list) -> dict:
+    if not shipments:
+        return rfq_data
+
+    pol_lines = []
+    pod_lines = []
+    type_lines = []
+    qty_lines = []
+    ready_date_lines = []
+    pickup_lines = []
+    delivery_lines = []
+    service_type_value = None
+
+    for shipment in shipments:
+        if not service_type_value and shipment.get("service_type"):
+            service_type_value = shipment.get("service_type")
+        shipment_pol = shipment.get("pol") or "N/A"
+        shipment_pod = shipment.get("pod") or "N/A"
+        shipment_ready = shipment.get("ready_date")
+        shipment_pickup = shipment.get("pickup_address")
+        shipment_delivery = shipment.get("delivery_address")
+
+        for container in shipment.get("containers") or [{"container_type": "40HQ", "qty": 1}]:
+            pol_lines.append(str(shipment_pol))
+            pod_lines.append(str(shipment_pod))
+            type_lines.append(str(container.get("container_type") or "40HQ"))
+            qty_lines.append(str(container.get("qty") or 1))
+            if shipment_ready:
+                ready_date_lines.append(str(shipment_ready))
+            if shipment_pickup:
+                pickup_lines.append(str(shipment_pickup))
+            if shipment_delivery:
+                delivery_lines.append(str(shipment_delivery))
+
+    projected = dict(rfq_data)
+    projected["pol"] = "\n".join(pol_lines) if pol_lines else rfq_data.get("pol")
+    projected["pod"] = "\n".join(pod_lines) if pod_lines else rfq_data.get("pod")
+    projected["container_type"] = "\n".join(type_lines) if type_lines else rfq_data.get("container_type")
+    projected["qty"] = "\n".join(qty_lines) if qty_lines else rfq_data.get("qty")
+    if ready_date_lines:
+        projected["ready_date"] = "\n".join(ready_date_lines)
+    if pickup_lines:
+        projected["pickup_address"] = "\n".join(pickup_lines)
+    if delivery_lines:
+        projected["delivery_address"] = "\n".join(delivery_lines)
+    if service_type_value:
+        projected["service_type"] = service_type_value
+    return projected
+
+
+def _map_normalized_quotes_to_legacy(rows: list) -> list:
+    mapped = []
+    for q in rows:
+        mapped.append(
+            {
+                "rfq_id": q.get("rfq_id"),
+                "match": q.get("match"),
+                "status": q.get("status") or "Invalid_Quote",
+                "agent_name": q.get("agent_name"),
+                "agent_email": q.get("agent_email"),
+                "shipment_number": str(q.get("shipment_number") or "1"),
+                "carrier": q.get("carrier") or "N/A",
+                "price": str(q.get("price")) if q.get("price") is not None else "N/A",
+                "currency": q.get("currency") or "USD",
+                "etd": q.get("etd") or "N/A",
+                "transit_time": str(q.get("transit_time")) if q.get("transit_time") is not None else "N/A",
+                "free_time": str(q.get("free_time")) if q.get("free_time") is not None else "N/A",
+                "validity": q.get("validity") or "N/A",
+                "sent_at": q.get("sent_at"),
+                "received_at": q.get("received_at"),
+            }
+        )
+    return mapped
+
+
+def _load_quotes_for_selection(supabase, workspace_id: str, rfq_id: str) -> list:
+    if not USE_NORMALIZED_READ:
+        return _get_by_filter(supabase, "agent_outbound_log", "rfq_id", rfq_id, workspace_id)
+
+    normalized_quotes = _get_by_filter(supabase, "agent_quotes", "rfq_id", rfq_id, workspace_id)
+    if normalized_quotes:
+        return _map_normalized_quotes_to_legacy(normalized_quotes)
+
+    return _get_by_filter(supabase, "agent_outbound_log", "rfq_id", rfq_id, workspace_id)
+
+
+def _load_do_charges_for_pricing(supabase, workspace_id: str) -> list:
+    rows = _get_workspace_rows(supabase, "v_do_charges_legacy", workspace_id)
+    if rows:
+        return rows
+    return _get_table(supabase, "do_charges", workspace_id)
+
+
+def _load_destination_charges_for_pricing(supabase, workspace_id: str) -> list:
+    rows = _get_workspace_rows(supabase, "v_destination_charges_legacy", workspace_id)
+    if rows:
+        return [
+            {
+                "Charge Type": row.get("charge_type"),
+                "Basis": row.get("basis"),
+                "20FT": row.get("20FT"),
+                "40FT": row.get("40FT"),
+            }
+            for row in rows
+        ]
+
+    legacy_rows = _get_table(supabase, "destination_charges", workspace_id)
+    return [
+        {
+            "Charge Type": row.get("charge_type"),
+            "Basis": row.get("basis"),
+            "20FT": row.get("20FT"),
+            "40FT": row.get("40FT"),
+        }
+        for row in legacy_rows
+    ]
+
+
 # =====================================================================
 # QUOTATION EMAIL
 # =====================================================================
@@ -601,6 +771,8 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
             f"RFQ '{request.rfq_id}' not found in master_rfqs for workspace '{workspace_id}'"
         )
     rfq_data = rfq_rows[0]
+    normalized_shipments = _load_normalized_shipments(supabase, workspace_id, request.rfq_id) if USE_NORMALIZED_READ else []
+    rfq_for_pricing = _build_legacy_rfq_projection(rfq_data, normalized_shipments)
 
     print(f"Found RFQ {request.rfq_id}")
 
@@ -612,20 +784,18 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
     print(f"Updated RFQ status to Selected, agent: {request.selected_agent}")
 
     # 3. Find the selected quote
-    all_quotes = _get_by_filter(
-        supabase, "agent_outbound_log", "rfq_id", request.rfq_id, workspace_id
-    )
+    all_quotes = _load_quotes_for_selection(supabase, workspace_id, request.rfq_id)
     quote_data = _find_selected_quote(all_quotes, request)
     print(f"Found quote: carrier={quote_data.get('carrier')}, price={quote_data.get('price')}")
 
     # 4. Read pricing lookup tables directly as dicts
-    do_charges = _get_table(supabase, "do_charges", workspace_id)
-    dest_charges = _get_table(supabase, "destination_charges", workspace_id)
+    do_charges = _load_do_charges_for_pricing(supabase, workspace_id)
+    dest_charges = _load_destination_charges_for_pricing(supabase, workspace_id)
     transp_charges = _get_table(supabase, "transportation_charges", workspace_id)
 
     # 5. Calculate pricing
     pricing = calculate_full_pricing(
-        rfq_data,
+        rfq_for_pricing,
         quote_data,
         do_charges,
         dest_charges,

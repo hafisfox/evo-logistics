@@ -55,6 +55,9 @@ image = modal.Image.debian_slim(python_version="3.11").pip_install(
 # =====================================================================
 VALID_TYPES = ['20FT', '40FT', '40HC', '40HQ', '45FT', '20OT', '40OT']
 VALID_SERVICE_TYPES = ['port-to-port', 'door-to-port', 'port-to-door', 'door-to-door']
+RFQ_NORMALIZED_DUAL_WRITE = os.environ.get(
+    "RFQ_NORMALIZED_DUAL_WRITE", "true"
+).lower() in {"1", "true", "yes", "on"}
 
 PORT_FIELD_INFO = {
     'pol':        {'label': 'Port of Loading (Origin)',        'example': 'SHENZHEN, SHANGHAI, NINGBO'},
@@ -371,6 +374,135 @@ def concatenate_shipments(shipments: list) -> dict:
         'pickup_address': '\n'.join(filter(None, all_pickups)) or None,
         'delivery_address': '\n'.join(filter(None, all_deliveries)) or None,
     }
+
+
+def _build_normalized_shipments(shipments: list) -> list:
+    """Convert parsed shipment payload into normalized rows."""
+    normalized = []
+    for idx, shipment in enumerate(shipments):
+        containers = shipment.get("containers") or []
+        normalized_containers = []
+        for c_idx, container in enumerate(containers):
+            container_type = normalize_type(container.get("type")) or "40HQ"
+            qty = normalize_qty(container.get("qty")) or 1
+            normalized_containers.append(
+                {
+                    "line_number": c_idx + 1,
+                    "container_type": container_type,
+                    "qty": qty,
+                }
+            )
+
+        if not normalized_containers:
+            normalized_containers = [
+                {
+                    "line_number": 1,
+                    "container_type": "40HQ",
+                    "qty": 1,
+                }
+            ]
+
+        normalized.append(
+            {
+                "shipment_number": idx + 1,
+                "pol": normalize_port(shipment.get("pol")) or "TBD",
+                "pod": normalize_port(shipment.get("pod")) or "TBD",
+                "ready_date": normalize_date(shipment.get("date")),
+                "delivery_deadline": normalize_date(shipment.get("delivery_deadline")),
+                "service_type": normalize_service_type(shipment.get("service_type")),
+                "pickup_address": normalize_address(shipment.get("pickup_address")),
+                "delivery_address": normalize_address(shipment.get("delivery_address")),
+                "containers": normalized_containers,
+            }
+        )
+
+    if not normalized:
+        normalized.append(
+            {
+                "shipment_number": 1,
+                "pol": "TBD",
+                "pod": "TBD",
+                "ready_date": None,
+                "delivery_deadline": None,
+                "service_type": "port-to-port",
+                "pickup_address": None,
+                "delivery_address": None,
+                "containers": [{"line_number": 1, "container_type": "40HQ", "qty": 1}],
+            }
+        )
+
+    return normalized
+
+
+def _dual_write_normalized_rfq(supabase, workspace_id: str, rfq_id: str, shipments: list):
+    """Persist normalized shipment/container tables alongside legacy row."""
+    if not RFQ_NORMALIZED_DUAL_WRITE:
+        return
+
+    normalized_shipments = _build_normalized_shipments(shipments)
+    shipment_count = len(normalized_shipments)
+
+    for shipment in normalized_shipments:
+        scoped_upsert(
+            supabase,
+            "rfq_shipments",
+            workspace_id,
+            {
+                "rfq_id": rfq_id,
+                "shipment_number": shipment["shipment_number"],
+                "pol": shipment["pol"],
+                "pod": shipment["pod"],
+                "ready_date": shipment["ready_date"],
+                "delivery_deadline": shipment["delivery_deadline"],
+                "service_type": shipment["service_type"],
+                "pickup_address": shipment["pickup_address"],
+                "delivery_address": shipment["delivery_address"],
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+        container_count = len(shipment["containers"])
+        for container in shipment["containers"]:
+            scoped_upsert(
+                supabase,
+                "rfq_shipment_containers",
+                workspace_id,
+                {
+                    "rfq_id": rfq_id,
+                    "shipment_number": shipment["shipment_number"],
+                    "line_number": container["line_number"],
+                    "container_type": container["container_type"],
+                    "qty": container["qty"],
+                },
+            )
+
+        (
+            supabase.table("rfq_shipment_containers")
+            .delete()
+            .eq("workspace_id", workspace_id)
+            .eq("rfq_id", rfq_id)
+            .eq("shipment_number", shipment["shipment_number"])
+            .gt("line_number", container_count)
+            .execute()
+        )
+
+    (
+        supabase.table("rfq_shipment_containers")
+        .delete()
+        .eq("workspace_id", workspace_id)
+        .eq("rfq_id", rfq_id)
+        .gt("shipment_number", shipment_count)
+        .execute()
+    )
+
+    (
+        supabase.table("rfq_shipments")
+        .delete()
+        .eq("workspace_id", workspace_id)
+        .eq("rfq_id", rfq_id)
+        .gt("shipment_number", shipment_count)
+        .execute()
+    )
 
 # =====================================================================
 # EMAIL CONTENT FORMATTERS
@@ -1459,6 +1591,7 @@ def _process_incoming_rfqs(pubsub_payload=None):
                 sheet_row['status'] = 'Processing'
                 try:
                     _upsert_row(supabase, "master_rfqs", sheet_row, workspace_id)
+                    _dual_write_normalized_rfq(supabase, workspace_id, rfq_id, shipments)
                 except Exception as upsert_exc:
                     if is_unique_violation(upsert_exc):
                         print(
@@ -1483,6 +1616,7 @@ def _process_incoming_rfqs(pubsub_payload=None):
                 sheet_row['status'] = 'Missing_Door_Data'
                 try:
                     _upsert_row(supabase, "master_rfqs", sheet_row, workspace_id)
+                    _dual_write_normalized_rfq(supabase, workspace_id, rfq_id, shipments)
                 except Exception as upsert_exc:
                     if is_unique_violation(upsert_exc):
                         print(
@@ -1503,6 +1637,7 @@ def _process_incoming_rfqs(pubsub_payload=None):
                 sheet_row['status'] = 'Missing_Port_Data'
                 try:
                     _upsert_row(supabase, "master_rfqs", sheet_row, workspace_id)
+                    _dual_write_normalized_rfq(supabase, workspace_id, rfq_id, shipments)
                 except Exception as upsert_exc:
                     if is_unique_violation(upsert_exc):
                         print(

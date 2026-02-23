@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { calculateFullPricing } from "@/lib/pricing-engine";
 import { getSettings } from "@/lib/settings";
 import type { DOCharge } from "@/types/pricing";
-import type { Database } from "@/types/supabase";
 import { requireWorkspaceApiContext } from "@/lib/workspace-context";
 import {
   validatePricingCalculateBody,
@@ -12,12 +11,95 @@ import {
 
 export const dynamic = "force-dynamic";
 
-type DoChargeRow = Database["public"]["Tables"]["do_charges"]["Row"];
-type DestinationChargeRow = Database["public"]["Tables"]["destination_charges"]["Row"];
-type TransportChargeRow = Database["public"]["Tables"]["transportation_charges"]["Row"];
-
 function jsonError(payload: ApiErrorPayload, status: number) {
   return NextResponse.json(payload, { status });
+}
+
+function isMissingRelationError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = "code" in error ? String((error as { code?: string }).code || "") : "";
+  const message =
+    "message" in error ? String((error as { message?: string }).message || "") : "";
+  return (
+    code === "PGRST205" ||
+    code === "42P01" ||
+    message.includes("Could not find the table") ||
+    (message.includes("relation") && message.includes("does not exist"))
+  );
+}
+
+async function fetchDoCharges(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  workspaceId: string
+): Promise<DOCharge[]> {
+  const fromView = await supabase
+    .from("v_do_charges_legacy")
+    .select('carrier, document, "20FT", "40FT", "40HQ"')
+    .eq("workspace_id", workspaceId);
+
+  if (!fromView.error) {
+    return ((fromView.data || []) as Record<string, unknown>[]).map((item) => ({
+      carrier: String(item.carrier || ""),
+      document: Number(item.document || 0),
+      "20FT": Number(item["20FT"] || 0),
+      "40FT": Number(item["40FT"] || 0),
+      "40HQ": Number(item["40HQ"] || 0),
+    }));
+  }
+
+  if (!isMissingRelationError(fromView.error)) {
+    throw fromView.error;
+  }
+
+  const legacyRes = await supabase
+    .from("do_charges")
+    .select('carrier, document, "20FT", "40FT", "40HQ"')
+    .eq("workspace_id", workspaceId);
+  if (legacyRes.error) throw legacyRes.error;
+
+  return ((legacyRes.data || []) as Record<string, unknown>[]).map((item) => ({
+    carrier: String(item.carrier || ""),
+    document: Number(item.document || 0),
+    "20FT": Number(item["20FT"] || 0),
+    "40FT": Number(item["40FT"] || 0),
+    "40HQ": Number(item["40HQ"] || 0),
+  }));
+}
+
+async function fetchDestinationCharges(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  workspaceId: string
+) {
+  const fromView = await supabase
+    .from("v_destination_charges_legacy")
+    .select('charge_type, basis, "20FT", "40FT"')
+    .eq("workspace_id", workspaceId);
+
+  if (!fromView.error) {
+    return ((fromView.data || []) as Record<string, unknown>[]).map((item) => ({
+      "Charge Type": String(item.charge_type || ""),
+      Basis: String(item.basis || ""),
+      "20FT": Number(item["20FT"] || 0),
+      "40FT": Number(item["40FT"] || 0),
+    }));
+  }
+
+  if (!isMissingRelationError(fromView.error)) {
+    throw fromView.error;
+  }
+
+  const legacyRes = await supabase
+    .from("destination_charges")
+    .select('charge_type, basis, "20FT", "40FT"')
+    .eq("workspace_id", workspaceId);
+  if (legacyRes.error) throw legacyRes.error;
+
+  return ((legacyRes.data || []) as Record<string, unknown>[]).map((item) => ({
+    "Charge Type": String(item.charge_type || ""),
+    Basis: String(item.basis || ""),
+    "20FT": Number(item["20FT"] || 0),
+    "40FT": Number(item["40FT"] || 0),
+  }));
 }
 
 export async function POST(request: Request) {
@@ -44,15 +126,9 @@ export async function POST(request: Request) {
   try {
     const supabase = await createClient();
 
-    const [doRes, destRes, transpRes, settings] = await Promise.all([
-      supabase
-        .from("do_charges")
-        .select("*")
-        .eq("workspace_id", workspaceId),
-      supabase
-        .from("destination_charges")
-        .select("*")
-        .eq("workspace_id", workspaceId),
+    const [doCharges, mappedDestCharges, transpRes, settings] = await Promise.all([
+      fetchDoCharges(supabase, workspaceId),
+      fetchDestinationCharges(supabase, workspaceId),
       supabase
         .from("transportation_charges")
         .select("*")
@@ -60,29 +136,14 @@ export async function POST(request: Request) {
       getSettings(workspaceId),
     ]);
 
-    if (doRes.error) throw doRes.error;
-    if (destRes.error) throw destRes.error;
     if (transpRes.error) throw transpRes.error;
 
-    const doCharges = ((doRes.data || []) as DoChargeRow[]).map((item) => ({
-      carrier: item.carrier,
-      document: Number(item.document),
-      "20FT": Number(item["20FT"]),
-      "40FT": Number(item["40FT"]),
-      "40HQ": Number(item["40HQ"]),
-    })) as DOCharge[];
-
-    const mappedDestCharges = ((destRes.data || []) as DestinationChargeRow[]).map((item) => ({
-      "Charge Type": item.charge_type,
-      Basis: item.basis,
-      "20FT": Number(item["20FT"]),
-      "40FT": Number(item["40FT"]),
-    }));
-
-    const mappedTranspCharges = ((transpRes.data || []) as TransportChargeRow[]).map((item) => ({
-      Place: item.place,
-      Price: Number(item.price),
-    }));
+    const mappedTranspCharges = ((transpRes.data || []) as Record<string, unknown>[]).map(
+      (item) => ({
+        Place: String(item.place || ""),
+        Price: Number(item.price || 0),
+      })
+    );
 
     const result = calculateFullPricing({
       rfq: validation.data.rfq,

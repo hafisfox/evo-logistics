@@ -4,26 +4,29 @@ const { requireWorkspaceApiContextMock } = vi.hoisted(() => ({
   requireWorkspaceApiContextMock: vi.fn(),
 }));
 
-const {
-  createClientMock,
-  fromMock,
-  isMock,
-  orderMock,
-} = vi.hoisted(() => {
-  const orderMock = vi.fn();
-  const isMock = vi.fn(() => ({ order: orderMock }));
-  const eqMock = vi.fn(() => ({ is: isMock }));
-  const selectMock = vi.fn(() => ({ eq: eqMock }));
-  const fromMock = vi.fn(() => ({ select: selectMock }));
-  const createClientMock = vi.fn();
+const { createClientMock, orderMock, masterIsMock, shipmentInMock, containerInMock } = vi.hoisted(
+  () => {
+    const orderMock = vi.fn();
+    const masterIsMock = vi.fn(() => ({ order: orderMock }));
 
-  return {
-    createClientMock,
-    fromMock,
-    isMock,
-    orderMock,
-  };
-});
+    const missingRelationResponse = {
+      data: null,
+      error: { code: "PGRST205", message: "Could not find the table" },
+    };
+    const shipmentInMock = vi.fn(() => Promise.resolve(missingRelationResponse));
+    const containerInMock = vi.fn(() => Promise.resolve(missingRelationResponse));
+
+    const createClientMock = vi.fn();
+
+    return {
+      createClientMock,
+      orderMock,
+      masterIsMock,
+      shipmentInMock,
+      containerInMock,
+    };
+  }
+);
 
 vi.mock("@/lib/workspace-context", () => ({
   requireWorkspaceApiContext: requireWorkspaceApiContextMock,
@@ -38,14 +41,51 @@ import { GET } from "@/app/api/rfqs/route";
 describe("/api/rfqs route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    createClientMock.mockResolvedValue({ from: fromMock });
+
+    createClientMock.mockResolvedValue({
+      from: (table: string) => {
+        if (table === "master_rfqs") {
+          return {
+            select: () => ({
+              eq: () => ({
+                is: masterIsMock,
+              }),
+            }),
+          };
+        }
+
+        if (table === "rfq_shipments") {
+          return {
+            select: () => ({
+              eq: () => ({
+                in: shipmentInMock,
+              }),
+            }),
+          };
+        }
+
+        if (table === "rfq_shipment_containers") {
+          return {
+            select: () => ({
+              eq: () => ({
+                in: containerInMock,
+              }),
+            }),
+          };
+        }
+
+        return {
+          select: vi.fn(),
+        };
+      },
+    });
+
     requireWorkspaceApiContextMock.mockResolvedValue({
       context: { workspaceId: "ws-1", userId: "u-1", role: "member" },
     });
-    orderMock.mockResolvedValue({ data: [], error: null });
   });
 
-  it("filters out soft deleted RFQs", async () => {
+  it("filters out soft deleted RFQs and keeps legacy fallback working", async () => {
     orderMock.mockResolvedValue({
       data: [
         {
@@ -74,8 +114,13 @@ describe("/api/rfqs route", () => {
     });
 
     const response = await GET();
+
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toHaveLength(1);
-    expect(isMock).toHaveBeenCalledWith("deleted_at", null);
+    const payload = await response.json();
+    expect(payload).toHaveLength(1);
+    expect(masterIsMock).toHaveBeenCalledWith("deleted_at", null);
+    expect(payload[0].shipment_count).toBe(1);
+    expect(shipmentInMock).toHaveBeenCalledOnce();
+    expect(containerInMock).toHaveBeenCalledOnce();
   });
 });

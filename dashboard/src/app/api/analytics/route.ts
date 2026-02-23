@@ -1,10 +1,46 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { DashboardKPIs, PipelineCount, ActivityItem } from "@/types/analytics";
-import type { MasterRFQ, AgentQuote } from "@/types/rfq";
+import type { AgentQuote, RFQShipment } from "@/types/rfq";
 import { requireWorkspaceApiContext } from "@/lib/workspace-context";
+import {
+  buildRFQWithShipments,
+  buildShipmentsByRfq,
+  mapMasterRFQRow,
+  mapNormalizedQuoteToLegacy,
+  type RFQShipmentContainerRow,
+  type RFQShipmentRow,
+} from "@/lib/rfq-normalization";
 
 export const dynamic = "force-dynamic";
+
+function isMissingRelationError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = "code" in error ? String((error as { code?: string }).code || "") : "";
+  const message =
+    "message" in error ? String((error as { message?: string }).message || "") : "";
+  return (
+    code === "PGRST205" ||
+    code === "42P01" ||
+    message.includes("Could not find the table") ||
+    (message.includes("relation") && message.includes("does not exist"))
+  );
+}
+
+function buildRouteSummary(rfq: {
+  pol: string;
+  pod: string;
+  shipment_count?: number;
+  shipments?: Array<{ pol: string; pod: string }>;
+}) {
+  const firstShipment = rfq.shipments?.[0];
+  const pol = firstShipment?.pol || rfq.pol || "TBD";
+  const pod = firstShipment?.pod || rfq.pod || "TBD";
+  const shipmentCount = rfq.shipment_count || rfq.shipments?.length || 1;
+  const extra = Math.max(shipmentCount - 1, 0);
+  if (extra <= 0) return `${pol} → ${pod}`;
+  return `${pol} → ${pod} (+${extra} shipments)`;
+}
 
 export async function GET() {
   const scope = await requireWorkspaceApiContext({
@@ -19,23 +55,84 @@ export async function GET() {
   try {
     const supabase = await createClient();
 
-    // Fetch all RFQs and Quotes in parallel from Supabase
-    const [rfqsRes, quotesRes] = await Promise.all([
+    const [rfqsRes, shipmentsRes, containersRes, normalizedQuotesRes, legacyQuotesRes] = await Promise.all([
       supabase
-        .from('master_rfqs')
-        .select('rfq_id, status, received_at, quoted_at, customer_email, pol, pod')
+        .from("master_rfqs")
+        .select(
+          "rfq_id, thread_id, customer_email, status, pol, pod, container_type, qty, ready_date, delivery_deadline, service_type, pickup_address, delivery_address, received_at, selected_agent, final_price_usd, final_price_aed, quoted_at, deleted_at"
+        )
         .eq("workspace_id", workspaceId),
       supabase
-        .from('agent_outbound_log')
-        .select('rfq_id, status')
-        .eq("workspace_id", workspaceId)
+        .from("rfq_shipments")
+        .select(
+          "workspace_id, rfq_id, shipment_number, pol, pod, ready_date, delivery_deadline, service_type, pickup_address, delivery_address"
+        )
+        .eq("workspace_id", workspaceId),
+      supabase
+        .from("rfq_shipment_containers")
+        .select("workspace_id, rfq_id, shipment_number, line_number, container_type, qty")
+        .eq("workspace_id", workspaceId),
+      supabase
+        .from("agent_quotes")
+        .select(
+          "rfq_id, match, status, agent_name, agent_email, shipment_number, carrier, price, currency, etd, transit_time, free_time, validity, sent_at, received_at"
+        )
+        .eq("workspace_id", workspaceId),
+      supabase
+        .from("agent_outbound_log")
+        .select(
+          "rfq_id, match, status, agent_name, agent_email, shipment_number, carrier, price, currency, etd, transit_time, free_time, validity, sent_at, received_at"
+        )
+        .eq("workspace_id", workspaceId),
     ]);
 
     if (rfqsRes.error) throw rfqsRes.error;
-    if (quotesRes.error) throw quotesRes.error;
+    if (legacyQuotesRes.error) throw legacyQuotesRes.error;
 
-    const rfqs = (rfqsRes.data || []) as Partial<MasterRFQ>[];
-    const quotes = (quotesRes.data || []) as Partial<AgentQuote>[];
+    const baseRfqs = ((rfqsRes.data || []) as Record<string, unknown>[])
+      .map(mapMasterRFQRow)
+      .filter((rfq) => !rfq.deleted_at);
+
+    let shipmentMap = new Map<string, RFQShipment[]>();
+    if (!shipmentsRes.error && !containersRes.error) {
+      shipmentMap = buildShipmentsByRfq(
+        (shipmentsRes.data || []) as RFQShipmentRow[],
+        (containersRes.data || []) as RFQShipmentContainerRow[]
+      );
+    } else if (
+      (shipmentsRes.error && !isMissingRelationError(shipmentsRes.error)) ||
+      (containersRes.error && !isMissingRelationError(containersRes.error))
+    ) {
+      throw shipmentsRes.error || containersRes.error;
+    }
+
+    const rfqs = baseRfqs.map((rfq) => buildRFQWithShipments(rfq, shipmentMap.get(rfq.rfq_id)));
+
+    let normalizedQuotes: AgentQuote[] = [];
+    if (normalizedQuotesRes.error) {
+      if (!isMissingRelationError(normalizedQuotesRes.error)) {
+        throw normalizedQuotesRes.error;
+      }
+    } else {
+      normalizedQuotes = ((normalizedQuotesRes.data || []) as Record<string, unknown>[]).map(
+        mapNormalizedQuoteToLegacy
+      );
+    }
+
+    const legacyQuotes = ((legacyQuotesRes.data || []) as Record<string, unknown>[]).map(
+      mapNormalizedQuoteToLegacy
+    );
+
+    const quoteMap = new Map<string, AgentQuote>();
+    for (const quote of legacyQuotes) {
+      const key = quote.match || `${quote.rfq_id}-${quote.agent_email}-${quote.shipment_number}`;
+      quoteMap.set(key, quote);
+    }
+    for (const quote of normalizedQuotes) {
+      const key = quote.match || `${quote.rfq_id}-${quote.agent_email}-${quote.shipment_number}`;
+      quoteMap.set(key, quote);
+    }
+    const quotes = Array.from(quoteMap.values());
     const receivedQuoteCountByRfq = new Map<string, number>();
 
     for (const quote of quotes) {
@@ -107,7 +204,7 @@ export async function GET() {
         customer_email: r.customer_email || "Unknown",
         status: r.status as string,
         timestamp: r.quoted_at || r.received_at as string,
-        route: `${r.pol} → ${r.pod}`,
+        route: buildRouteSummary(r),
       }));
 
     return NextResponse.json({ kpis, pipeline, activity });

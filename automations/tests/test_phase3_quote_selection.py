@@ -72,9 +72,14 @@ def test_find_selected_quote_falls_back_when_selected_match_missing():
 
 
 class _FakeQuery:
-    def __init__(self):
+    def __init__(self, table_name, rows_by_table):
+        self.table_name = table_name
+        self.rows_by_table = rows_by_table
         self.values = None
         self.eq_calls = []
+
+    def select(self, _columns="*"):
+        return self
 
     def update(self, values):
         self.values = values
@@ -84,16 +89,20 @@ class _FakeQuery:
         self.eq_calls.append((column, value))
         return self
 
+    def order(self, *_args, **_kwargs):
+        return self
+
     def execute(self):
-        return SimpleNamespace(data=[])
+        return SimpleNamespace(data=self.rows_by_table.get(self.table_name, []))
 
 
 class _FakeSupabase:
-    def __init__(self):
+    def __init__(self, rows_by_table=None):
+        self.rows_by_table = rows_by_table or {}
         self.queries = []
 
-    def table(self, _table_name):
-        query = _FakeQuery()
+    def table(self, table_name):
+        query = _FakeQuery(table_name, self.rows_by_table)
         self.queries.append(query)
         return query
 

@@ -25,6 +25,20 @@ export interface PricingCalculateBody {
     pod: string;
     service_type: string;
     delivery_address: string | null;
+    shipments?: Array<{
+      shipment_number: number;
+      pol: string;
+      pod: string;
+      service_type: string;
+      ready_date: string | null;
+      delivery_deadline: string | null;
+      pickup_address: string | null;
+      delivery_address: string | null;
+      containers: Array<{
+        container_type: string;
+        qty: number;
+      }>;
+    }>;
   };
   quote: {
     carrier: string;
@@ -297,19 +311,22 @@ export function validatePricingCalculateBody(body: unknown): ValidationResult<Pr
     return { success: false, error: "Invalid pricing payload", details };
   }
 
-  if (!isNonEmptyString(rfq.container_type)) {
+  const rawShipments = Array.isArray(rfq.shipments) ? rfq.shipments : null;
+  const hasShipments = !!rawShipments && rawShipments.length > 0;
+
+  if (!hasShipments && !isNonEmptyString(rfq.container_type)) {
     details.push("rfq.container_type is required.");
   }
 
-  if (!isNonEmptyString(rfq.qty)) {
+  if (!hasShipments && !isNonEmptyString(rfq.qty)) {
     details.push("rfq.qty is required.");
   }
 
-  if (!isNonEmptyString(rfq.pol)) {
+  if (!hasShipments && !isNonEmptyString(rfq.pol)) {
     details.push("rfq.pol is required.");
   }
 
-  if (!isNonEmptyString(rfq.pod)) {
+  if (!hasShipments && !isNonEmptyString(rfq.pod)) {
     details.push("rfq.pod is required.");
   }
 
@@ -319,6 +336,104 @@ export function validatePricingCalculateBody(body: unknown): ValidationResult<Pr
 
   if (!(typeof rfq.delivery_address === "string" || rfq.delivery_address === null)) {
     details.push("rfq.delivery_address must be a string or null.");
+  }
+
+  const normalizedShipments: PricingCalculateBody["rfq"]["shipments"] = [];
+  if (rawShipments) {
+    for (let index = 0; index < rawShipments.length; index += 1) {
+      const shipment = rawShipments[index];
+      if (!isRecord(shipment)) {
+        details.push(`rfq.shipments[${index}] must be an object.`);
+        continue;
+      }
+
+      if (!isNonEmptyString(shipment.pol)) {
+        details.push(`rfq.shipments[${index}].pol is required.`);
+      }
+      if (!isNonEmptyString(shipment.pod)) {
+        details.push(`rfq.shipments[${index}].pod is required.`);
+      }
+
+      const shipmentServiceType = isNonEmptyString(shipment.service_type)
+        ? shipment.service_type.trim()
+        : "";
+      if (!VALID_SERVICE_TYPES.has(shipmentServiceType)) {
+        details.push(
+          `rfq.shipments[${index}].service_type must be one of: port-to-port, door-to-port, port-to-door, door-to-door.`
+        );
+      }
+
+      const shipmentContainers = Array.isArray(shipment.containers) ? shipment.containers : [];
+      if (shipmentContainers.length === 0) {
+        details.push(`rfq.shipments[${index}].containers must contain at least one item.`);
+      }
+
+      const normalizedContainers: Array<{ container_type: string; qty: number }> = [];
+      for (let cIndex = 0; cIndex < shipmentContainers.length; cIndex += 1) {
+        const container = shipmentContainers[cIndex];
+        if (!isRecord(container)) {
+          details.push(`rfq.shipments[${index}].containers[${cIndex}] must be an object.`);
+          continue;
+        }
+
+        const containerType = isNonEmptyString(container.container_type)
+          ? container.container_type.trim()
+          : "";
+        if (!containerType) {
+          details.push(`rfq.shipments[${index}].containers[${cIndex}].container_type is required.`);
+        }
+
+        const qty = asNumber(container.qty);
+        if (qty == null || !Number.isInteger(qty) || qty <= 0) {
+          details.push(
+            `rfq.shipments[${index}].containers[${cIndex}].qty must be a positive integer.`
+          );
+        }
+
+        if (containerType && qty != null && Number.isInteger(qty) && qty > 0) {
+          normalizedContainers.push({
+            container_type: containerType,
+            qty,
+          });
+        }
+      }
+
+      if (
+        isNonEmptyString(shipment.pol) &&
+        isNonEmptyString(shipment.pod) &&
+        VALID_SERVICE_TYPES.has(shipmentServiceType) &&
+        normalizedContainers.length > 0
+      ) {
+        normalizedShipments.push({
+          shipment_number: Number.isInteger(asNumber(shipment.shipment_number))
+            ? Number(shipment.shipment_number)
+            : index + 1,
+          pol: shipment.pol.trim(),
+          pod: shipment.pod.trim(),
+          service_type: shipmentServiceType,
+          ready_date:
+            typeof shipment.ready_date === "string" && shipment.ready_date.trim().length > 0
+              ? shipment.ready_date.trim()
+              : null,
+          delivery_deadline:
+            typeof shipment.delivery_deadline === "string" &&
+            shipment.delivery_deadline.trim().length > 0
+              ? shipment.delivery_deadline.trim()
+              : null,
+          pickup_address:
+            typeof shipment.pickup_address === "string" &&
+            shipment.pickup_address.trim().length > 0
+              ? shipment.pickup_address.trim()
+              : null,
+          delivery_address:
+            typeof shipment.delivery_address === "string" &&
+            shipment.delivery_address.trim().length > 0
+              ? shipment.delivery_address.trim()
+              : null,
+          containers: normalizedContainers,
+        });
+      }
+    }
   }
 
   if (!isNonEmptyString(quote.carrier)) {
@@ -359,6 +474,7 @@ export function validatePricingCalculateBody(body: unknown): ValidationResult<Pr
         pod,
         service_type: serviceType,
         delivery_address: deliveryAddress,
+        shipments: normalizedShipments.length > 0 ? normalizedShipments : undefined,
       },
       quote: {
         carrier,

@@ -43,9 +43,16 @@ Tenant-scoped tables include:
 
 - `master_rfqs`
 - `agent_outbound_log`
+- `rfq_shipments`
+- `rfq_shipment_containers`
+- `agent_quotes`
 - `agents`
 - `do_charges`
+- `do_charge_profiles`
+- `do_charge_rates`
 - `destination_charges`
+- `destination_charge_items`
+- `destination_charge_rates`
 - `transportation_charges`
 - `app_settings`
 - `workspace_mailboxes`
@@ -86,6 +93,7 @@ Enforcement migration:
 - resolves Gmail credentials from workspace mailbox row
 - reads `agents` scoped by workspace
 - writes `master_rfqs` and `agent_outbound_log` with workspace context
+- dual-write mode persists normalized shipments and shipment containers when `RFQ_NORMALIZED_DUAL_WRITE=true`
 - preserves workspace-safe thread correlation and deterministic extraction behavior
 
 ### Phase 2 (`phase_2_quote_analysis.py`)
@@ -94,12 +102,14 @@ Enforcement migration:
 - resolves Gmail credentials from workspace mailbox row
 - parses/normalizes quote replies with workspace-scoped RFQ context
 - writes quote outcomes with workspace scoping and deduplicated `match` identity
+- dual-write mode persists normalized quote rows in `agent_quotes` when `RFQ_NORMALIZED_DUAL_WRITE=true`
 
 ### Phase 3 (`phase_3_select_and_quote.py`)
 
 - requires `workspace_id` in request payload
 - resolves Gmail credentials from `workspace_id`
 - reads/writes RFQ and quote tables in that workspace only
+- reads normalized tables first when `RFQ_NORMALIZED_READ_SOURCE=normalized|shadow`, with legacy fallback retained for safety
 
 ### Scheduled Tasks (`scheduled_tasks.py`)
 
@@ -142,6 +152,8 @@ Optional:
 - `MODAL_LLM_API_KEY`
 - `BOOTSTRAP_WORKSPACE_ID`
 - `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK`
+- `RFQ_NORMALIZED_DUAL_WRITE` (default: `true`)
+- `RFQ_NORMALIZED_READ_SOURCE` (`legacy` | `shadow` | `normalized`; production now uses `normalized`)
 
 Reference file:
 
@@ -179,3 +191,12 @@ From repo root:
 PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m py_compile automations/*.py
 python3 -m pytest automations/tests -q
 ```
+
+## 13. Normalization Cutover Status
+
+- Migration `dashboard/supabase/migrations/20260223_012_rfq_and_pricing_normalization.sql` applied.
+- Historical backfill completed via `dashboard/scripts/backfill_rfq_normalized.ts`.
+- Current runtime mode:
+  - `RFQ_NORMALIZED_DUAL_WRITE=true`
+  - `RFQ_NORMALIZED_READ_SOURCE=normalized`
+- Post-cutover parity check is clean (`agent_outbound_log` and `agent_quotes` have zero unmatched `match` rows).

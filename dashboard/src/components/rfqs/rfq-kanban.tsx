@@ -49,14 +49,15 @@ export function RFQKanban({ rfqs }: RFQKanbanProps) {
                           </span>
                           <StatusBadge status={rfq.status} className="text-[10px]" />
                         </div>
-                        <RouteDisplay pol={rfq.pol} pod={rfq.pod} />
+                        <RouteDisplay pol={rfq.pol} pod={rfq.pod} shipments={rfq.shipments} />
                         <div className="flex items-center justify-between">
                           <ContainerBadge
                             type={rfq.container_type}
                             qty={rfq.qty}
+                            shipments={rfq.shipments}
                           />
                           <span className="text-xs text-muted-foreground">
-                            {formatDate(rfq.ready_date)}
+                            {formatDate(rfq.shipments?.[0]?.ready_date || rfq.ready_date)}
                           </span>
                         </div>
                         <p className="text-xs text-muted-foreground truncate">

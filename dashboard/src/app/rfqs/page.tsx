@@ -22,11 +22,16 @@ export default function RFQPipelinePage() {
       // Search filter
       if (search) {
         const s = search.toLowerCase();
+        const shipmentSearchText = (r.shipments || [])
+          .map((shipment) => `${shipment.pol} ${shipment.pod}`)
+          .join(" ")
+          .toLowerCase();
         const matchesSearch =
           r.rfq_id?.toLowerCase().includes(s) ||
           r.customer_email?.toLowerCase().includes(s) ||
           r.pol?.toLowerCase().includes(s) ||
-          r.pod?.toLowerCase().includes(s);
+          r.pod?.toLowerCase().includes(s) ||
+          shipmentSearchText.includes(s);
         if (!matchesSearch) return false;
       }
       // Status filter

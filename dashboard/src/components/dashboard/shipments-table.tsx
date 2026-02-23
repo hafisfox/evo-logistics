@@ -4,6 +4,8 @@ import { useRFQs } from "@/hooks/use-rfqs";
 import { format } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RouteDisplay } from "@/components/ui/route-display";
+import { ContainerBadge } from "@/components/ui/container-badge";
 import Link from "next/link";
 import type { RFQStatus } from "@/types/rfq";
 
@@ -90,10 +92,19 @@ export function ShipmentsTable() {
                                             {format(new Date(rfq.received_at), "MMM d, yyyy")}
                                         </td>
                                         <td className="py-4 px-4 text-muted-foreground font-medium">
-                                            {rfq.pol} <span className="text-border mx-1">→</span> {rfq.pod}
+                                            <RouteDisplay
+                                                pol={rfq.pol}
+                                                pod={rfq.pod}
+                                                shipments={rfq.shipments}
+                                            />
                                         </td>
                                         <td className="py-4 px-4 font-semibold text-foreground">
-                                            {rfq.qty} <span className="text-muted-foreground font-medium text-xs">× {rfq.container_type}</span>
+                                            <ContainerBadge
+                                                type={rfq.container_type}
+                                                qty={rfq.qty}
+                                                shipments={rfq.shipments}
+                                                maxChips={3}
+                                            />
                                         </td>
                                         <td className="py-4 px-4">
                                             <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider border ${statusInfo.color}`}>
