@@ -136,6 +136,12 @@ def get_workspace_mailbox_row(
 
 
 def _parse_token_expiry(token_expires_at: Optional[str]) -> Optional[datetime]:
+    """Parse token expiry into a timezone-NAIVE UTC datetime.
+
+    google-auth stores Credentials.expiry as a naive UTC datetime internally.
+    Setting a timezone-aware expiry causes a TypeError when google-auth compares
+    it against its own _helpers.utcnow() (also naive). We always strip tzinfo.
+    """
     if not token_expires_at:
         return None
     value = str(token_expires_at).strip()
@@ -149,8 +155,9 @@ def _parse_token_expiry(token_expires_at: Optional[str]) -> Optional[datetime]:
         return None
 
     if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        return parsed  # already naive UTC
+    # Convert to UTC, then strip tzinfo so google-auth is happy
+    return parsed.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 def _require_google_oauth_client_credentials() -> Tuple[str, str]:
@@ -238,10 +245,13 @@ def _needs_refresh(credentials: Credentials) -> bool:
         return True
     if not credentials.expiry:
         return False
+    # credentials.expiry is naive UTC (google-auth convention); compare with naive UTC now
     expiry = credentials.expiry
-    if expiry.tzinfo is None:
-        expiry = expiry.replace(tzinfo=timezone.utc)
-    return expiry <= datetime.now(timezone.utc) + ACCESS_TOKEN_REFRESH_SKEW
+    if expiry.tzinfo is not None:
+        # Defensive: strip tzinfo if somehow set
+        expiry = expiry.astimezone(timezone.utc).replace(tzinfo=None)
+    now_naive_utc = datetime.utcnow()
+    return expiry <= now_naive_utc + ACCESS_TOKEN_REFRESH_SKEW
 
 
 def _assert_mailbox_connected(row: Dict[str, Any]) -> None:
