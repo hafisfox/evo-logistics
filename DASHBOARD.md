@@ -61,6 +61,12 @@ File: `dashboard/src/lib/supabase/middleware.ts`
 
 ## 4. Workspace UX Model
 
+### AppShell & Layout Framework
+- All authenticated routes are wrapped in a unified `AppShell`.
+- `AppShell` natively controls the full viewport (`h-screen w-full`) without internal constrained padding, enabling fluid glass backgrounds.
+- State-aware dynamic `Sidebar` respects dark/light theme natively.
+- Global `<Header>` component rendered exactly once at the top layout level; no sub-page imports to avoid double-rendering headers.
+
 ### Header workspace context
 File: `dashboard/src/components/layout/header.tsx`
 

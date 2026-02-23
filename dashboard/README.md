@@ -7,6 +7,8 @@ Workspace-centric Next.js control plane for RFQ operations, pricing, and automat
 ## What Is Implemented
 
 - **Global Premium Glassmorphism UI**: Entire application utilizes a stunning Bento Grid architecture with deep backdrop blurs, floating interactive cards, staggered entrance choreographies, and `oklch`-based fluid themes.
+- **Unified AppShell Layout**: Clean single-header layout powered by a root `AppShell`, purging old duplicate page-level headers.
+- **Native Data Widgets**: Cleaned out static placeholder charts in favor of dynamic `CircularProgress` and `PipelineChart` widgets fed natively by React Query activity hooks.
 - Supabase auth with dedicated `/login` and `/signup` experiences.
 - Hash-token session fallback handling on login/signup for redirect edge cases.
 - Post-auth workspace bootstrap (personal workspace + owner membership).

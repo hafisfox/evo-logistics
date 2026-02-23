@@ -74,8 +74,10 @@ Legacy tenant-hardening patch is in `dashboard/supabase/migrations/20260222_010_
   - pricing constants + workspace mailbox OAuth connect/reconnect/disconnect UI.
 - Members/invites UI:
   - `dashboard/src/app/settings/members/page.tsx`
-- Header workspace switcher + user menu + sign out:
+- Layout & Header workspace switcher + user menu + sign out:
+  - Unified native full-screen `AppShell` removing duplicate sub-page headers.
   - `dashboard/src/components/layout/header.tsx`
+  - `ThemeToggle` correctly bounds between Light/Dark/System.
   - includes in-app workspace creation modal and auto-switch to new workspace.
   - clears client query cache on workspace switch/create to avoid stale cross-workspace table data.
 - Logout API:
