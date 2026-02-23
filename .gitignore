@@ -2,3 +2,7 @@ screenshots/
 .DS_Store
 .worktrees/
 .vercel
+
+# Local AI skill packs (keep local, do not commit)
+.agents/skills/
+.claude/skills/
