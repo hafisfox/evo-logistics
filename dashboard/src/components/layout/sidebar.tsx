@@ -56,18 +56,18 @@ export function Sidebar() {
         className={cn(
           "flex items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-300",
           isActive
-            ? "bg-[#2A2B2F] text-white shadow-md dark:bg-white dark:text-black"
-            : "text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5"
+            ? "bg-primary text-primary-foreground shadow-sm"
+            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
         )}
       >
-        <item.icon className={cn("h-5 w-5", isActive ? "text-white dark:text-black" : "")} />
+        <item.icon className={cn("h-5 w-5", isActive ? "text-primary-foreground" : "")} />
         {item.label}
       </Link>
     );
   };
 
   return (
-    <aside className="hidden md:flex flex-col w-[260px] bg-transparent border-r border-[#E5E7EB] dark:border-white/10 h-screen overflow-hidden z-40">
+    <aside className="hidden md:flex flex-col w-[260px] bg-card border-r border-border h-screen overflow-hidden z-40 shrink-0">
       <div className="flex h-24 items-center gap-3 px-8 mt-2">
         <Ship className="h-7 w-7 text-black dark:text-white" />
         <span className="text-xl font-bold tracking-tight text-black dark:text-white">Evo Logistics</span>
