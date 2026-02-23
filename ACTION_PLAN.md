@@ -218,6 +218,8 @@ Executed from this workspace branch:
   - `workspace_mailboxes_connected_requires_refresh_token` check blocks token-less `connected` updates
 - RFQ/pricing normalization migration applied:
   - `dashboard/supabase/migrations/20260223_012_rfq_and_pricing_normalization.sql`
+- `dashboard/supabase/migrations/20260223_013_supabase_advisors_fixes.sql`
+  - Drops old global agent constraints and enforces:
 - backfill completed:
   - `rfqsRead=2`
   - `shipmentsUpserted=7`
@@ -242,6 +244,7 @@ Executed from this workspace branch:
 - `dashboard/supabase/migrations/20260222_010_fix_agents_workspace_scoping.sql`
 - `dashboard/supabase/migrations/20260223_011_workspace_mailbox_oauth_enforcement.sql`
 - `dashboard/supabase/migrations/20260223_012_rfq_and_pricing_normalization.sql`
+- `dashboard/supabase/migrations/20260223_013_supabase_advisors_fixes.sql`
 - `dashboard/supabase_schema.sql`
 - `dashboard/scripts/backfill_rfq_normalized.ts`
 - `dashboard/src/lib/rfq-normalization.ts`

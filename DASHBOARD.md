@@ -167,6 +167,7 @@ Legacy-constraint hardening:
 - `dashboard/supabase/migrations/20260222_010_fix_agents_workspace_scoping.sql`
 - `dashboard/supabase/migrations/20260223_011_workspace_mailbox_oauth_enforcement.sql`
 - `dashboard/supabase/migrations/20260223_012_rfq_and_pricing_normalization.sql`
+- `dashboard/supabase/migrations/20260223_013_supabase_advisors_fixes.sql`
 - Drops old global agent constraints and enforces:
   - `primary key (workspace_id, agent_name)`
   - `unique (workspace_id, email)`
