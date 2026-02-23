@@ -1,11 +1,10 @@
 "use client";
 
 import { useDashboardKPIs, usePipelineCounts, useRecentActivity } from "@/hooks/use-analytics";
-import { useRFQs } from "@/hooks/use-rfqs";
 import { CircularProgress } from "@/components/dashboard/circular-progress";
 import { PipelineChart } from "@/components/dashboard/pipeline-chart";
 import { ShipmentsTable } from "@/components/dashboard/shipments-table";
-import { Plus, MoveUpRight, MoveDownRight, ArrowRight } from "lucide-react";
+import { Plus, MoveUpRight, ArrowRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import Link from "next/link";
@@ -14,8 +13,6 @@ export default function DashboardPage() {
   const { data: kpis, isLoading: kpisLoading } = useDashboardKPIs();
   const { data: pipeline, isLoading: pipelineLoading } = usePipelineCounts();
   const { data: activity, isLoading: activityLoading } = useRecentActivity();
-  const { data: rfqs } = useRFQs();
-
   const today = new Date();
 
   // Calculate pipeline total for the CircularProgress widget

@@ -69,7 +69,7 @@ export async function PATCH(
   const supabase = await createClient();
   const { error } = await supabase
     .from("workspace_members")
-    .update({ role: role as any, updated_at: new Date().toISOString() })
+    .update({ role: role as "owner" | "admin" | "member", updated_at: new Date().toISOString() })
     .eq("workspace_id", workspaceId)
     .eq("id", memberId);
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import type { MasterRFQ, AgentQuote, RFQShipment } from "@/types/rfq";
+import type { AgentQuote, RFQShipment } from "@/types/rfq";
 import { requireWorkspaceApiContext } from "@/lib/workspace-context";
 import type { ApiErrorPayload } from "@/lib/validation";
 import {

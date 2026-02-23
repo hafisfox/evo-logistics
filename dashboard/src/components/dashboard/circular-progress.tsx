@@ -15,7 +15,6 @@ interface CircularProgressProps {
 
 export function CircularProgress({
     percentage,
-    total,
     label,
     size = 180,
     strokeWidth = 14,

@@ -73,7 +73,7 @@ export async function POST(
     .insert({
       workspace_id: workspaceId,
       email,
-      role: role as any, // Cast to any or the specific enum type to satisfy TS
+      role: role as "admin" | "member",
       invited_by: access.context.userId,
       status: "pending",
       expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
