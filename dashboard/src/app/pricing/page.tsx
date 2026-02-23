@@ -268,10 +268,10 @@ export default function PricingPage() {
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 animate-in fade-in zoom-in-95 duration-700">
       <Tabs defaultValue="do" className="w-full">
-        <TabsList className="w-full justify-start overflow-x-auto scrollbar-hide py-1 h-auto bg-card/40 backdrop-blur-2xl border border-white/10 dark:border-white/5 rounded-3xl mb-4 p-1 shadow-sm">
-          <TabsTrigger value="do" className="shrink-0 tracking-tight rounded-2xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">DO Charges</TabsTrigger>
-          <TabsTrigger value="dest" className="rounded-2xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">Destination Charges</TabsTrigger>
-          <TabsTrigger value="transport" className="rounded-2xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">Transportation</TabsTrigger>
+        <TabsList className="w-full justify-start overflow-x-auto scrollbar-hide py-1 h-auto bg-card/60 backdrop-blur-2xl border border-white/10 dark:border-white/5 rounded-3xl mb-6 p-1.5 shadow-sm">
+          <TabsTrigger value="do" className="shrink-0 font-medium tracking-tight rounded-2xl data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-md transition-all px-6 py-2">DO Charges</TabsTrigger>
+          <TabsTrigger value="dest" className="shrink-0 font-medium tracking-tight rounded-2xl data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-md transition-all px-6 py-2">Destination Charges</TabsTrigger>
+          <TabsTrigger value="transport" className="shrink-0 font-medium tracking-tight rounded-2xl data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-md transition-all px-6 py-2">Transportation</TabsTrigger>
         </TabsList>
 
         <TabsContent value="do" className="mt-2 focus-visible:outline-none focus-visible:ring-0">
@@ -281,66 +281,66 @@ export default function PricingPage() {
             </CardHeader>
             <CardContent className="px-6 pb-6 pt-2">
               {canManage && (
-                <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-6">
+                <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-6 bg-black/[0.02] dark:bg-white/[0.02] p-4 rounded-2xl border border-black/5 dark:border-white/5">
                   <Input
                     value={newDo.carrier}
                     onChange={(event) => setNewDo((current) => ({ ...current, carrier: event.target.value }))}
                     placeholder="Carrier"
                     disabled={disableManageActions || createDo.isPending}
-                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                    className="rounded-xl border-black/10 dark:border-white/10 bg-background shadow-sm px-4 h-11 focus-visible:ring-1 focus-visible:ring-primary/50 transition-all"
                   />
                   <Input
                     value={newDo.document}
                     onChange={(event) => setNewDo((current) => ({ ...current, document: event.target.value }))}
-                    placeholder="Document"
+                    placeholder="Document Fee"
                     disabled={disableManageActions || createDo.isPending}
-                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                    className="rounded-xl border-black/10 dark:border-white/10 bg-background shadow-sm px-4 h-11 focus-visible:ring-1 focus-visible:ring-primary/50 transition-all font-mono"
                   />
                   <Input
                     value={newDo["20FT"]}
                     onChange={(event) => setNewDo((current) => ({ ...current, "20FT": event.target.value }))}
-                    placeholder="20FT"
+                    placeholder="20FT Rate"
                     disabled={disableManageActions || createDo.isPending}
-                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                    className="rounded-xl border-black/10 dark:border-white/10 bg-background shadow-sm px-4 h-11 focus-visible:ring-1 focus-visible:ring-primary/50 transition-all font-mono"
                   />
                   <Input
                     value={newDo["40FT"]}
                     onChange={(event) => setNewDo((current) => ({ ...current, "40FT": event.target.value }))}
-                    placeholder="40FT"
+                    placeholder="40FT Rate"
                     disabled={disableManageActions || createDo.isPending}
-                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                    className="rounded-xl border-black/10 dark:border-white/10 bg-background shadow-sm px-4 h-11 focus-visible:ring-1 focus-visible:ring-primary/50 transition-all font-mono"
                   />
                   <Input
                     value={newDo["40HQ"]}
                     onChange={(event) => setNewDo((current) => ({ ...current, "40HQ": event.target.value }))}
-                    placeholder="40HQ"
+                    placeholder="40HQ Rate"
                     disabled={disableManageActions || createDo.isPending}
-                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                    className="rounded-xl border-black/10 dark:border-white/10 bg-background shadow-sm px-4 h-11 focus-visible:ring-1 focus-visible:ring-primary/50 transition-all font-mono"
                   />
                   <Button onClick={handleCreateDo} disabled={disableManageActions || createDo.isPending} className="h-11 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
-                    <Plus className="mr-1.5 h-4 w-4" /> Add
+                    <Plus className="mr-1.5 h-4 w-4" /> Add Row
                   </Button>
                 </div>
               )}
               {doLoading ? (
                 <Skeleton className="h-48" />
               ) : (
-                <div className="rounded-md border overflow-x-auto">
-                  <Table className="min-w-[760px]">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Carrier</TableHead>
-                        <TableHead className="text-right">Document Fee</TableHead>
-                        <TableHead className="text-right">20FT</TableHead>
-                        <TableHead className="text-right">40FT</TableHead>
-                        <TableHead className="text-right">40HQ</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                <div className="rounded-2xl border border-black/5 dark:border-white/5 overflow-x-auto scrollbar-hide">
+                  <Table className="min-w-[800px]">
+                    <TableHeader className="bg-black/[0.02] dark:bg-white/[0.02]">
+                      <TableRow className="border-b border-black/5 dark:border-white/5 hover:bg-transparent">
+                        <TableHead className="font-semibold text-muted-foreground h-12">Carrier</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground h-12">Document Fee (AED)</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground h-12">20FT (AED)</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground h-12">40FT (AED)</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground h-12">40HQ (AED)</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground h-12 w-[120px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {doCharges?.map((row) => (
-                        <TableRow key={row.id ?? row.carrier}>
-                          <TableCell className="font-medium">
+                        <TableRow key={row.id ?? row.carrier} className="group border-b border-black/5 dark:border-white/5 hover:bg-black/[0.01] dark:hover:bg-white/[0.01] transition-colors">
+                          <TableCell className="font-semibold text-foreground py-3">
                             {editingDoId === row.id ? (
                               <Input
                                 value={editingDo?.carrier ?? ""}
@@ -350,12 +350,13 @@ export default function PricingPage() {
                                   )
                                 }
                                 disabled={disableManageActions || updateDo.isPending}
+                                className="h-9 rounded-lg border-black/10 dark:border-white/10"
                               />
                             ) : (
                               row.carrier
                             )}
                           </TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className="text-right font-mono font-medium text-muted-foreground py-3 opacity-90 group-hover:opacity-100 transition-opacity">
                             {editingDoId === row.id ? (
                               <Input
                                 value={numberString(editingDo?.document)}
@@ -365,12 +366,13 @@ export default function PricingPage() {
                                   )
                                 }
                                 disabled={disableManageActions || updateDo.isPending}
+                                className="h-9 rounded-lg text-right font-mono border-black/10 dark:border-white/10"
                               />
                             ) : (
-                              formatCurrency(row.document)
+                              <span className="bg-black/5 dark:bg-white/5 px-2 py-1 rounded-md">{formatCurrency(row.document)}</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className="text-right font-mono font-medium text-muted-foreground py-3 opacity-90 group-hover:opacity-100 transition-opacity">
                             {editingDoId === row.id ? (
                               <Input
                                 value={numberString(editingDo?.["20FT"])}
@@ -380,12 +382,13 @@ export default function PricingPage() {
                                   )
                                 }
                                 disabled={disableManageActions || updateDo.isPending}
+                                className="h-9 rounded-lg text-right font-mono border-black/10 dark:border-white/10"
                               />
                             ) : (
-                              formatCurrency(row["20FT"])
+                              <span className="bg-black/5 dark:bg-white/5 px-2 py-1 rounded-md">{formatCurrency(row["20FT"])}</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className="text-right font-mono font-medium text-muted-foreground py-3 opacity-90 group-hover:opacity-100 transition-opacity">
                             {editingDoId === row.id ? (
                               <Input
                                 value={numberString(editingDo?.["40FT"])}
@@ -395,12 +398,13 @@ export default function PricingPage() {
                                   )
                                 }
                                 disabled={disableManageActions || updateDo.isPending}
+                                className="h-9 rounded-lg text-right font-mono border-black/10 dark:border-white/10"
                               />
                             ) : (
-                              formatCurrency(row["40FT"])
+                              <span className="bg-black/5 dark:bg-white/5 px-2 py-1 rounded-md">{formatCurrency(row["40FT"])}</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className="text-right font-mono font-medium text-muted-foreground py-3 opacity-90 group-hover:opacity-100 transition-opacity">
                             {editingDoId === row.id ? (
                               <Input
                                 value={numberString(editingDo?.["40HQ"])}
@@ -410,30 +414,32 @@ export default function PricingPage() {
                                   )
                                 }
                                 disabled={disableManageActions || updateDo.isPending}
+                                className="h-9 rounded-lg text-right font-mono border-black/10 dark:border-white/10"
                               />
                             ) : (
-                              formatCurrency(row["40HQ"])
+                              <span className="bg-black/5 dark:bg-white/5 px-2 py-1 rounded-md">{formatCurrency(row["40HQ"])}</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right py-3">
                             {!canManage ? (
-                              <span className="text-xs text-muted-foreground">Owner/Admin only</span>
+                              <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">Owner Only</span>
                             ) : editingDoId === row.id ? (
-                              <div className="flex justify-end gap-2">
-                                <Button size="sm" onClick={handleSaveDo} disabled={updateDo.isPending}>Save</Button>
+                              <div className="flex justify-end gap-1.5">
+                                <Button size="sm" onClick={handleSaveDo} disabled={updateDo.isPending} className="h-8 rounded-lg bg-primary text-primary-foreground">Save</Button>
                                 <Button
                                   size="sm"
-                                  variant="outline"
+                                  variant="ghost"
                                   onClick={() => {
                                     setEditingDoId(null);
                                     setEditingDo(null);
                                   }}
+                                  className="h-8 w-8 p-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
                                 >
                                   <X className="h-4 w-4" />
                                 </Button>
                               </div>
                             ) : (
-                              <div className="flex justify-end gap-2">
+                              <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <Button
                                   size="icon"
                                   variant="ghost"
@@ -444,8 +450,9 @@ export default function PricingPage() {
                                   }}
                                   disabled={disableManageActions || !row.id}
                                   aria-label={`Edit DO ${row.carrier}`}
+                                  className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10"
                                 >
-                                  <Pencil className="h-4 w-4" />
+                                  <Pencil className="h-3.5 w-3.5" />
                                 </Button>
                                 <Button
                                   size="icon"
@@ -453,8 +460,9 @@ export default function PricingPage() {
                                   onClick={() => handleDeleteDo(row.id)}
                                   disabled={disableManageActions || deleteDo.isPending || !row.id}
                                   aria-label={`Delete DO ${row.carrier}`}
+                                  className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                 >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                  <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               </div>
                             )}
@@ -472,11 +480,11 @@ export default function PricingPage() {
         <TabsContent value="dest" className="mt-2 focus-visible:outline-none focus-visible:ring-0">
           <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
             <CardHeader className="p-6 pb-4">
-              <CardTitle className="text-base font-bold tracking-tight">UAE Destination Charges</CardTitle>
+              <CardTitle className="text-lg font-bold tracking-tight">UAE Destination Charges</CardTitle>
             </CardHeader>
             <CardContent className="px-6 pb-6 pt-2">
               {canManage && (
-                <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-5">
+                <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-5 bg-black/[0.02] dark:bg-white/[0.02] p-4 rounded-2xl border border-black/5 dark:border-white/5">
                   <Input
                     value={newDest["Charge Type"]}
                     onChange={(event) =>
@@ -484,52 +492,52 @@ export default function PricingPage() {
                     }
                     placeholder="Charge Type"
                     disabled={disableManageActions || createDest.isPending}
-                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                    className="rounded-xl border-black/10 dark:border-white/10 bg-background shadow-sm px-4 h-11 focus-visible:ring-1 focus-visible:ring-primary/50 transition-all"
                   />
                   <Input
                     value={newDest.Basis}
                     onChange={(event) => setNewDest((current) => ({ ...current, Basis: event.target.value }))}
-                    placeholder="Basis"
+                    placeholder="Basis (e.g., Per B/L)"
                     disabled={disableManageActions || createDest.isPending}
-                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                    className="rounded-xl border-black/10 dark:border-white/10 bg-background shadow-sm px-4 h-11 focus-visible:ring-1 focus-visible:ring-primary/50 transition-all"
                   />
                   <Input
                     value={newDest["20FT"]}
                     onChange={(event) => setNewDest((current) => ({ ...current, "20FT": event.target.value }))}
-                    placeholder="20FT"
+                    placeholder="20FT Check"
                     disabled={disableManageActions || createDest.isPending}
-                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                    className="rounded-xl border-black/10 dark:border-white/10 bg-background shadow-sm px-4 h-11 focus-visible:ring-1 focus-visible:ring-primary/50 transition-all font-mono"
                   />
                   <Input
                     value={newDest["40FT"]}
                     onChange={(event) => setNewDest((current) => ({ ...current, "40FT": event.target.value }))}
-                    placeholder="40FT"
+                    placeholder="40FT / HQ Check"
                     disabled={disableManageActions || createDest.isPending}
-                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                    className="rounded-xl border-black/10 dark:border-white/10 bg-background shadow-sm px-4 h-11 focus-visible:ring-1 focus-visible:ring-primary/50 transition-all font-mono"
                   />
                   <Button onClick={handleCreateDest} disabled={disableManageActions || createDest.isPending} className="h-11 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
-                    <Plus className="mr-1.5 h-4 w-4" /> Add
+                    <Plus className="mr-1.5 h-4 w-4" /> Add Row
                   </Button>
                 </div>
               )}
               {destLoading ? (
                 <Skeleton className="h-48" />
               ) : (
-                <div className="rounded-md border overflow-x-auto">
-                  <Table className="min-w-[680px]">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Charge Type</TableHead>
-                        <TableHead>Basis</TableHead>
-                        <TableHead className="text-right">20FT</TableHead>
-                        <TableHead className="text-right">40FT</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                <div className="rounded-2xl border border-black/5 dark:border-white/5 overflow-x-auto scrollbar-hide">
+                  <Table className="min-w-[700px]">
+                    <TableHeader className="bg-black/[0.02] dark:bg-white/[0.02]">
+                      <TableRow className="border-b border-black/5 dark:border-white/5 hover:bg-transparent">
+                        <TableHead className="font-semibold text-muted-foreground h-12">Charge Type</TableHead>
+                        <TableHead className="font-semibold text-muted-foreground h-12">Basis</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground h-12">20FT (AED)</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground h-12">40FT/HQ (AED)</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground h-12 w-[120px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {destCharges?.map((row) => (
-                        <TableRow key={row.id ?? row["Charge Type"]}>
-                          <TableCell className="font-medium">
+                        <TableRow key={row.id ?? row["Charge Type"]} className="group border-b border-black/5 dark:border-white/5 hover:bg-black/[0.01] dark:hover:bg-white/[0.01] transition-colors">
+                          <TableCell className="font-semibold text-foreground py-3">
                             {editingDestId === row.id ? (
                               <Input
                                 value={editingDest?.["Charge Type"] ?? ""}
@@ -541,12 +549,13 @@ export default function PricingPage() {
                                   )
                                 }
                                 disabled={disableManageActions || updateDest.isPending}
+                                className="h-9 rounded-lg border-black/10 dark:border-white/10"
                               />
                             ) : (
                               row["Charge Type"]
                             )}
                           </TableCell>
-                          <TableCell className="text-sm">
+                          <TableCell className="text-sm font-medium text-muted-foreground py-3">
                             {editingDestId === row.id ? (
                               <Input
                                 value={editingDest?.Basis ?? ""}
@@ -556,12 +565,13 @@ export default function PricingPage() {
                                   )
                                 }
                                 disabled={disableManageActions || updateDest.isPending}
+                                className="h-9 rounded-lg border-black/10 dark:border-white/10"
                               />
                             ) : (
-                              row.Basis
+                              <span className="bg-black/5 dark:bg-white/5 px-2 py-1 rounded-md text-[11px] uppercase tracking-wider">{row.Basis}</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className="text-right font-mono font-medium text-muted-foreground py-3 opacity-90 group-hover:opacity-100 transition-opacity">
                             {editingDestId === row.id ? (
                               <Input
                                 value={numberString(editingDest?.["20FT"])}
@@ -571,12 +581,13 @@ export default function PricingPage() {
                                   )
                                 }
                                 disabled={disableManageActions || updateDest.isPending}
+                                className="h-9 rounded-lg text-right font-mono border-black/10 dark:border-white/10"
                               />
                             ) : (
-                              formatCurrency(row["20FT"])
+                              <span className="bg-black/5 dark:bg-white/5 px-2 py-1 rounded-md">{formatCurrency(row["20FT"])}</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className="text-right font-mono font-medium text-muted-foreground py-3 opacity-90 group-hover:opacity-100 transition-opacity">
                             {editingDestId === row.id ? (
                               <Input
                                 value={numberString(editingDest?.["40FT"])}
@@ -586,30 +597,32 @@ export default function PricingPage() {
                                   )
                                 }
                                 disabled={disableManageActions || updateDest.isPending}
+                                className="h-9 rounded-lg text-right font-mono border-black/10 dark:border-white/10"
                               />
                             ) : (
-                              formatCurrency(row["40FT"])
+                              <span className="bg-black/5 dark:bg-white/5 px-2 py-1 rounded-md">{formatCurrency(row["40FT"])}</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right py-3">
                             {!canManage ? (
-                              <span className="text-xs text-muted-foreground">Owner/Admin only</span>
+                              <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">Owner Only</span>
                             ) : editingDestId === row.id ? (
-                              <div className="flex justify-end gap-2">
-                                <Button size="sm" onClick={handleSaveDest} disabled={updateDest.isPending}>Save</Button>
+                              <div className="flex justify-end gap-1.5">
+                                <Button size="sm" onClick={handleSaveDest} disabled={updateDest.isPending} className="h-8 rounded-lg bg-primary text-primary-foreground">Save</Button>
                                 <Button
                                   size="sm"
-                                  variant="outline"
+                                  variant="ghost"
                                   onClick={() => {
                                     setEditingDestId(null);
                                     setEditingDest(null);
                                   }}
+                                  className="h-8 w-8 p-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
                                 >
                                   <X className="h-4 w-4" />
                                 </Button>
                               </div>
                             ) : (
-                              <div className="flex justify-end gap-2">
+                              <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <Button
                                   size="icon"
                                   variant="ghost"
@@ -620,8 +633,9 @@ export default function PricingPage() {
                                   }}
                                   disabled={disableManageActions || !row.id}
                                   aria-label={`Edit destination ${row["Charge Type"]}`}
+                                  className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10"
                                 >
-                                  <Pencil className="h-4 w-4" />
+                                  <Pencil className="h-3.5 w-3.5" />
                                 </Button>
                                 <Button
                                   size="icon"
@@ -629,8 +643,9 @@ export default function PricingPage() {
                                   onClick={() => handleDeleteDest(row.id)}
                                   disabled={disableManageActions || deleteDest.isPending || !row.id}
                                   aria-label={`Delete destination ${row["Charge Type"]}`}
+                                  className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                 >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                  <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               </div>
                             )}
@@ -648,56 +663,56 @@ export default function PricingPage() {
         <TabsContent value="transport" className="mt-2 focus-visible:outline-none focus-visible:ring-0">
           <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
             <CardHeader className="p-6 pb-4">
-              <CardTitle className="text-base font-bold tracking-tight">
+              <CardTitle className="text-lg font-bold tracking-tight">
                 Transportation Charges by Location
               </CardTitle>
             </CardHeader>
             <CardContent className="px-6 pb-6 pt-2">
               {canManage && (
-                <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-3">
+                <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-3 bg-black/[0.02] dark:bg-white/[0.02] p-4 rounded-2xl border border-black/5 dark:border-white/5">
                   <Input
                     value={newTransport.Place}
                     onChange={(event) =>
                       setNewTransport((current) => ({ ...current, Place: event.target.value }))
                     }
-                    placeholder="Place"
+                    placeholder="Location / Place"
                     disabled={disableManageActions || createTransport.isPending}
-                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                    className="rounded-xl border-black/10 dark:border-white/10 bg-background shadow-sm px-4 h-11 focus-visible:ring-1 focus-visible:ring-primary/50 transition-all"
                   />
                   <Input
                     value={newTransport.Price}
                     onChange={(event) =>
                       setNewTransport((current) => ({ ...current, Price: event.target.value }))
                     }
-                    placeholder="Price"
+                    placeholder="Price (AED)"
                     disabled={disableManageActions || createTransport.isPending}
-                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                    className="rounded-xl border-black/10 dark:border-white/10 bg-background shadow-sm px-4 h-11 focus-visible:ring-1 focus-visible:ring-primary/50 transition-all font-mono"
                   />
                   <Button
                     onClick={handleCreateTransport}
                     disabled={disableManageActions || createTransport.isPending}
                     className="h-11 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all"
                   >
-                    <Plus className="mr-1.5 h-4 w-4" /> Add
+                    <Plus className="mr-1.5 h-4 w-4" /> Add Location
                   </Button>
                 </div>
               )}
               {transpLoading ? (
                 <Skeleton className="h-48" />
               ) : (
-                <div className="rounded-md border overflow-x-auto">
+                <div className="rounded-2xl border border-black/5 dark:border-white/5 overflow-x-auto scrollbar-hide">
                   <Table className="min-w-[560px]">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Place</TableHead>
-                        <TableHead className="text-right">Price (AED)</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                    <TableHeader className="bg-black/[0.02] dark:bg-white/[0.02]">
+                      <TableRow className="border-b border-black/5 dark:border-white/5 hover:bg-transparent">
+                        <TableHead className="font-semibold text-muted-foreground h-12">Place</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground h-12">Price (AED)</TableHead>
+                        <TableHead className="text-right font-semibold text-muted-foreground h-12 w-[120px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {transpCharges?.map((row) => (
-                        <TableRow key={row.id ?? row.Place}>
-                          <TableCell className="font-medium">
+                        <TableRow key={row.id ?? row.Place} className="group border-b border-black/5 dark:border-white/5 hover:bg-black/[0.01] dark:hover:bg-white/[0.01] transition-colors">
+                          <TableCell className="font-semibold text-foreground py-4">
                             {editingTransportId === row.id ? (
                               <Input
                                 value={editingTransport?.Place ?? ""}
@@ -707,12 +722,13 @@ export default function PricingPage() {
                                   )
                                 }
                                 disabled={disableManageActions || updateTransport.isPending}
+                                className="h-9 rounded-lg border-black/10 dark:border-white/10"
                               />
                             ) : (
                               row.Place
                             )}
                           </TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className="text-right font-mono font-medium text-muted-foreground py-4 opacity-90 group-hover:opacity-100 transition-opacity">
                             {editingTransportId === row.id ? (
                               <Input
                                 value={numberString(editingTransport?.Price)}
@@ -722,32 +738,34 @@ export default function PricingPage() {
                                   )
                                 }
                                 disabled={disableManageActions || updateTransport.isPending}
+                                className="h-9 rounded-lg text-right font-mono border-black/10 dark:border-white/10"
                               />
                             ) : (
-                              formatCurrency(row.Price)
+                              <span className="bg-black/5 dark:bg-white/5 px-2 py-1 rounded-md">{formatCurrency(row.Price)}</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right py-4">
                             {!canManage ? (
-                              <span className="text-xs text-muted-foreground">Owner/Admin only</span>
+                              <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">Owner Only</span>
                             ) : editingTransportId === row.id ? (
-                              <div className="flex justify-end gap-2">
-                                <Button size="sm" onClick={handleSaveTransport} disabled={updateTransport.isPending}>
+                              <div className="flex justify-end gap-1.5">
+                                <Button size="sm" onClick={handleSaveTransport} disabled={updateTransport.isPending} className="h-8 rounded-lg bg-primary text-primary-foreground">
                                   Save
                                 </Button>
                                 <Button
                                   size="sm"
-                                  variant="outline"
+                                  variant="ghost"
                                   onClick={() => {
                                     setEditingTransportId(null);
                                     setEditingTransport(null);
                                   }}
+                                  className="h-8 w-8 p-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
                                 >
                                   <X className="h-4 w-4" />
                                 </Button>
                               </div>
                             ) : (
-                              <div className="flex justify-end gap-2">
+                              <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <Button
                                   size="icon"
                                   variant="ghost"
@@ -758,8 +776,9 @@ export default function PricingPage() {
                                   }}
                                   disabled={disableManageActions || !row.id}
                                   aria-label={`Edit transport ${row.Place}`}
+                                  className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10"
                                 >
-                                  <Pencil className="h-4 w-4" />
+                                  <Pencil className="h-3.5 w-3.5" />
                                 </Button>
                                 <Button
                                   size="icon"
@@ -767,8 +786,9 @@ export default function PricingPage() {
                                   onClick={() => handleDeleteTransport(row.id)}
                                   disabled={disableManageActions || deleteTransport.isPending || !row.id}
                                   aria-label={`Delete transport ${row.Place}`}
+                                  className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                 >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                  <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               </div>
                             )}

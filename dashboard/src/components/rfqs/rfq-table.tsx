@@ -47,64 +47,64 @@ export function RFQTable({ rfqs }: RFQTableProps) {
   }
 
   return (
-    <div className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-x-auto">
+    <div className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-x-auto scrollbar-hide">
       <Table className="min-w-[800px]">
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[140px]">RFQ ID</TableHead>
-            <TableHead>Customer</TableHead>
-            <TableHead>Route</TableHead>
-            <TableHead>Containers</TableHead>
-            <TableHead>Service</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Ready Date</TableHead>
-            <TableHead>Price (AED)</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+        <TableHeader className="bg-black/[0.02] dark:bg-white/[0.02]">
+          <TableRow className="border-b border-black/5 dark:border-white/5 hover:bg-transparent">
+            <TableHead className="w-[140px] font-semibold text-muted-foreground h-12">RFQ ID</TableHead>
+            <TableHead className="font-semibold text-muted-foreground h-12">Customer</TableHead>
+            <TableHead className="font-semibold text-muted-foreground h-12">Route</TableHead>
+            <TableHead className="font-semibold text-muted-foreground h-12">Containers</TableHead>
+            <TableHead className="font-semibold text-muted-foreground h-12">Service</TableHead>
+            <TableHead className="font-semibold text-muted-foreground h-12">Status</TableHead>
+            <TableHead className="font-semibold text-muted-foreground h-12">Ready Date</TableHead>
+            <TableHead className="font-semibold text-muted-foreground h-12">Price (AED)</TableHead>
+            <TableHead className="text-right font-semibold text-muted-foreground h-12 w-[120px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rfqs.map((rfq) => (
-            <TableRow key={rfq.rfq_id}>
-              <TableCell className="font-mono text-sm">
+            <TableRow key={rfq.rfq_id} className="group border-b border-black/5 dark:border-white/5 hover:bg-black/[0.015] dark:hover:bg-white/[0.015] transition-all cursor-pointer">
+              <TableCell className="font-mono text-sm py-4">
                 <Link
                   href={`/rfqs/${rfq.rfq_id}`}
-                  className="text-primary hover:underline"
+                  className="text-primary font-medium hover:underline transition-all"
                 >
                   {rfq.rfq_id}
                 </Link>
               </TableCell>
-              <TableCell className="text-sm max-w-[180px] truncate">
+              <TableCell className="text-sm max-w-[180px] truncate font-medium text-foreground py-4">
                 {rfq.customer_email}
               </TableCell>
-              <TableCell>
+              <TableCell className="py-4">
                 <RouteDisplay pol={rfq.pol} pod={rfq.pod} />
               </TableCell>
-              <TableCell>
+              <TableCell className="py-4">
                 <ContainerBadge type={rfq.container_type} qty={rfq.qty} />
               </TableCell>
-              <TableCell className="text-sm">{rfq.service_type}</TableCell>
-              <TableCell>
+              <TableCell className="text-sm font-medium text-muted-foreground py-4">{rfq.service_type}</TableCell>
+              <TableCell className="py-4">
                 <StatusBadge status={rfq.status} />
               </TableCell>
-              <TableCell className="text-sm">
+              <TableCell className="text-sm font-medium text-muted-foreground py-4">
                 {formatDate(rfq.ready_date)}
               </TableCell>
-              <TableCell>
+              <TableCell className="py-4 cursor-default">
                 {rfq.final_price_aed ? (
-                  <CurrencyDisplay amount={rfq.final_price_aed} />
+                  <span className="font-mono font-medium opacity-90 group-hover:opacity-100 transition-opacity"><CurrencyDisplay amount={rfq.final_price_aed} /></span>
                 ) : (
-                  <span className="text-muted-foreground">—</span>
+                  <span className="text-muted-foreground/60">—</span>
                 )}
               </TableCell>
-              <TableCell className="text-right">
-                <div className="flex justify-end gap-1.5">
+              <TableCell className="text-right py-4 cursor-default">
+                <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0">
                   <Button
                     variant="ghost"
                     size="icon"
                     asChild
                     aria-label={`View RFQ ${rfq.rfq_id}`}
                     title={`View RFQ ${rfq.rfq_id}`}
-                    className="h-8 w-8 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                    className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                   >
                     <Link href={`/rfqs/${rfq.rfq_id}`}>
                       <Eye className="h-4 w-4" />
@@ -117,7 +117,7 @@ export function RFQTable({ rfqs }: RFQTableProps) {
                       asChild
                       aria-label={`Select agent for RFQ ${rfq.rfq_id}`}
                       title={`Select agent for RFQ ${rfq.rfq_id}`}
-                      className="h-8 w-8 rounded-lg hover:bg-primary/10 hover:text-primary transition-colors"
+                      className="h-8 w-8 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-600/10 transition-colors"
                     >
                       <Link href={`/rfqs/${rfq.rfq_id}/select`}>
                         <UserCheck className="h-4 w-4" />
@@ -128,13 +128,13 @@ export function RFQTable({ rfqs }: RFQTableProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleDelete(rfq.rfq_id)}
+                      onClick={(e) => { e.stopPropagation(); handleDelete(rfq.rfq_id); }}
                       disabled={deleteMutation.isPending}
                       aria-label={`Delete RFQ ${rfq.rfq_id}`}
                       title={`Delete RFQ ${rfq.rfq_id}`}
-                      className="h-8 w-8 rounded-lg hover:bg-destructive/10 hover:text-destructive transition-colors"
+                      className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                     >
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   )}
                 </div>

@@ -115,12 +115,12 @@ export default function WorkspaceSettingsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <div className="mb-2 mt-1 flex items-center justify-between">
-                  <label id="profit-margin-label" className="text-sm text-muted-foreground">
+                  <label id="profit-margin-label" className="text-sm font-medium text-muted-foreground">
                     Profit Margin (%)
                   </label>
                   <span
                     id="profit-margin-value"
-                    className="min-w-[3rem] rounded-md border px-2 py-1 text-center font-mono text-sm"
+                    className="min-w-[3rem] rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-2.5 py-1 text-center font-mono text-sm font-semibold shadow-sm"
                     aria-live="polite"
                   >
                     {formatSliderValue(formSettings.profitMargin)}
@@ -137,21 +137,21 @@ export default function WorkspaceSettingsPage() {
                   aria-labelledby="profit-margin-label"
                   aria-describedby="profit-margin-help"
                   aria-valuetext={`${formatSliderValue(formSettings.profitMargin)} percent`}
-                  className="py-2"
+                  className="py-3"
                 />
-                <p id="profit-margin-help" className="mt-1 text-xs text-muted-foreground">
+                <p id="profit-margin-help" className="mt-1 text-[11px] font-medium text-muted-foreground/80">
                   Added to computed shipment costs before final rounding.
                 </p>
               </div>
 
               <div>
                 <div className="mb-2 mt-1 flex items-center justify-between">
-                  <label id="quote-threshold-label" className="text-sm text-muted-foreground">
+                  <label id="quote-threshold-label" className="text-sm font-medium text-muted-foreground">
                     Quote Threshold
                   </label>
                   <span
                     id="quote-threshold-value"
-                    className="min-w-[2.5rem] rounded-md border px-2 py-1 text-center font-mono text-sm"
+                    className="min-w-[3rem] rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-2.5 py-1 text-center font-mono text-sm font-semibold shadow-sm"
                     aria-live="polite"
                   >
                     {formatSliderValue(formSettings.quoteThreshold)}
@@ -168,9 +168,9 @@ export default function WorkspaceSettingsPage() {
                   aria-labelledby="quote-threshold-label"
                   aria-describedby="quote-threshold-help"
                   aria-valuetext={`${formatSliderValue(formSettings.quoteThreshold)} quotes`}
-                  className="py-2"
+                  className="py-3"
                 />
-                <p id="quote-threshold-help" className="mt-1 text-xs text-muted-foreground">
+                <p id="quote-threshold-help" className="mt-1 text-[11px] font-medium text-muted-foreground/80">
                   Minimum quotes before manager notification.
                 </p>
               </div>

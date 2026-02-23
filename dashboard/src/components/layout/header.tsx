@@ -34,7 +34,7 @@ export function Header({ title, description }: HeaderProps) {
   };
 
   return (
-    <header className="flex h-20 shrink-0 items-center justify-between px-6 md:px-8 border-b border-border bg-background">
+    <header className="flex h-20 shrink-0 items-center justify-between px-6 md:px-8 border-b border-white/10 dark:border-white/5 bg-background/80 backdrop-blur-xl sticky top-0 z-30">
       {/* Left: mobile nav + page title */}
       <div className="flex items-center gap-3">
         <MobileNav />
@@ -54,24 +54,29 @@ export function Header({ title, description }: HeaderProps) {
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2.5 rounded-full hover:bg-accent p-1.5 pr-3 transition-colors outline-none cursor-pointer">
-              <Avatar className="h-8 w-8">
+            <button className="flex items-center gap-2.5 rounded-full hover:bg-black/5 dark:hover:bg-white/5 p-1.5 pr-3 transition-colors outline-none cursor-pointer focus-visible:ring-2 focus-visible:ring-primary/50">
+              <Avatar className="h-8 w-8 ring-1 ring-black/10 dark:ring-white/10 ring-offset-background ring-offset-2">
                 <AvatarImage src="https://i.pravatar.cc/150?u=evo" />
-                <AvatarFallback>EL</AvatarFallback>
+                <AvatarFallback className="bg-primary/10 text-primary font-medium text-xs">EL</AvatarFallback>
               </Avatar>
               <span className="hidden md:block text-sm font-medium">Account</span>
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem asChild>
-              <Link href="/settings/account" className="flex items-center gap-2">
-                <Settings className="h-4 w-4" />
-                Settings
+          <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2 shadow-xl border-black/5 dark:border-white/10 backdrop-blur-xl bg-background/95">
+            <DropdownMenuItem asChild className="rounded-xl cursor-pointer">
+              <Link href="/settings/account" className="flex items-center gap-3 py-2 px-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Settings className="h-4 w-4" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">Settings</span>
+                  <span className="text-xs text-muted-foreground">Manage preferences</span>
+                </div>
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
-              Sign Out
+            <DropdownMenuSeparator className="my-2 opacity-50" />
+            <DropdownMenuItem onClick={handleLogout} className="rounded-xl cursor-pointer py-2.5 px-3 text-destructive focus:bg-destructive/10 focus:text-destructive">
+              Sign out of application
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

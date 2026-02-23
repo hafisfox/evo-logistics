@@ -49,20 +49,20 @@ export default function DashboardPage() {
         <div className="flex flex-wrap items-center gap-3">
           <Link
             href="/rfqs"
-            className="flex items-center gap-2 rounded-full bg-[#1A1C20] px-5 py-2.5 text-sm font-medium text-white shadow hover:bg-black/80 transition-colors"
+            className="flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
           >
             <Plus className="h-4 w-4" />
             New RFQ
           </Link>
           <Link
             href="/agents"
-            className="flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/10 bg-white dark:bg-black/20 px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+            className="flex items-center gap-2 rounded-full border border-black/5 dark:border-white/5 bg-white/50 dark:bg-black/20 backdrop-blur-md px-5 py-2.5 text-sm font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-all duration-300"
           >
             View Agents
           </Link>
           <Link
             href="/pricing"
-            className="flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/10 bg-white dark:bg-black/20 px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+            className="flex items-center gap-2 rounded-full border border-black/5 dark:border-white/5 bg-white/50 dark:bg-black/20 backdrop-blur-md px-5 py-2.5 text-sm font-medium text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-all duration-300"
           >
             Pricing Tables
           </Link>
@@ -72,120 +72,129 @@ export default function DashboardPage() {
       {/* Top KPI Widgets Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Pipeline Activity Card */}
-        <div className="flex flex-col rounded-[24px] bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-white/5 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold text-gray-900 dark:text-white">Pipeline Activity</h3>
-            <Link href="/rfqs" className="text-xs text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
-              View all →
-            </Link>
-          </div>
-          <div className="flex items-center gap-6 mt-4">
-            {pipelineLoading ? (
-              <Skeleton className="h-[140px] w-[140px] rounded-full" />
-            ) : (
-              <CircularProgress
-                percentage={activePercent}
-                total={pipelineTotal}
-                label="Processing"
-                size={140}
-                strokeWidth={12}
-                primaryColor="#F97316"
-                secondaryColor="#FFEDD5"
-              />
-            )}
-            <div className="flex-1 space-y-3">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="h-2 w-2 rounded-full bg-orange-500" />
-                <span className="text-gray-500 capitalize">Processing</span>
-                <span className="ml-auto font-semibold text-gray-900 dark:text-white">
-                  {kpisLoading ? <Skeleton className="h-4 w-6 inline-block" /> : kpis?.activeRFQs ?? 0}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-sm border-t border-dashed border-gray-200 dark:border-white/10 pt-2">
-                <span className="h-2 w-2 rounded-full bg-blue-400" />
-                <span className="text-gray-500 capitalize">Awaiting Quotes</span>
-                <span className="ml-auto font-semibold text-gray-900 dark:text-white">
-                  {kpisLoading ? <Skeleton className="h-4 w-6 inline-block" /> : kpis?.awaitingQuotes ?? 0}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-sm border-t border-dashed border-gray-200 dark:border-white/10 pt-2">
-                <span className="h-2 w-2 rounded-full bg-green-400" />
-                <span className="text-gray-500 capitalize">Pending Selection</span>
-                <span className="ml-auto font-semibold text-gray-900 dark:text-white">
-                  {kpisLoading ? <Skeleton className="h-4 w-6 inline-block" /> : kpis?.pendingSelection ?? 0}
-                </span>
+        <div className="group flex flex-col rounded-3xl bg-card border border-black/5 dark:border-white/5 p-6 shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold text-foreground tracking-tight">Pipeline Activity</h3>
+              <Link href="/rfqs" className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                View all <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+            <div className="flex items-center gap-6 mt-4">
+              {pipelineLoading ? (
+                <Skeleton className="h-[140px] w-[140px] rounded-full" />
+              ) : (
+                <CircularProgress
+                  percentage={activePercent}
+                  total={pipelineTotal}
+                  label="Processing"
+                  size={140}
+                  strokeWidth={12}
+                  primaryColor="oklch(0.55 0.15 230)"
+                  secondaryColor="oklch(0.55 0.15 230 / 0.1)"
+                />
+              )}
+              <div className="flex-1 space-y-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="h-2 w-2 rounded-full bg-primary" />
+                  <span className="text-muted-foreground capitalize">Processing</span>
+                  <span className="ml-auto font-semibold text-foreground">
+                    {kpisLoading ? <Skeleton className="h-4 w-6 inline-block" /> : kpis?.activeRFQs ?? 0}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-sm border-t border-dashed border-black/5 dark:border-white/10 pt-2">
+                  <span className="h-2 w-2 rounded-full bg-chart-4" />
+                  <span className="text-muted-foreground capitalize">Awaiting Quotes</span>
+                  <span className="ml-auto font-semibold text-foreground">
+                    {kpisLoading ? <Skeleton className="h-4 w-6 inline-block" /> : kpis?.awaitingQuotes ?? 0}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-sm border-t border-dashed border-black/5 dark:border-white/10 pt-2">
+                  <span className="h-2 w-2 rounded-full bg-chart-2" />
+                  <span className="text-muted-foreground capitalize">Pending Selection</span>
+                  <span className="ml-auto font-semibold text-foreground">
+                    {kpisLoading ? <Skeleton className="h-4 w-6 inline-block" /> : kpis?.pendingSelection ?? 0}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Quoted Today Card */}
-        <div className="flex flex-col rounded-[24px] bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-white/5 p-6 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="h-2 w-2 rounded-full bg-green-500" />
-            <h3 className="font-semibold text-gray-900 dark:text-white">Quoted Today</h3>
-          </div>
-          <div className="flex-1 flex items-center justify-center mt-4">
-            {kpisLoading ? (
-              <Skeleton className="h-[160px] w-[160px] rounded-full" />
-            ) : (
-              <CircularProgress
-                percentage={quotedPercent}
-                total={pipelineTotal}
-                label="Conversion Rate"
-                size={160}
-                strokeWidth={14}
-                primaryColor="#22c55e"
-                secondaryColor="#dcfce7"
-              />
-            )}
-          </div>
-          <div className="mt-4 text-center">
-            <p className="text-3xl font-bold text-gray-900 dark:text-white">
-              {kpisLoading ? <Skeleton className="h-8 w-16 inline-block" /> : kpis?.quotedToday ?? 0}
-            </p>
-            <p className="text-sm text-gray-500 mt-1">quotes sent today</p>
+        <div className="group flex flex-col rounded-3xl bg-card border border-black/5 dark:border-white/5 p-6 shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-chart-2/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <div className="relative z-10 flex flex-col h-full">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="h-2 w-2 rounded-full bg-chart-2" />
+              <h3 className="font-semibold text-foreground tracking-tight">Quoted Today</h3>
+            </div>
+            <div className="flex-1 flex items-center justify-center mt-4">
+              {kpisLoading ? (
+                <Skeleton className="h-[160px] w-[160px] rounded-full" />
+              ) : (
+                <CircularProgress
+                  percentage={quotedPercent}
+                  total={pipelineTotal}
+                  label="Conversion Rate"
+                  size={160}
+                  strokeWidth={14}
+                  primaryColor="oklch(0.696 0.17 162.48)"
+                  secondaryColor="oklch(0.696 0.17 162.48 / 0.1)"
+                />
+              )}
+            </div>
+            <div className="mt-4 text-center">
+              <p className="text-3xl font-bold text-foreground tracking-tight">
+                {kpisLoading ? <Skeleton className="h-8 w-16 inline-block" /> : kpis?.quotedToday ?? 0}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1 font-medium">quotes sent today</p>
+            </div>
           </div>
         </div>
 
         {/* Avg Response Time Card */}
-        <div className="flex flex-col rounded-[24px] bg-[#EAE8E3] dark:bg-[#2A2A2A] border border-gray-100 dark:border-white/5 relative overflow-hidden shadow-sm">
-          <div className="p-6 relative z-10">
-            <div className="flex items-center gap-2 mb-6">
-              <span className="h-2 w-2 rounded-full bg-blue-500" />
-              <h3 className="font-semibold text-gray-900 dark:text-white">Avg. Response Time</h3>
+        <div className="group flex flex-col rounded-3xl bg-secondary border border-black/5 dark:border-white/5 relative overflow-hidden shadow-sm hover:shadow-md transition-all duration-300">
+          <div className="absolute inset-0 bg-gradient-to-br from-chart-3/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <div className="p-6 relative z-10 flex flex-col h-full justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-6">
+                <span className="h-2 w-2 rounded-full bg-chart-3" />
+                <h3 className="font-semibold text-secondary-foreground tracking-tight">Avg. Response Time</h3>
+              </div>
+              <div className="flex items-baseline gap-3 mb-2">
+                {kpisLoading ? (
+                  <Skeleton className="h-12 w-24" />
+                ) : (
+                  <>
+                    <span className="text-5xl font-light text-secondary-foreground tracking-tighter">
+                      {kpis?.avgResponseTimeHours != null
+                        ? kpis.avgResponseTimeHours < 1
+                          ? `${Math.round(kpis.avgResponseTimeHours * 60)}m`
+                          : `${kpis.avgResponseTimeHours.toFixed(1)}h`
+                        : "—"}
+                    </span>
+                    {kpis?.avgResponseTimeHours != null && (
+                      <div className="flex items-center gap-1 text-sm text-chart-2 font-semibold">
+                        <MoveUpRight className="h-4 w-4 stroke-[3]" />
+                        <span>Active</span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mb-6 font-medium">Average agent quote turnaround</p>
             </div>
-            <div className="flex items-baseline gap-3 mb-2">
-              {kpisLoading ? (
-                <Skeleton className="h-12 w-24" />
-              ) : (
-                <>
-                  <span className="text-5xl font-light text-gray-900 dark:text-white">
-                    {kpis?.avgResponseTimeHours != null
-                      ? kpis.avgResponseTimeHours < 1
-                        ? `${Math.round(kpis.avgResponseTimeHours * 60)}m`
-                        : `${kpis.avgResponseTimeHours.toFixed(1)}h`
-                      : "—"}
-                  </span>
-                  {kpis?.avgResponseTimeHours != null && (
-                    <div className="flex items-center gap-1 text-sm text-green-600 font-medium">
-                      <MoveUpRight className="h-4 w-4" />
-                      <span>Active</span>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-            <p className="text-xs text-gray-500 mb-6">Average agent quote turnaround</p>
             <Link
               href="/rfqs"
-              className="inline-flex items-center gap-2 rounded-full bg-[#1A1C20] px-5 py-2 text-sm font-medium text-white shadow hover:bg-black/80 transition-colors"
+              className="mt-auto inline-flex items-center justify-center gap-2 rounded-full bg-foreground px-5 py-2.5 text-sm font-semibold text-background shadow-md shadow-black/10 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
             >
               View Pipeline
-              <ArrowRight className="h-3.5 w-3.5" />
+              <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
-          <div className="absolute -bottom-6 -right-6 h-40 w-56 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-white/10 dark:to-white/5 rounded-xl opacity-50 transform rotate-12" />
+          <div className="absolute -bottom-6 -right-6 h-48 w-64 bg-chart-3/20 blur-3xl rounded-full opacity-50 transition-transform duration-700 ease-out group-hover:scale-150" />
         </div>
       </div>
 
@@ -205,14 +214,14 @@ export default function DashboardPage() {
         </div>
 
         {/* Recent Activity */}
-        <div className="flex flex-col rounded-[24px] bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-white/5 p-6 shadow-sm overflow-hidden">
+        <div className="flex flex-col rounded-3xl bg-card border border-black/5 dark:border-white/5 p-6 shadow-sm overflow-hidden min-h-[300px]">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="font-semibold text-gray-900 dark:text-white">Recent Activity</h3>
-            <Link href="/rfqs" className="text-xs text-gray-400 hover:text-gray-700 transition-colors">
-              All →
+            <h3 className="font-semibold text-foreground tracking-tight">Recent Activity</h3>
+            <Link href="/rfqs" className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+              All <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
-          <div className="flex-1 space-y-4 overflow-y-auto">
+          <div className="flex-1 space-y-4 overflow-y-auto pr-2 scrollbar-hide">
             {activityLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="flex items-start gap-3">
@@ -225,18 +234,20 @@ export default function DashboardPage() {
               ))
             ) : activity && activity.length > 0 ? (
               activity.slice(0, 6).map((item) => (
-                <div key={`${item.rfq_id}-${item.timestamp}`} className="flex items-start gap-3 group">
-                  <div className="h-8 w-8 rounded-full bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center shrink-0 text-xs font-bold text-orange-500">
+                <div key={`${item.rfq_id}-${item.timestamp}`} className="group/item flex items-start gap-3 p-2 -mx-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors duration-200 cursor-default">
+                  <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-sm font-bold text-primary shadow-sm border border-primary/20">
                     {item.customer_email.charAt(0).toUpperCase()}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-900 dark:text-white truncate">
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <p className="text-sm font-semibold text-foreground truncate leading-tight group-hover/item:text-primary transition-colors">
                       {item.customer_email}
                     </p>
-                    <p className="text-[11px] text-gray-500 truncate">
-                      {item.route} · <span className="text-orange-500">{item.status}</span>
+                    <p className="text-[12px] text-muted-foreground truncate flex items-center gap-1.5 mt-0.5">
+                      <span className="font-medium text-foreground/70">{item.route}</span>
+                      <span className="h-1 w-1 rounded-full bg-border" />
+                      <span className="text-chart-1 font-medium bg-chart-1/10 px-1.5 rounded-sm">{item.status}</span>
                     </p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">
+                    <p className="text-[10px] text-muted-foreground/60 mt-1 font-medium uppercase tracking-wider">
                       {format(new Date(item.timestamp), "MMM d, HH:mm")}
                     </p>
                   </div>
