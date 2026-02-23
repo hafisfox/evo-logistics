@@ -446,7 +446,7 @@ def _normalize_iso_date(value: Optional[str]) -> Optional[str]:
     cleaned = value.strip()
     if not cleaned or cleaned.upper() in {"N/A", "NO_QUOTE", "TBD"}:
         return None
-    match = re.match(r"^(\\d{4}-\\d{2}-\\d{2})", cleaned)
+    match = re.match(r"^(\d{4}-\d{2}-\d{2})", cleaned)
     if match:
         return match.group(1)
     return None
@@ -1267,12 +1267,12 @@ def _process_agent_quotes(pubsub_payload=None):
                     'agent_name': agent_name,
                     'agent_email': agent_email,
                     'carrier': 'N/A',
-                    'price': 'N/A',
+                    'price': None,
                     'currency': 'N/A',
-                    'etd': 'N/A',
+                    'etd': None,
                     'transit_time': 'N/A',
                     'free_time': 'N/A',
-                    'validity': 'N/A',
+                    'validity': None,
                     'received_at': now_str,
                 }
                 _upsert_row(supabase, "agent_outbound_log", log_data, workspace_id)
@@ -1307,10 +1307,10 @@ def _process_agent_quotes(pubsub_payload=None):
                     'carrier': carrier,
                     'price': str(price) if is_valid else 'N/A',
                     'currency': quote.currency or 'USD',
-                    'etd': quote.etd or 'N/A',
+                    'etd': quote.etd or None,
                     'transit_time': str(quote.transit_time) if quote.transit_time else 'N/A',
                     'free_time': str(quote.free_time) if quote.free_time else 'N/A',
-                    'validity': quote.validity or 'N/A',
+                    'validity': quote.validity or None,
                     'received_at': now_str,
                 }
 

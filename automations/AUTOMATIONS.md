@@ -122,7 +122,10 @@ Enforcement migration:
 
 A robust optimization pass was applied to the Supabase schema:
 - **Timestamp strings:** `sent_at`, `received_at`, and `quoted_at` are stored as `TEXT` (format: `YYYY-MM-DD HH:MI AM`) to exactly match the UAE local-time strings produced by the automations without risking Postgres timezone coercion bugs.
-- **Durations:** `transit_time` and `free_time` are strictly stored as `INTEGER`.
+- **Date columns:** `etd` and `validity` in both `agent_outbound_log` and `agent_quotes` are `DATE` type — automation code must write `None`/`NULL` (not `'N/A'` strings) when no date is available.
+- **Numeric columns:** `price` in `agent_outbound_log` is `NUMERIC` — write `None`/`NULL` for invalid quotes, not `'N/A'`.
+- **NOT NULL text columns:** `carrier` in `agent_outbound_log` is `NOT NULL` — outreach rows must supply a default (e.g. `'Pending'`).
+- **Durations:** `transit_time` and `free_time` are stored as `TEXT` in `agent_outbound_log` and `INTEGER` in `agent_quotes`.
 - **Deduplication:** Manager threshold notifications fire exactly once when `quote_count == QUOTE_THRESHOLD`, preventing duplicate emails on subsequent quotes.
 
 ## 7. Gmail Watch Renewal

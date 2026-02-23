@@ -915,6 +915,7 @@ def _send_agent_outreach(gmail_service, supabase, workspace_id, rfq_id, shipment
                 'status': 'Requested',
                 'agent_name': agent_name,
                 'agent_email': agent_email,
+                'carrier': 'Pending',
                 'sent_at': now_str,
             }
             try:

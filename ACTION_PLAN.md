@@ -235,6 +235,10 @@ Executed from this workspace branch:
   - `RFQ_NORMALIZED_DUAL_WRITE=true`
   - `RFQ_NORMALIZED_READ_SOURCE=normalized`
 - Modal apps redeployed (phase 1/2/3 + scheduled tasks).
+- **Hotfix deployed (2026-02-23):** Fixed DATE/NUMERIC column handling in both phases:
+  - Phase 1: added `carrier='Pending'` default for outreach rows (was NULL → NOT NULL violation).
+  - Phase 2: replaced `'N/A'` string fallbacks with `None` for `etd`, `validity` (DATE cols) and `price` (NUMERIC col) in all code paths.
+  - Phase 2: fixed `_normalize_iso_date` regex (`\\d` → `\d`) so `agent_quotes` dual-write preserves valid ISO dates.
 - Gmail watches renewed successfully for connected mailbox:
   - `yunapink05@gmail.com`
 - webhook endpoint smoke probes (`GET`) return `405` as expected for POST-only handlers.

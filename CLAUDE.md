@@ -12,6 +12,7 @@
 - **New phases** — add new python scripts to the `automations/` directory
 - **New skills** — when adding a skill, register it in `SKILLS.md` and place it in `.agents/skills/` (mirror to `.claude/skills/` for parity in this repo)
 - **Credentials** — never store secrets in any markdown file; reference `.env` files and secret managers only
+- **UPGRADES.md** — reserved for future implementation plans only; do not log hotfixes or runtime changes there
 
 ## On-Demand Skill Loading
 

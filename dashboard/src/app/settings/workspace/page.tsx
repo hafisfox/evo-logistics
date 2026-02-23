@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { Settings } from "@/lib/settings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -24,6 +25,28 @@ function formatDateTime(value: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Invalid date";
   return date.toLocaleString();
+}
+
+function OAuthCallbackToast() {
+  const searchParams = useSearchParams();
+  const fired = useRef(false);
+
+  useEffect(() => {
+    if (fired.current) return;
+    const error = searchParams.get("mailbox_error");
+    const connected = searchParams.get("mailbox_connected");
+    if (error) {
+      fired.current = true;
+      toast.error("Mailbox connection failed", { description: error, duration: 8000 });
+      window.history.replaceState({}, "", "/settings/workspace");
+    } else if (connected === "true") {
+      fired.current = true;
+      toast.success("Mailbox connected successfully");
+      window.history.replaceState({}, "", "/settings/workspace");
+    }
+  }, [searchParams]);
+
+  return null;
 }
 
 export default function WorkspaceSettingsPage() {
@@ -96,6 +119,9 @@ export default function WorkspaceSettingsPage() {
 
   return (
     <div className="max-w-2xl space-y-6 md:space-y-8 p-4 md:p-6 lg:p-8 animate-in fade-in zoom-in-95 duration-700">
+      <Suspense fallback={null}>
+        <OAuthCallbackToast />
+      </Suspense>
       <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
         <CardHeader className="pb-3 px-6 pt-6">
           <div className="flex items-center gap-3">
