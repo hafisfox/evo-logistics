@@ -230,12 +230,14 @@ Executed from this workspace branch:
 - Dashboard deployed and aliased to:
   - `https://evo-logistics.vercel.app`
 - Latest production deployment from `main`:
-  - commit `b5da915`
+  - commit `0dac2f9`
 - Vercel environment is configured for mailbox OAuth across `production`/`preview`/`development`:
   - `GOOGLE_OAUTH_CLIENT_ID`
   - `GOOGLE_OAUTH_CLIENT_SECRET`
+  - `GOOGLE_PUBSUB_TOPIC`
   - `MAILBOX_TOKEN_ENCRYPTION_KEY`
   - `MAILBOX_OAUTH_STATE_SECRET`
+- dashboard OAuth callback now initializes Gmail watch immediately on mailbox connect/reconnect and persists `watch_expiration`.
 - Modal apps deployed:
   - phase 1: `https://hafisjavad--rfq-analyzer-phase-1-gmail-push-phase1.modal.run`
   - phase 2: `https://hafisjavad--quote-analysis-phase-2-gmail-push-phase2.modal.run`
@@ -267,7 +269,8 @@ Executed from this workspace branch:
   - Phase 1: added `carrier='Pending'` default for outreach rows (was NULL → NOT NULL violation).
   - Phase 2: replaced `'N/A'` string fallbacks with `None` for `etd`, `validity` (DATE cols) and `price` (NUMERIC col) in all code paths.
   - Phase 2: fixed `_normalize_iso_date` regex (`\\d` → `\d`) so `agent_quotes` dual-write preserves valid ISO dates.
-- Gmail watches renewed successfully for connected mailbox:
+- Gmail watches currently active for connected mailboxes:
+  - `hafisjavad@gmail.com`
   - `yunapink05@gmail.com`
 - webhook endpoint smoke probes (`GET`) return `405` as expected for POST-only handlers.
 

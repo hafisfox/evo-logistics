@@ -29,7 +29,8 @@ Workspace-centric Next.js control plane for RFQ operations, pricing, and automat
   - compatibility views: `v_master_rfq_legacy_projection`, `v_do_charges_legacy`, `v_destination_charges_legacy`
 - Quote selection uses exact quote `match` key (`selected_match`) to support same-carrier multi-option offers safely.
 - Workspace-scoped agent uniqueness (`workspace_id + agent_name`, `workspace_id + email`) via migration `20260222_010_fix_agents_workspace_scoping.sql`.
-- Workspace mailbox OAuth connect/reconnect/disconnect in workspace settings.
+- Workspace mailbox OAuth connect/reconnect/disconnect in workspace settings with immediate Gmail watch initialization.
+- OAuth callback handles cross-workspace mailbox conflicts with safe transfer (when caller is owner/admin on both workspaces) or friendly user-facing error.
 - Invite links that carry token through auth callback and auto-accept membership.
 - Invite acceptance now treats invite-row status update failures as hard failures (no silent pending drift).
 - Account settings (`/settings/account`) with profile update, session revoke, MFA flag toggle, and soft-delete request.
@@ -59,6 +60,7 @@ Workspace-centric Next.js control plane for RFQ operations, pricing, and automat
    - `MODAL_WEBHOOK_SELECT_AGENT`
    - `GOOGLE_OAUTH_CLIENT_ID`
    - `GOOGLE_OAUTH_CLIENT_SECRET`
+   - `GOOGLE_PUBSUB_TOPIC`
    - `MAILBOX_TOKEN_ENCRYPTION_KEY`
 3. Install dependencies and run dev server.
 
@@ -92,11 +94,11 @@ Notes:
 - `src/app/api/workspaces/**` — workspace/member/invite APIs.
 - `src/app/api/workspaces/current/mailbox/route.ts` — mailbox read + metadata-safe updates (`connected` cannot be set manually).
 - `src/app/api/workspaces/current/mailbox/oauth/start/route.ts` — starts Google OAuth for current workspace.
-- `src/app/api/workspaces/current/mailbox/oauth/callback/route.ts` — exchanges OAuth code and persists encrypted tokens.
+- `src/app/api/workspaces/current/mailbox/oauth/callback/route.ts` — exchanges OAuth code, persists encrypted tokens, initializes Gmail INBOX watch, and handles cross-workspace mailbox conflicts.
 - `src/app/api/workspaces/current/mailbox/disconnect/route.ts` — disconnects and clears workspace mailbox tokens.
 - `src/hooks/use-workspace-mailbox.ts` — mailbox query/mutation hooks.
 - `src/lib/mailbox-crypto.ts` — shared token encryption/decryption contract.
-- `src/lib/google-gmail-oauth.ts` — Google OAuth URL/token/profile helpers.
+- `src/lib/google-gmail-oauth.ts` — Google OAuth URL/token/profile helpers + Gmail watch bootstrap helper.
 - `src/app/api/rfqs/[rfqId]/select/route.ts` — workspace-aware Modal handoff.
 - `src/lib/validation.ts` — select-agent payload validation (`selected_match` required).
 - `src/app/api/dashboard/summary/route.ts` — compact dashboard summary API used by homepage.

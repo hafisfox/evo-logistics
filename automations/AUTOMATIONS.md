@@ -80,6 +80,7 @@ Unknown mailbox behavior:
 - `gmail_workspace_auth.py` decrypts tokens, refreshes access tokens when needed, and persists refreshed values.
 - Global `token.json` + global `OWN_EMAIL` runtime dependency is removed from automation phases.
 - Sender filtering and outbound mailbox identity are resolved per workspace mailbox row.
+- Dashboard OAuth callback now initializes Gmail INBOX watch at connect-time and stores `watch_expiration`, so newly connected mailboxes are active immediately.
 
 Enforcement migration:
 
@@ -95,6 +96,7 @@ Enforcement migration:
 - writes `master_rfqs` and `agent_outbound_log` with workspace context
 - dual-write mode persists normalized shipments and shipment containers when `RFQ_NORMALIZED_DUAL_WRITE=true`
 - preserves workspace-safe thread correlation and deterministic extraction behavior
+- unread query intentionally excludes self-sent messages (`-from:<connected mailbox>`) to prevent reply loops; RFQ ingestion tests must use a different sender mailbox.
 
 ### Phase 2 (`phase_2_quote_analysis.py`)
 
@@ -128,9 +130,17 @@ A robust optimization pass was applied to the Supabase schema:
 - **Durations:** `transit_time` and `free_time` are stored as `TEXT` in `agent_outbound_log` and `INTEGER` in `agent_quotes`.
 - **Deduplication:** Manager threshold notifications fire exactly once when `quote_count == QUOTE_THRESHOLD`, preventing duplicate emails on subsequent quotes.
 
-## 7. Gmail Watch Renewal
+## 7. Gmail Watch Lifecycle
 
-Both phase 1 and phase 2 expose `renew_gmail_watch`:
+Initial watch setup:
+
+- dashboard OAuth callback initializes Gmail watch when mailbox connect/reconnect succeeds.
+- callback persists `workspace_mailboxes.watch_expiration` and logs watch metadata in `audit_events`.
+- dashboard runtime requires `GOOGLE_PUBSUB_TOPIC` for this step.
+
+Renewal path:
+
+Both phase 1 and phase 2 expose `renew_gmail_watch` for periodic maintenance:
 
 - loops connected workspace mailbox rows
 - builds Gmail client from workspace OAuth credentials
@@ -179,7 +189,7 @@ python3 -m modal deploy automations/scheduled_tasks.py
 
 ## 11. Post-Deploy Operations
 
-After each workspace mailbox is connected in dashboard settings:
+Optional recovery operation (only if `watch_expiration` is null/stale or watch setup failed):
 
 ```bash
 python3 -m modal run automations/phase_1_request_analysis.py::renew_gmail_watch

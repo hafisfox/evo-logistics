@@ -127,6 +127,8 @@ Mailbox endpoint behavior:
 
 - `POST /api/workspaces/current/mailbox` cannot set `status="connected"` manually.
 - connected state is established only by OAuth callback token exchange.
+- OAuth callback initializes Gmail INBOX watch immediately and persists `watch_expiration` on `workspace_mailboxes`.
+- OAuth callback resolves cross-workspace mailbox collisions by transferring ownership when the caller is `owner/admin` on both workspaces, otherwise returning a friendly conflict error.
 
 Invite endpoint behavior:
 
@@ -243,6 +245,7 @@ Required for dashboard runtime:
 - `MODAL_WEBHOOK_SELECT_AGENT`
 - `GOOGLE_OAUTH_CLIENT_ID`
 - `GOOGLE_OAUTH_CLIENT_SECRET`
+- `GOOGLE_PUBSUB_TOPIC`
 - `MAILBOX_TOKEN_ENCRYPTION_KEY`
 
 Optional hardening:
