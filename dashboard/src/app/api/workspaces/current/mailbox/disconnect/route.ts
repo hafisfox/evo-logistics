@@ -31,5 +31,14 @@ export async function POST() {
     return NextResponse.json({ error: "Failed to disconnect mailbox" }, { status: 500 });
   }
 
+  // Audit Event
+  await supabase.from("audit_events").insert({
+    workspace_id: scope.context.workspaceId,
+    actor_user_id: scope.context.userId,
+    action: "mailbox_disconnected",
+    entity_type: "workspace_mailbox",
+    entity_id: scope.context.workspaceId,
+  });
+
   return NextResponse.json({ success: true });
 }

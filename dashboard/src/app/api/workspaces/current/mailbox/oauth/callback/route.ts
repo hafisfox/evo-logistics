@@ -125,14 +125,32 @@ export async function GET(request: Request) {
       throw new Error(error.message || "Failed to persist workspace mailbox");
     }
 
+    await supabase.from("audit_events").insert({
+      workspace_id: parsedState.workspaceId,
+      actor_user_id: membership.context.userId,
+      action: "mailbox_connected",
+      entity_type: "workspace_mailbox",
+      entity_id: parsedState.workspaceId,
+    });
+
     return clearOAuthNonce(
       redirectToWorkspaceSettings(request, { mailbox_connected: "true" })
     );
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "mailbox_oauth_failed";
+
+    await supabase.from("audit_events").insert({
+      workspace_id: parsedState?.workspaceId,
+      actor_user_id: membership?.context?.userId,
+      action: "mailbox_oauth_failed",
+      entity_type: "workspace_mailbox",
+      entity_id: parsedState?.workspaceId,
+      metadata: { error: errorMessage },
+    });
+
     return clearOAuthNonce(
       redirectToWorkspaceSettings(request, {
-        mailbox_error:
-          error instanceof Error ? error.message : "mailbox_oauth_failed",
+        mailbox_error: errorMessage,
       })
     );
   }

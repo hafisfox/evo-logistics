@@ -220,6 +220,7 @@ Executed from this workspace branch:
   - `dashboard/supabase/migrations/20260223_012_rfq_and_pricing_normalization.sql`
 - Supabase advisors fixes migration applied:
   - `dashboard/supabase/migrations/20260223_013_supabase_advisors_fixes.sql`
+  - `dashboard/supabase/migrations/20260223_014_workspace_members_rls_optimization.sql`
 - backfill completed:
   - `rfqsRead=2`
   - `shipmentsUpserted=7`
@@ -245,6 +246,7 @@ Executed from this workspace branch:
 - `dashboard/supabase/migrations/20260223_011_workspace_mailbox_oauth_enforcement.sql`
 - `dashboard/supabase/migrations/20260223_012_rfq_and_pricing_normalization.sql`
 - `dashboard/supabase/migrations/20260223_013_supabase_advisors_fixes.sql`
+- `dashboard/supabase/migrations/20260223_014_workspace_members_rls_optimization.sql`
 - `dashboard/supabase_schema.sql`
 - `dashboard/scripts/backfill_rfq_normalized.ts`
 - `dashboard/src/lib/rfq-normalization.ts`

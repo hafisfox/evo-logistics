@@ -46,16 +46,16 @@ export async function POST(
 
   const email =
     typeof body === "object" &&
-    body !== null &&
-    "email" in body &&
-    typeof body.email === "string"
+      body !== null &&
+      "email" in body &&
+      typeof body.email === "string"
       ? body.email.trim().toLowerCase()
       : "";
   const role =
     typeof body === "object" &&
-    body !== null &&
-    "role" in body &&
-    typeof body.role === "string"
+      body !== null &&
+      "role" in body &&
+      typeof body.role === "string"
       ? body.role
       : "member";
 
@@ -73,7 +73,7 @@ export async function POST(
     .insert({
       workspace_id: workspaceId,
       email,
-      role,
+      role: role as any, // Cast to any or the specific enum type to satisfy TS
       invited_by: access.context.userId,
       status: "pending",
       expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),

@@ -49,16 +49,16 @@ export async function PATCH(
 
   const memberId =
     typeof body === "object" &&
-    body !== null &&
-    "member_id" in body &&
-    typeof body.member_id === "string"
+      body !== null &&
+      "member_id" in body &&
+      typeof body.member_id === "string"
       ? body.member_id
       : null;
   const role =
     typeof body === "object" &&
-    body !== null &&
-    "role" in body &&
-    typeof body.role === "string"
+      body !== null &&
+      "role" in body &&
+      typeof body.role === "string"
       ? body.role
       : null;
 
@@ -69,7 +69,7 @@ export async function PATCH(
   const supabase = await createClient();
   const { error } = await supabase
     .from("workspace_members")
-    .update({ role, updated_at: new Date().toISOString() })
+    .update({ role: role as any, updated_at: new Date().toISOString() })
     .eq("workspace_id", workspaceId)
     .eq("id", memberId);
 
