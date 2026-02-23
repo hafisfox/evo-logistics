@@ -10,16 +10,26 @@ const {
   maybeSingleMock,
   upsertMock,
   insertMock,
+  updateMock,
+  deleteMock,
+  updateEqMock,
+  deleteEqMock,
 } = vi.hoisted(() => {
   const maybeSingleMock = vi.fn();
   const eqMock = vi.fn(() => ({ maybeSingle: maybeSingleMock }));
+  const updateEqMock = vi.fn().mockResolvedValue({ error: null });
+  const deleteEqMock = vi.fn().mockResolvedValue({ error: null });
   const selectMock = vi.fn(() => ({ eq: eqMock }));
+  const updateMock = vi.fn(() => ({ eq: updateEqMock }));
+  const deleteMock = vi.fn(() => ({ eq: deleteEqMock }));
   const upsertMock = vi.fn();
   const insertMock = vi.fn().mockResolvedValue({ error: null });
   const fromMock = vi.fn(() => ({
     select: selectMock,
     upsert: upsertMock,
     insert: insertMock,
+    update: updateMock,
+    delete: deleteMock,
   }));
   const createClientMock = vi.fn();
   return {
@@ -28,6 +38,10 @@ const {
     maybeSingleMock,
     upsertMock,
     insertMock,
+    updateMock,
+    deleteMock,
+    updateEqMock,
+    deleteEqMock,
   };
 });
 
@@ -98,6 +112,8 @@ describe("/api/workspaces/current/mailbox/oauth/callback route", () => {
       data: null,
       error: null,
     });
+    updateEqMock.mockResolvedValue({ error: null });
+    deleteEqMock.mockResolvedValue({ error: null });
     verifyMailboxOAuthStateTokenMock.mockReturnValue({
       workspaceId: "ws-1",
       nonce: "nonce-123",
@@ -158,5 +174,94 @@ describe("/api/workspaces/current/mailbox/oauth/callback route", () => {
       "/settings/workspace?mailbox_error=oauth_nonce_missing"
     );
     expect(upsertMock).not.toHaveBeenCalled();
+  });
+
+  it("transfers mailbox ownership from another managed workspace before reconnecting", async () => {
+    maybeSingleMock
+      .mockResolvedValueOnce({
+        data: null,
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: { workspace_id: "ws-old" },
+        error: null,
+      });
+
+    requireWorkspaceMembershipMock
+      .mockResolvedValueOnce({
+        context: {
+          workspaceId: "ws-1",
+          role: "owner",
+          userId: "u-1",
+        },
+      })
+      .mockResolvedValueOnce({
+        context: {
+          workspaceId: "ws-old",
+          role: "owner",
+          userId: "u-1",
+        },
+      });
+
+    const response = await GET(
+      new Request(
+        "http://localhost/api/workspaces/current/mailbox/oauth/callback?code=abc&state=state-token"
+      )
+    );
+
+    expect(deleteMock).toHaveBeenCalledTimes(1);
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    expect(upsertMock).not.toHaveBeenCalled();
+
+    const firstUpdateCall = updateMock.mock.calls[0] as unknown[] | undefined;
+    const payload = (firstUpdateCall?.[0] ?? {}) as Record<string, unknown>;
+    expect(payload.workspace_id).toBe("ws-1");
+    expect(payload.email).toBe("ops@example.com");
+    expect(payload.status).toBe("connected");
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toContain(
+      "/settings/workspace?mailbox_connected=true"
+    );
+  });
+
+  it("returns a friendly error when mailbox is connected to another workspace", async () => {
+    maybeSingleMock
+      .mockResolvedValueOnce({
+        data: null,
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: { workspace_id: "ws-locked" },
+        error: null,
+      });
+
+    requireWorkspaceMembershipMock
+      .mockResolvedValueOnce({
+        context: {
+          workspaceId: "ws-1",
+          role: "owner",
+          userId: "u-1",
+        },
+      })
+      .mockResolvedValueOnce({
+        response: new Response(null, { status: 403 }),
+      });
+
+    const response = await GET(
+      new Request(
+        "http://localhost/api/workspaces/current/mailbox/oauth/callback?code=abc&state=state-token"
+      )
+    );
+
+    expect(upsertMock).not.toHaveBeenCalled();
+    expect(response.status).toBe(307);
+
+    const location = response.headers.get("location") || "";
+    const redirected = new URL(location, "http://localhost");
+    expect(redirected.pathname).toBe("/settings/workspace");
+    expect(decodeURIComponent(redirected.searchParams.get("mailbox_error") || "")).toContain(
+      "already connected to another workspace"
+    );
   });
 });

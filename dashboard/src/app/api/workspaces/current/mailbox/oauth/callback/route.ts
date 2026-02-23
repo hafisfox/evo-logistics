@@ -12,6 +12,21 @@ import { MAILBOX_OAUTH_NONCE_COOKIE } from "@/lib/mailbox-oauth";
 import { createClient } from "@/lib/supabase/server";
 import { requireWorkspaceMembership } from "@/lib/workspace-context";
 
+const MAILBOX_EMAIL_CONFLICT_CONSTRAINT = "workspace_mailboxes_email_key";
+const MAILBOX_ALREADY_CONNECTED_ERROR =
+  "This Gmail account is already connected to another workspace. Disconnect it there first, then reconnect here.";
+
+type WorkspaceMailboxPayload = {
+  workspace_id: string;
+  email: string;
+  status: "connected";
+  gmail_refresh_token_encrypted: string;
+  gmail_access_token_encrypted: string;
+  token_expires_at: string | null;
+  last_error: null;
+  updated_at: string;
+};
+
 function redirectToWorkspaceSettings(request: Request, params?: Record<string, string>) {
   const url = new URL("/settings/workspace", request.url);
   for (const [key, value] of Object.entries(params ?? {})) {
@@ -26,6 +41,70 @@ function clearOAuthNonce(response: NextResponse) {
     maxAge: 0,
   });
   return response;
+}
+
+function isMailboxEmailConflict(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const maybeCode = "code" in error ? String(error.code ?? "") : "";
+  const maybeMessage = "message" in error ? String(error.message ?? "") : "";
+  const maybeDetails = "details" in error ? String(error.details ?? "") : "";
+
+  return (
+    maybeCode === "23505" &&
+    (maybeMessage.includes(MAILBOX_EMAIL_CONFLICT_CONSTRAINT) ||
+      maybeDetails.includes(MAILBOX_EMAIL_CONFLICT_CONSTRAINT))
+  );
+}
+
+async function tryTransferMailboxToWorkspace({
+  supabase,
+  mailboxEmail,
+  targetWorkspaceId,
+  payload,
+}: {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  mailboxEmail: string;
+  targetWorkspaceId: string;
+  payload: WorkspaceMailboxPayload;
+}) {
+  const { data: mailboxByEmail, error: lookupError } = await supabase
+    .from("workspace_mailboxes")
+    .select("workspace_id")
+    .eq("email", mailboxEmail)
+    .maybeSingle();
+
+  if (lookupError) {
+    throw new Error(lookupError.message || "Failed to resolve existing mailbox ownership");
+  }
+  if (!mailboxByEmail || mailboxByEmail.workspace_id === targetWorkspaceId) {
+    return { transferred: false, blocked: false };
+  }
+
+  const sourceMembership = await requireWorkspaceMembership(mailboxByEmail.workspace_id, [
+    "owner",
+    "admin",
+  ]);
+  if (sourceMembership.response || !sourceMembership.context) {
+    return { transferred: false, blocked: true };
+  }
+
+  const { error: deleteTargetError } = await supabase
+    .from("workspace_mailboxes")
+    .delete()
+    .eq("workspace_id", targetWorkspaceId);
+  if (deleteTargetError) {
+    throw new Error(deleteTargetError.message || "Failed to prepare workspace mailbox transfer");
+  }
+
+  const { error: transferError } = await supabase
+    .from("workspace_mailboxes")
+    .update(payload)
+    .eq("workspace_id", mailboxByEmail.workspace_id);
+  if (transferError) {
+    throw new Error(transferError.message || "Failed to transfer mailbox ownership");
+  }
+
+  return { transferred: true, blocked: false };
 }
 
 export async function GET(request: Request) {
@@ -99,30 +178,54 @@ export async function GET(request: Request) {
       tokenPayload.access_token
     );
 
-    const { error } = await supabase
-      .from("workspace_mailboxes")
-      .upsert(
-        {
-          workspace_id: parsedState.workspaceId,
-          email: mailboxEmail,
-          status: "connected",
-          gmail_refresh_token_encrypted: encryptMailboxToken(
-            refreshToken,
-            parsedState.workspaceId
-          ),
-          gmail_access_token_encrypted: encryptMailboxToken(
-            tokenPayload.access_token,
-            parsedState.workspaceId
-          ),
-          token_expires_at: computeGoogleTokenExpiryIso(tokenPayload.expires_in),
-          last_error: null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "workspace_id" }
-      );
+    const normalizedMailboxEmail = mailboxEmail.trim().toLowerCase();
+    const mailboxPayload: WorkspaceMailboxPayload = {
+      workspace_id: parsedState.workspaceId,
+      email: normalizedMailboxEmail,
+      status: "connected",
+      gmail_refresh_token_encrypted: encryptMailboxToken(
+        refreshToken,
+        parsedState.workspaceId
+      ),
+      gmail_access_token_encrypted: encryptMailboxToken(
+        tokenPayload.access_token,
+        parsedState.workspaceId
+      ),
+      token_expires_at: computeGoogleTokenExpiryIso(tokenPayload.expires_in),
+      last_error: null,
+      updated_at: new Date().toISOString(),
+    };
 
-    if (error) {
-      throw new Error(error.message || "Failed to persist workspace mailbox");
+    const preTransfer = await tryTransferMailboxToWorkspace({
+      supabase,
+      mailboxEmail: normalizedMailboxEmail,
+      targetWorkspaceId: parsedState.workspaceId,
+      payload: mailboxPayload,
+    });
+    if (preTransfer.blocked) {
+      throw new Error(MAILBOX_ALREADY_CONNECTED_ERROR);
+    }
+
+    if (!preTransfer.transferred) {
+      const { error } = await supabase
+        .from("workspace_mailboxes")
+        .upsert(mailboxPayload, { onConflict: "workspace_id" });
+
+      if (error) {
+        if (!isMailboxEmailConflict(error)) {
+          throw new Error(error.message || "Failed to persist workspace mailbox");
+        }
+
+        const recoveryTransfer = await tryTransferMailboxToWorkspace({
+          supabase,
+          mailboxEmail: normalizedMailboxEmail,
+          targetWorkspaceId: parsedState.workspaceId,
+          payload: mailboxPayload,
+        });
+        if (!recoveryTransfer.transferred) {
+          throw new Error(MAILBOX_ALREADY_CONNECTED_ERROR);
+        }
+      }
     }
 
     await supabase.from("audit_events").insert({
