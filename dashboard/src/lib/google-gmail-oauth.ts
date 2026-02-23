@@ -6,6 +6,7 @@ const GMAIL_MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GMAIL_PROFILE_URL = "https://gmail.googleapis.com/gmail/v1/users/me/profile";
+const GMAIL_WATCH_URL = "https://gmail.googleapis.com/gmail/v1/users/me/watch";
 
 export interface MailboxOAuthStatePayload {
   workspaceId: string;
@@ -248,6 +249,48 @@ export async function fetchMailboxEmailFromGmailProfile(accessToken: string) {
     throw new Error("Gmail profile response is missing emailAddress");
   }
   return email;
+}
+
+export async function createGmailInboxWatch(accessToken: string) {
+  const topicName = process.env.GOOGLE_PUBSUB_TOPIC?.trim();
+  if (!topicName) {
+    throw new Error("GOOGLE_PUBSUB_TOPIC must be configured to initialize Gmail watch");
+  }
+
+  const response = await fetch(GMAIL_WATCH_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      topicName,
+      labelIds: ["INBOX"],
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Failed to initialize Gmail watch (${response.status}): ${text}`);
+  }
+
+  const payload = (await response.json()) as {
+    expiration?: string | number;
+    historyId?: string | number;
+  };
+
+  let expiration: string | null = null;
+  if (payload.expiration !== undefined && payload.expiration !== null) {
+    const expirationMs = Number(payload.expiration);
+    if (Number.isFinite(expirationMs) && expirationMs > 0) {
+      expiration = new Date(expirationMs).toISOString();
+    }
+  }
+
+  return {
+    expiration,
+    historyId: payload.historyId !== undefined ? String(payload.historyId) : null,
+  };
 }
 
 export function computeGoogleTokenExpiryIso(expiresInSeconds?: number) {

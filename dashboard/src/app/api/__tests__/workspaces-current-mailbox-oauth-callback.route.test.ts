@@ -54,11 +54,13 @@ const {
   exchangeGoogleOAuthCodeMock,
   fetchMailboxEmailFromGmailProfileMock,
   computeGoogleTokenExpiryIsoMock,
+  createGmailInboxWatchMock,
 } = vi.hoisted(() => ({
   verifyMailboxOAuthStateTokenMock: vi.fn(),
   exchangeGoogleOAuthCodeMock: vi.fn(),
   fetchMailboxEmailFromGmailProfileMock: vi.fn(),
   computeGoogleTokenExpiryIsoMock: vi.fn(),
+  createGmailInboxWatchMock: vi.fn(),
 }));
 
 const { encryptMailboxTokenMock } = vi.hoisted(() => ({
@@ -82,6 +84,7 @@ vi.mock("@/lib/google-gmail-oauth", () => ({
   exchangeGoogleOAuthCode: exchangeGoogleOAuthCodeMock,
   fetchMailboxEmailFromGmailProfile: fetchMailboxEmailFromGmailProfileMock,
   computeGoogleTokenExpiryIso: computeGoogleTokenExpiryIsoMock,
+  createGmailInboxWatch: createGmailInboxWatchMock,
 }));
 
 vi.mock("@/lib/mailbox-crypto", () => ({
@@ -126,6 +129,10 @@ describe("/api/workspaces/current/mailbox/oauth/callback route", () => {
     });
     fetchMailboxEmailFromGmailProfileMock.mockResolvedValue("ops@example.com");
     computeGoogleTokenExpiryIsoMock.mockReturnValue("2026-02-23T00:00:00.000Z");
+    createGmailInboxWatchMock.mockResolvedValue({
+      expiration: "2026-03-02T00:00:00.000Z",
+      historyId: "1234",
+    });
     encryptMailboxTokenMock.mockImplementation((value: string) => `enc:${value}`);
     upsertMock.mockResolvedValue({ error: null });
   });
@@ -148,6 +155,8 @@ describe("/api/workspaces/current/mailbox/oauth/callback route", () => {
     expect(payload.status).toBe("connected");
     expect(payload.gmail_refresh_token_encrypted).toBe("enc:refresh-token");
     expect(payload.gmail_access_token_encrypted).toBe("enc:access-token");
+    expect(payload.watch_expiration).toBe("2026-03-02T00:00:00.000Z");
+    expect(createGmailInboxWatchMock).toHaveBeenCalledWith("access-token");
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toContain(

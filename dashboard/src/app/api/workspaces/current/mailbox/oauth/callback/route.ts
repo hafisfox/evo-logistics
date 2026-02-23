@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import {
   computeGoogleTokenExpiryIso,
+  createGmailInboxWatch,
   exchangeGoogleOAuthCode,
   fetchMailboxEmailFromGmailProfile,
   verifyMailboxOAuthStateToken,
@@ -23,6 +24,7 @@ type WorkspaceMailboxPayload = {
   gmail_refresh_token_encrypted: string;
   gmail_access_token_encrypted: string;
   token_expires_at: string | null;
+  watch_expiration: string | null;
   last_error: null;
   updated_at: string;
 };
@@ -177,6 +179,7 @@ export async function GET(request: Request) {
     const mailboxEmail = await fetchMailboxEmailFromGmailProfile(
       tokenPayload.access_token
     );
+    const watch = await createGmailInboxWatch(tokenPayload.access_token);
 
     const normalizedMailboxEmail = mailboxEmail.trim().toLowerCase();
     const mailboxPayload: WorkspaceMailboxPayload = {
@@ -192,6 +195,7 @@ export async function GET(request: Request) {
         parsedState.workspaceId
       ),
       token_expires_at: computeGoogleTokenExpiryIso(tokenPayload.expires_in),
+      watch_expiration: watch.expiration,
       last_error: null,
       updated_at: new Date().toISOString(),
     };
@@ -234,6 +238,10 @@ export async function GET(request: Request) {
       action: "mailbox_connected",
       entity_type: "workspace_mailbox",
       entity_id: parsedState.workspaceId,
+      metadata: {
+        watch_history_id: watch.historyId,
+        watch_expiration: watch.expiration,
+      },
     });
 
     return clearOAuthNonce(
