@@ -37,10 +37,13 @@ export async function acceptWorkspaceInviteForUser(
   }
 
   if (new Date(invite.expires_at).getTime() < Date.now()) {
-    await supabase
+    const expiredUpdateRes = await supabase
       .from("workspace_invites")
       .update({ status: "expired", updated_at: new Date().toISOString() })
       .eq("id", invite.id);
+    if (expiredUpdateRes.error) {
+      return { error: "invite_status_update_failed" };
+    }
     return { error: "invite_expired" };
   }
 
@@ -59,25 +62,32 @@ export async function acceptWorkspaceInviteForUser(
     return { error: "membership_upsert_failed" };
   }
 
-  await Promise.all([
-    supabase
-      .from("workspace_invites")
-      .update({
-        status: "accepted",
-        accepted_at: new Date().toISOString(),
-        accepted_by: user.id,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", invite.id),
-    supabase.from("user_profiles").upsert(
-      {
-        id: user.id,
-        default_workspace_id: invite.workspace_id,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" }
-    ),
-  ]);
+  const inviteUpdateRes = await supabase
+    .from("workspace_invites")
+    .update({
+      status: "accepted",
+      accepted_at: new Date().toISOString(),
+      accepted_by: user.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", invite.id);
+
+  if (inviteUpdateRes.error) {
+    return { error: "invite_status_update_failed" };
+  }
+
+  const profileUpsertRes = await supabase.from("user_profiles").upsert(
+    {
+      id: user.id,
+      default_workspace_id: invite.workspace_id,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" }
+  );
+
+  if (profileUpsertRes.error) {
+    console.error("Failed to update user profile default workspace after invite accept:", profileUpsertRes.error);
+  }
 
   return { workspaceId: invite.workspace_id };
 }

@@ -31,7 +31,7 @@ export async function POST(
   { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   const { workspaceId } = await params;
-  const access = await requireWorkspaceMembership(workspaceId, ["owner", "admin"]);
+  const access = await requireWorkspaceMembership(workspaceId, ["owner", "admin", "member"]);
   if (access.response) return access.response;
   if (!access.context) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -65,6 +65,13 @@ export async function POST(
 
   if (!["admin", "member"].includes(role)) {
     return NextResponse.json({ error: "role must be admin or member" }, { status: 400 });
+  }
+
+  if (access.context.role === "member" && role !== "member") {
+    return NextResponse.json(
+      { error: "Members can only invite users with member role" },
+      { status: 403 }
+    );
   }
 
   const supabase = await createClient();

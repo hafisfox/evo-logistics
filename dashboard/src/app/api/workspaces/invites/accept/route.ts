@@ -51,10 +51,14 @@ export async function POST(request: Request) {
   }
 
   if (new Date(invite.expires_at).getTime() < Date.now()) {
-    await supabase
+    const expiredUpdateRes = await supabase
       .from("workspace_invites")
       .update({ status: "expired", updated_at: new Date().toISOString() })
       .eq("id", invite.id);
+    if (expiredUpdateRes.error) {
+      console.error("Failed to mark invite as expired:", expiredUpdateRes.error);
+      return NextResponse.json({ error: "Failed to update invite status" }, { status: 500 });
+    }
     return NextResponse.json({ error: "Invite has expired" }, { status: 400 });
   }
 
@@ -74,27 +78,38 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to accept invite" }, { status: 500 });
   }
 
-  await Promise.all([
-    supabase
-      .from("workspace_invites")
-      .update({
-        status: "accepted",
-        accepted_at: new Date().toISOString(),
-        accepted_by: user.id,
+  const inviteUpdateRes = await supabase
+    .from("workspace_invites")
+    .update({
+      status: "accepted",
+      accepted_at: new Date().toISOString(),
+      accepted_by: user.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", invite.id);
+
+  if (inviteUpdateRes.error) {
+    console.error("Failed to update invite status after membership upsert:", inviteUpdateRes.error);
+    return NextResponse.json({ error: "Failed to update invite status" }, { status: 500 });
+  }
+
+  const profileUpsertRes = await supabase
+    .from("user_profiles")
+    .upsert(
+      {
+        id: user.id,
+        default_workspace_id: invite.workspace_id,
         updated_at: new Date().toISOString(),
-      })
-      .eq("id", invite.id),
-    supabase
-      .from("user_profiles")
-      .upsert(
-        {
-          id: user.id,
-          default_workspace_id: invite.workspace_id,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "id" }
-      ),
-  ]);
+      },
+      { onConflict: "id" }
+    );
+
+  if (profileUpsertRes.error) {
+    console.error(
+      "Failed to update default workspace after invite acceptance:",
+      profileUpsertRes.error
+    );
+  }
 
   const response = NextResponse.json({ success: true, workspace_id: invite.workspace_id });
   response.cookies.set("workspace_id", invite.workspace_id, {
@@ -106,4 +121,3 @@ export async function POST(request: Request) {
   });
   return response;
 }
-

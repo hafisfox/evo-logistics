@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,12 +47,15 @@ export default function MembersSettingsPage() {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const activeWorkspace = useMemo(
     () => workspaces.find((w) => w.workspace_id === workspaceId) ?? null,
     [workspaces, workspaceId]
   );
+  const activeWorkspaceRole = (activeWorkspace?.role ?? "").toLowerCase();
+  const memberInviter = activeWorkspaceRole === "member";
 
   useEffect(() => {
     void (async () => {
@@ -92,6 +96,11 @@ export default function MembersSettingsPage() {
     })();
   }, [workspaceId]);
 
+  useEffect(() => {
+    if (!memberInviter) return;
+    setInviteRole("member");
+  }, [memberInviter]);
+
   const switchWorkspace = async (nextWorkspaceId: string) => {
     await fetch("/api/workspaces/current", {
       method: "POST",
@@ -102,22 +111,39 @@ export default function MembersSettingsPage() {
   };
 
   const sendInvite = async () => {
-    if (!workspaceId || !inviteEmail.trim()) return;
+    if (!workspaceId || !inviteEmail.trim() || isSendingInvite) return;
 
-    const res = await fetch(`/api/workspaces/${workspaceId}/invites`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: inviteEmail.trim(),
-        role: inviteRole,
-      }),
-    });
+    setIsSendingInvite(true);
+    try {
+      const roleToSend: "admin" | "member" = memberInviter ? "member" : inviteRole;
+      const res = await fetch(`/api/workspaces/${workspaceId}/invites`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          role: roleToSend,
+        }),
+      });
 
-    if (!res.ok) return;
+      if (!res.ok) {
+        let message = "Failed to send invite";
+        try {
+          const payload = (await res.json()) as { error?: string };
+          if (payload.error) message = payload.error;
+        } catch {
+          // Keep generic message when response body is not JSON.
+        }
+        toast.error(message);
+        return;
+      }
 
-    const data = (await res.json()) as { invite: Invite };
-    setInvites((current) => [data.invite, ...current]);
-    setInviteEmail("");
+      const data = (await res.json()) as { invite: Invite };
+      setInvites((current) => [data.invite, ...current]);
+      setInviteEmail("");
+      toast.success("Invite sent");
+    } finally {
+      setIsSendingInvite(false);
+    }
   };
 
   const updateRole = async (memberId: string, role: "owner" | "admin" | "member") => {
@@ -190,21 +216,31 @@ export default function MembersSettingsPage() {
             <div className="w-full sm:w-[140px] space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">Role</Label>
               <Select
-                value={inviteRole}
+                value={memberInviter ? "member" : inviteRole}
                 onValueChange={(value) => setInviteRole(value as "admin" | "member")}
+                disabled={memberInviter}
               >
                 <SelectTrigger className="h-11 rounded-xl border-black/10 dark:border-white/10 focus:ring-1 focus:ring-primary/50">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="member">Member</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  {!memberInviter ? <SelectItem value="admin">Admin</SelectItem> : null}
                 </SelectContent>
               </Select>
             </div>
           </div>
-          <Button onClick={sendInvite} className="mt-2 h-11 w-full sm:w-auto rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
-            Send Invite
+          {memberInviter ? (
+            <p className="text-xs text-muted-foreground">
+              Members can invite new users as member only.
+            </p>
+          ) : null}
+          <Button
+            onClick={sendInvite}
+            disabled={isSendingInvite}
+            className="mt-2 h-11 w-full sm:w-auto rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all"
+          >
+            {isSendingInvite ? "Sending..." : "Send Invite"}
           </Button>
         </CardContent>
       </Card>
@@ -293,4 +329,3 @@ export default function MembersSettingsPage() {
     </div>
   );
 }
-
