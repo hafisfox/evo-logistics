@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Header } from "@/components/layout/header";
 import { RFQTable } from "@/components/rfqs/rfq-table";
 import { RFQKanban } from "@/components/rfqs/rfq-kanban";
 import { RFQFilters } from "@/components/rfqs/rfq-filters";
@@ -40,36 +39,30 @@ export default function RFQPipelinePage() {
   }, [rfqs, search, statusFilter, serviceFilter]);
 
   return (
-    <div>
-      <Header
-        title="RFQ Pipeline"
-        description={`${rfqs?.length || 0} total RFQs`}
-      />
-      <div className="p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6 animate-in fade-in zoom-in-95 duration-700 ease-out fill-mode-both mt-4 md:mt-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <RFQFilters
-            search={search}
-            onSearchChange={setSearch}
-            statusFilter={statusFilter}
-            onStatusFilterChange={setStatusFilter}
-            serviceFilter={serviceFilter}
-            onServiceFilterChange={setServiceFilter}
-          />
-          <ViewToggle view={pipelineView} onViewChange={setPipelineView} />
-        </div>
-
-        {isLoading ? (
-          <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} className="h-16 w-full rounded-2xl" />
-            ))}
-          </div>
-        ) : pipelineView === "table" ? (
-          <RFQTable rfqs={filtered} />
-        ) : (
-          <RFQKanban rfqs={filtered} />
-        )}
+    <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6 animate-in fade-in zoom-in-95 duration-700 ease-out fill-mode-both">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <RFQFilters
+          search={search}
+          onSearchChange={setSearch}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          serviceFilter={serviceFilter}
+          onServiceFilterChange={setServiceFilter}
+        />
+        <ViewToggle view={pipelineView} onViewChange={setPipelineView} />
       </div>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-2xl" />
+          ))}
+        </div>
+      ) : pipelineView === "table" ? (
+        <RFQTable rfqs={filtered} />
+      ) : (
+        <RFQKanban rfqs={filtered} />
+      )}
     </div>
   );
 }

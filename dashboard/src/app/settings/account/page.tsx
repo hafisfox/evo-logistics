@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 
-import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -92,75 +91,72 @@ export default async function AccountSettingsPage() {
   };
 
   return (
-    <div>
-      <Header title="Account" description="Profile and security settings" />
-      <div className="max-w-2xl space-y-6 p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Profile</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form action={saveProfile} className="space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" value={user.email ?? ""} readOnly />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="full_name">Full name</Label>
-                <Input
-                  id="full_name"
-                  name="full_name"
-                  defaultValue={profile?.full_name ?? ""}
-                  placeholder="Your full name"
-                />
-              </div>
-              <Button type="submit">Save Profile</Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Security</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              MFA status: {profile?.mfa_enabled ? "Enabled" : "Optional (not enabled)"}
-            </p>
-            <form action={updateMfa}>
-              <input
-                type="hidden"
-                name="enabled"
-                value={profile?.mfa_enabled ? "false" : "true"}
+    <div className="max-w-2xl space-y-6 p-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Profile</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={saveProfile} className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" value={user.email ?? ""} readOnly />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="full_name">Full name</Label>
+              <Input
+                id="full_name"
+                name="full_name"
+                defaultValue={profile?.full_name ?? ""}
+                placeholder="Your full name"
               />
-              <Button type="submit" variant="outline">
-                {profile?.mfa_enabled ? "Disable MFA" : "Enable MFA"}
-              </Button>
-            </form>
-            <form action={revokeSessions}>
-              <Button type="submit" variant="outline">
-                Revoke All Sessions
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+            </div>
+            <Button type="submit">Save Profile</Button>
+          </form>
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Deletion</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Soft delete starts a 30-day recovery window for your account data.
-            </p>
-            <form action={softDelete}>
-              <Button type="submit" variant="destructive">
-                Request Account Deletion
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Security</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            MFA status: {profile?.mfa_enabled ? "Enabled" : "Optional (not enabled)"}
+          </p>
+          <form action={updateMfa}>
+            <input
+              type="hidden"
+              name="enabled"
+              value={profile?.mfa_enabled ? "false" : "true"}
+            />
+            <Button type="submit" variant="outline">
+              {profile?.mfa_enabled ? "Disable MFA" : "Enable MFA"}
+            </Button>
+          </form>
+          <form action={revokeSessions}>
+            <Button type="submit" variant="outline">
+              Revoke All Sessions
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Deletion</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Soft delete starts a 30-day recovery window for your account data.
+          </p>
+          <form action={softDelete}>
+            <Button type="submit" variant="destructive">
+              Request Account Deletion
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

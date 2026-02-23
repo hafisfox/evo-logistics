@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Header } from "@/components/layout/header";
 import {
   Table,
   TableBody,
@@ -267,529 +266,523 @@ export default function PricingPage() {
   };
 
   return (
-    <div>
-      <Header
-        title="Pricing Tables"
-        description="Lookup tables used in cost calculations"
-      />
-      <div className="p-4 md:p-6 lg:p-8 animate-in fade-in zoom-in-95 duration-700">
-        <Tabs defaultValue="do" className="w-full">
-          <TabsList className="w-full justify-start overflow-x-auto scrollbar-hide py-1 h-auto bg-card/40 backdrop-blur-2xl border border-white/10 dark:border-white/5 rounded-3xl mb-4 p-1 shadow-sm">
-            <TabsTrigger value="do" className="shrink-0 tracking-tight rounded-2xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">DO Charges</TabsTrigger>
-            <TabsTrigger value="dest" className="rounded-2xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">Destination Charges</TabsTrigger>
-            <TabsTrigger value="transport" className="rounded-2xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">Transportation</TabsTrigger>
-          </TabsList>
+    <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 animate-in fade-in zoom-in-95 duration-700">
+      <Tabs defaultValue="do" className="w-full">
+        <TabsList className="w-full justify-start overflow-x-auto scrollbar-hide py-1 h-auto bg-card/40 backdrop-blur-2xl border border-white/10 dark:border-white/5 rounded-3xl mb-4 p-1 shadow-sm">
+          <TabsTrigger value="do" className="shrink-0 tracking-tight rounded-2xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">DO Charges</TabsTrigger>
+          <TabsTrigger value="dest" className="rounded-2xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">Destination Charges</TabsTrigger>
+          <TabsTrigger value="transport" className="rounded-2xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">Transportation</TabsTrigger>
+        </TabsList>
 
-          <TabsContent value="do" className="mt-2 focus-visible:outline-none focus-visible:ring-0">
-            <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
-              <CardHeader className="p-6 pb-4">
-                <CardTitle className="text-lg font-bold tracking-tight">DO Charges by Carrier</CardTitle>
-              </CardHeader>
-              <CardContent className="px-6 pb-6 pt-2">
-                {canManage && (
-                  <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-6">
-                    <Input
-                      value={newDo.carrier}
-                      onChange={(event) => setNewDo((current) => ({ ...current, carrier: event.target.value }))}
-                      placeholder="Carrier"
-                      disabled={disableManageActions || createDo.isPending}
-                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
-                    />
-                    <Input
-                      value={newDo.document}
-                      onChange={(event) => setNewDo((current) => ({ ...current, document: event.target.value }))}
-                      placeholder="Document"
-                      disabled={disableManageActions || createDo.isPending}
-                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
-                    />
-                    <Input
-                      value={newDo["20FT"]}
-                      onChange={(event) => setNewDo((current) => ({ ...current, "20FT": event.target.value }))}
-                      placeholder="20FT"
-                      disabled={disableManageActions || createDo.isPending}
-                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
-                    />
-                    <Input
-                      value={newDo["40FT"]}
-                      onChange={(event) => setNewDo((current) => ({ ...current, "40FT": event.target.value }))}
-                      placeholder="40FT"
-                      disabled={disableManageActions || createDo.isPending}
-                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
-                    />
-                    <Input
-                      value={newDo["40HQ"]}
-                      onChange={(event) => setNewDo((current) => ({ ...current, "40HQ": event.target.value }))}
-                      placeholder="40HQ"
-                      disabled={disableManageActions || createDo.isPending}
-                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
-                    />
-                    <Button onClick={handleCreateDo} disabled={disableManageActions || createDo.isPending} className="h-11 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
-                      <Plus className="mr-1.5 h-4 w-4" /> Add
-                    </Button>
-                  </div>
-                )}
-                {doLoading ? (
-                  <Skeleton className="h-48" />
-                ) : (
-                  <div className="rounded-md border overflow-x-auto">
-                    <Table className="min-w-[760px]">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Carrier</TableHead>
-                          <TableHead className="text-right">Document Fee</TableHead>
-                          <TableHead className="text-right">20FT</TableHead>
-                          <TableHead className="text-right">40FT</TableHead>
-                          <TableHead className="text-right">40HQ</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
+        <TabsContent value="do" className="mt-2 focus-visible:outline-none focus-visible:ring-0">
+          <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
+            <CardHeader className="p-6 pb-4">
+              <CardTitle className="text-lg font-bold tracking-tight">DO Charges by Carrier</CardTitle>
+            </CardHeader>
+            <CardContent className="px-6 pb-6 pt-2">
+              {canManage && (
+                <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-6">
+                  <Input
+                    value={newDo.carrier}
+                    onChange={(event) => setNewDo((current) => ({ ...current, carrier: event.target.value }))}
+                    placeholder="Carrier"
+                    disabled={disableManageActions || createDo.isPending}
+                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                  />
+                  <Input
+                    value={newDo.document}
+                    onChange={(event) => setNewDo((current) => ({ ...current, document: event.target.value }))}
+                    placeholder="Document"
+                    disabled={disableManageActions || createDo.isPending}
+                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                  />
+                  <Input
+                    value={newDo["20FT"]}
+                    onChange={(event) => setNewDo((current) => ({ ...current, "20FT": event.target.value }))}
+                    placeholder="20FT"
+                    disabled={disableManageActions || createDo.isPending}
+                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                  />
+                  <Input
+                    value={newDo["40FT"]}
+                    onChange={(event) => setNewDo((current) => ({ ...current, "40FT": event.target.value }))}
+                    placeholder="40FT"
+                    disabled={disableManageActions || createDo.isPending}
+                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                  />
+                  <Input
+                    value={newDo["40HQ"]}
+                    onChange={(event) => setNewDo((current) => ({ ...current, "40HQ": event.target.value }))}
+                    placeholder="40HQ"
+                    disabled={disableManageActions || createDo.isPending}
+                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                  />
+                  <Button onClick={handleCreateDo} disabled={disableManageActions || createDo.isPending} className="h-11 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                    <Plus className="mr-1.5 h-4 w-4" /> Add
+                  </Button>
+                </div>
+              )}
+              {doLoading ? (
+                <Skeleton className="h-48" />
+              ) : (
+                <div className="rounded-md border overflow-x-auto">
+                  <Table className="min-w-[760px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Carrier</TableHead>
+                        <TableHead className="text-right">Document Fee</TableHead>
+                        <TableHead className="text-right">20FT</TableHead>
+                        <TableHead className="text-right">40FT</TableHead>
+                        <TableHead className="text-right">40HQ</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {doCharges?.map((row) => (
+                        <TableRow key={row.id ?? row.carrier}>
+                          <TableCell className="font-medium">
+                            {editingDoId === row.id ? (
+                              <Input
+                                value={editingDo?.carrier ?? ""}
+                                onChange={(event) =>
+                                  setEditingDo((current) =>
+                                    current ? { ...current, carrier: event.target.value } : current
+                                  )
+                                }
+                                disabled={disableManageActions || updateDo.isPending}
+                              />
+                            ) : (
+                              row.carrier
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {editingDoId === row.id ? (
+                              <Input
+                                value={numberString(editingDo?.document)}
+                                onChange={(event) =>
+                                  setEditingDo((current) =>
+                                    current ? { ...current, document: Number(event.target.value) } : current
+                                  )
+                                }
+                                disabled={disableManageActions || updateDo.isPending}
+                              />
+                            ) : (
+                              formatCurrency(row.document)
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {editingDoId === row.id ? (
+                              <Input
+                                value={numberString(editingDo?.["20FT"])}
+                                onChange={(event) =>
+                                  setEditingDo((current) =>
+                                    current ? { ...current, "20FT": Number(event.target.value) } : current
+                                  )
+                                }
+                                disabled={disableManageActions || updateDo.isPending}
+                              />
+                            ) : (
+                              formatCurrency(row["20FT"])
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {editingDoId === row.id ? (
+                              <Input
+                                value={numberString(editingDo?.["40FT"])}
+                                onChange={(event) =>
+                                  setEditingDo((current) =>
+                                    current ? { ...current, "40FT": Number(event.target.value) } : current
+                                  )
+                                }
+                                disabled={disableManageActions || updateDo.isPending}
+                              />
+                            ) : (
+                              formatCurrency(row["40FT"])
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {editingDoId === row.id ? (
+                              <Input
+                                value={numberString(editingDo?.["40HQ"])}
+                                onChange={(event) =>
+                                  setEditingDo((current) =>
+                                    current ? { ...current, "40HQ": Number(event.target.value) } : current
+                                  )
+                                }
+                                disabled={disableManageActions || updateDo.isPending}
+                              />
+                            ) : (
+                              formatCurrency(row["40HQ"])
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {!canManage ? (
+                              <span className="text-xs text-muted-foreground">Owner/Admin only</span>
+                            ) : editingDoId === row.id ? (
+                              <div className="flex justify-end gap-2">
+                                <Button size="sm" onClick={handleSaveDo} disabled={updateDo.isPending}>Save</Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setEditingDoId(null);
+                                    setEditingDo(null);
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    if (!row.id) return;
+                                    setEditingDoId(row.id);
+                                    setEditingDo({ ...row });
+                                  }}
+                                  disabled={disableManageActions || !row.id}
+                                  aria-label={`Edit DO ${row.carrier}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => handleDeleteDo(row.id)}
+                                  disabled={disableManageActions || deleteDo.isPending || !row.id}
+                                  aria-label={`Delete DO ${row.carrier}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {doCharges?.map((row) => (
-                          <TableRow key={row.id ?? row.carrier}>
-                            <TableCell className="font-medium">
-                              {editingDoId === row.id ? (
-                                <Input
-                                  value={editingDo?.carrier ?? ""}
-                                  onChange={(event) =>
-                                    setEditingDo((current) =>
-                                      current ? { ...current, carrier: event.target.value } : current
-                                    )
-                                  }
-                                  disabled={disableManageActions || updateDo.isPending}
-                                />
-                              ) : (
-                                row.carrier
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right font-mono">
-                              {editingDoId === row.id ? (
-                                <Input
-                                  value={numberString(editingDo?.document)}
-                                  onChange={(event) =>
-                                    setEditingDo((current) =>
-                                      current ? { ...current, document: Number(event.target.value) } : current
-                                    )
-                                  }
-                                  disabled={disableManageActions || updateDo.isPending}
-                                />
-                              ) : (
-                                formatCurrency(row.document)
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right font-mono">
-                              {editingDoId === row.id ? (
-                                <Input
-                                  value={numberString(editingDo?.["20FT"])}
-                                  onChange={(event) =>
-                                    setEditingDo((current) =>
-                                      current ? { ...current, "20FT": Number(event.target.value) } : current
-                                    )
-                                  }
-                                  disabled={disableManageActions || updateDo.isPending}
-                                />
-                              ) : (
-                                formatCurrency(row["20FT"])
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right font-mono">
-                              {editingDoId === row.id ? (
-                                <Input
-                                  value={numberString(editingDo?.["40FT"])}
-                                  onChange={(event) =>
-                                    setEditingDo((current) =>
-                                      current ? { ...current, "40FT": Number(event.target.value) } : current
-                                    )
-                                  }
-                                  disabled={disableManageActions || updateDo.isPending}
-                                />
-                              ) : (
-                                formatCurrency(row["40FT"])
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right font-mono">
-                              {editingDoId === row.id ? (
-                                <Input
-                                  value={numberString(editingDo?.["40HQ"])}
-                                  onChange={(event) =>
-                                    setEditingDo((current) =>
-                                      current ? { ...current, "40HQ": Number(event.target.value) } : current
-                                    )
-                                  }
-                                  disabled={disableManageActions || updateDo.isPending}
-                                />
-                              ) : (
-                                formatCurrency(row["40HQ"])
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {!canManage ? (
-                                <span className="text-xs text-muted-foreground">Owner/Admin only</span>
-                              ) : editingDoId === row.id ? (
-                                <div className="flex justify-end gap-2">
-                                  <Button size="sm" onClick={handleSaveDo} disabled={updateDo.isPending}>Save</Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setEditingDoId(null);
-                                      setEditingDo(null);
-                                    }}
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              ) : (
-                                <div className="flex justify-end gap-2">
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => {
-                                      if (!row.id) return;
-                                      setEditingDoId(row.id);
-                                      setEditingDo({ ...row });
-                                    }}
-                                    disabled={disableManageActions || !row.id}
-                                    aria-label={`Edit DO ${row.carrier}`}
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => handleDeleteDo(row.id)}
-                                    disabled={disableManageActions || deleteDo.isPending || !row.id}
-                                    aria-label={`Delete DO ${row.carrier}`}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                </div>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          <TabsContent value="dest" className="mt-2 focus-visible:outline-none focus-visible:ring-0">
-            <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
-              <CardHeader className="p-6 pb-4">
-                <CardTitle className="text-base font-bold tracking-tight">UAE Destination Charges</CardTitle>
-              </CardHeader>
-              <CardContent className="px-6 pb-6 pt-2">
-                {canManage && (
-                  <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-5">
-                    <Input
-                      value={newDest["Charge Type"]}
-                      onChange={(event) =>
-                        setNewDest((current) => ({ ...current, "Charge Type": event.target.value }))
-                      }
-                      placeholder="Charge Type"
-                      disabled={disableManageActions || createDest.isPending}
-                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
-                    />
-                    <Input
-                      value={newDest.Basis}
-                      onChange={(event) => setNewDest((current) => ({ ...current, Basis: event.target.value }))}
-                      placeholder="Basis"
-                      disabled={disableManageActions || createDest.isPending}
-                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
-                    />
-                    <Input
-                      value={newDest["20FT"]}
-                      onChange={(event) => setNewDest((current) => ({ ...current, "20FT": event.target.value }))}
-                      placeholder="20FT"
-                      disabled={disableManageActions || createDest.isPending}
-                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
-                    />
-                    <Input
-                      value={newDest["40FT"]}
-                      onChange={(event) => setNewDest((current) => ({ ...current, "40FT": event.target.value }))}
-                      placeholder="40FT"
-                      disabled={disableManageActions || createDest.isPending}
-                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
-                    />
-                    <Button onClick={handleCreateDest} disabled={disableManageActions || createDest.isPending} className="h-11 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
-                      <Plus className="mr-1.5 h-4 w-4" /> Add
-                    </Button>
-                  </div>
-                )}
-                {destLoading ? (
-                  <Skeleton className="h-48" />
-                ) : (
-                  <div className="rounded-md border overflow-x-auto">
-                    <Table className="min-w-[680px]">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Charge Type</TableHead>
-                          <TableHead>Basis</TableHead>
-                          <TableHead className="text-right">20FT</TableHead>
-                          <TableHead className="text-right">40FT</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
+        <TabsContent value="dest" className="mt-2 focus-visible:outline-none focus-visible:ring-0">
+          <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
+            <CardHeader className="p-6 pb-4">
+              <CardTitle className="text-base font-bold tracking-tight">UAE Destination Charges</CardTitle>
+            </CardHeader>
+            <CardContent className="px-6 pb-6 pt-2">
+              {canManage && (
+                <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-5">
+                  <Input
+                    value={newDest["Charge Type"]}
+                    onChange={(event) =>
+                      setNewDest((current) => ({ ...current, "Charge Type": event.target.value }))
+                    }
+                    placeholder="Charge Type"
+                    disabled={disableManageActions || createDest.isPending}
+                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                  />
+                  <Input
+                    value={newDest.Basis}
+                    onChange={(event) => setNewDest((current) => ({ ...current, Basis: event.target.value }))}
+                    placeholder="Basis"
+                    disabled={disableManageActions || createDest.isPending}
+                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                  />
+                  <Input
+                    value={newDest["20FT"]}
+                    onChange={(event) => setNewDest((current) => ({ ...current, "20FT": event.target.value }))}
+                    placeholder="20FT"
+                    disabled={disableManageActions || createDest.isPending}
+                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                  />
+                  <Input
+                    value={newDest["40FT"]}
+                    onChange={(event) => setNewDest((current) => ({ ...current, "40FT": event.target.value }))}
+                    placeholder="40FT"
+                    disabled={disableManageActions || createDest.isPending}
+                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                  />
+                  <Button onClick={handleCreateDest} disabled={disableManageActions || createDest.isPending} className="h-11 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                    <Plus className="mr-1.5 h-4 w-4" /> Add
+                  </Button>
+                </div>
+              )}
+              {destLoading ? (
+                <Skeleton className="h-48" />
+              ) : (
+                <div className="rounded-md border overflow-x-auto">
+                  <Table className="min-w-[680px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Charge Type</TableHead>
+                        <TableHead>Basis</TableHead>
+                        <TableHead className="text-right">20FT</TableHead>
+                        <TableHead className="text-right">40FT</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {destCharges?.map((row) => (
+                        <TableRow key={row.id ?? row["Charge Type"]}>
+                          <TableCell className="font-medium">
+                            {editingDestId === row.id ? (
+                              <Input
+                                value={editingDest?.["Charge Type"] ?? ""}
+                                onChange={(event) =>
+                                  setEditingDest((current) =>
+                                    current
+                                      ? { ...current, "Charge Type": event.target.value }
+                                      : current
+                                  )
+                                }
+                                disabled={disableManageActions || updateDest.isPending}
+                              />
+                            ) : (
+                              row["Charge Type"]
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {editingDestId === row.id ? (
+                              <Input
+                                value={editingDest?.Basis ?? ""}
+                                onChange={(event) =>
+                                  setEditingDest((current) =>
+                                    current ? { ...current, Basis: event.target.value } : current
+                                  )
+                                }
+                                disabled={disableManageActions || updateDest.isPending}
+                              />
+                            ) : (
+                              row.Basis
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {editingDestId === row.id ? (
+                              <Input
+                                value={numberString(editingDest?.["20FT"])}
+                                onChange={(event) =>
+                                  setEditingDest((current) =>
+                                    current ? { ...current, "20FT": Number(event.target.value) } : current
+                                  )
+                                }
+                                disabled={disableManageActions || updateDest.isPending}
+                              />
+                            ) : (
+                              formatCurrency(row["20FT"])
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {editingDestId === row.id ? (
+                              <Input
+                                value={numberString(editingDest?.["40FT"])}
+                                onChange={(event) =>
+                                  setEditingDest((current) =>
+                                    current ? { ...current, "40FT": Number(event.target.value) } : current
+                                  )
+                                }
+                                disabled={disableManageActions || updateDest.isPending}
+                              />
+                            ) : (
+                              formatCurrency(row["40FT"])
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {!canManage ? (
+                              <span className="text-xs text-muted-foreground">Owner/Admin only</span>
+                            ) : editingDestId === row.id ? (
+                              <div className="flex justify-end gap-2">
+                                <Button size="sm" onClick={handleSaveDest} disabled={updateDest.isPending}>Save</Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setEditingDestId(null);
+                                    setEditingDest(null);
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    if (!row.id) return;
+                                    setEditingDestId(row.id);
+                                    setEditingDest({ ...row });
+                                  }}
+                                  disabled={disableManageActions || !row.id}
+                                  aria-label={`Edit destination ${row["Charge Type"]}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => handleDeleteDest(row.id)}
+                                  disabled={disableManageActions || deleteDest.isPending || !row.id}
+                                  aria-label={`Delete destination ${row["Charge Type"]}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {destCharges?.map((row) => (
-                          <TableRow key={row.id ?? row["Charge Type"]}>
-                            <TableCell className="font-medium">
-                              {editingDestId === row.id ? (
-                                <Input
-                                  value={editingDest?.["Charge Type"] ?? ""}
-                                  onChange={(event) =>
-                                    setEditingDest((current) =>
-                                      current
-                                        ? { ...current, "Charge Type": event.target.value }
-                                        : current
-                                    )
-                                  }
-                                  disabled={disableManageActions || updateDest.isPending}
-                                />
-                              ) : (
-                                row["Charge Type"]
-                              )}
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {editingDestId === row.id ? (
-                                <Input
-                                  value={editingDest?.Basis ?? ""}
-                                  onChange={(event) =>
-                                    setEditingDest((current) =>
-                                      current ? { ...current, Basis: event.target.value } : current
-                                    )
-                                  }
-                                  disabled={disableManageActions || updateDest.isPending}
-                                />
-                              ) : (
-                                row.Basis
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right font-mono">
-                              {editingDestId === row.id ? (
-                                <Input
-                                  value={numberString(editingDest?.["20FT"])}
-                                  onChange={(event) =>
-                                    setEditingDest((current) =>
-                                      current ? { ...current, "20FT": Number(event.target.value) } : current
-                                    )
-                                  }
-                                  disabled={disableManageActions || updateDest.isPending}
-                                />
-                              ) : (
-                                formatCurrency(row["20FT"])
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right font-mono">
-                              {editingDestId === row.id ? (
-                                <Input
-                                  value={numberString(editingDest?.["40FT"])}
-                                  onChange={(event) =>
-                                    setEditingDest((current) =>
-                                      current ? { ...current, "40FT": Number(event.target.value) } : current
-                                    )
-                                  }
-                                  disabled={disableManageActions || updateDest.isPending}
-                                />
-                              ) : (
-                                formatCurrency(row["40FT"])
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {!canManage ? (
-                                <span className="text-xs text-muted-foreground">Owner/Admin only</span>
-                              ) : editingDestId === row.id ? (
-                                <div className="flex justify-end gap-2">
-                                  <Button size="sm" onClick={handleSaveDest} disabled={updateDest.isPending}>Save</Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setEditingDestId(null);
-                                      setEditingDest(null);
-                                    }}
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              ) : (
-                                <div className="flex justify-end gap-2">
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => {
-                                      if (!row.id) return;
-                                      setEditingDestId(row.id);
-                                      setEditingDest({ ...row });
-                                    }}
-                                    disabled={disableManageActions || !row.id}
-                                    aria-label={`Edit destination ${row["Charge Type"]}`}
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => handleDeleteDest(row.id)}
-                                    disabled={disableManageActions || deleteDest.isPending || !row.id}
-                                    aria-label={`Delete destination ${row["Charge Type"]}`}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                </div>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          <TabsContent value="transport" className="mt-2 focus-visible:outline-none focus-visible:ring-0">
-            <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
-              <CardHeader className="p-6 pb-4">
-                <CardTitle className="text-base font-bold tracking-tight">
-                  Transportation Charges by Location
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-6 pb-6 pt-2">
-                {canManage && (
-                  <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-3">
-                    <Input
-                      value={newTransport.Place}
-                      onChange={(event) =>
-                        setNewTransport((current) => ({ ...current, Place: event.target.value }))
-                      }
-                      placeholder="Place"
-                      disabled={disableManageActions || createTransport.isPending}
-                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
-                    />
-                    <Input
-                      value={newTransport.Price}
-                      onChange={(event) =>
-                        setNewTransport((current) => ({ ...current, Price: event.target.value }))
-                      }
-                      placeholder="Price"
-                      disabled={disableManageActions || createTransport.isPending}
-                      className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
-                    />
-                    <Button
-                      onClick={handleCreateTransport}
-                      disabled={disableManageActions || createTransport.isPending}
-                      className="h-11 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all"
-                    >
-                      <Plus className="mr-1.5 h-4 w-4" /> Add
-                    </Button>
-                  </div>
-                )}
-                {transpLoading ? (
-                  <Skeleton className="h-48" />
-                ) : (
-                  <div className="rounded-md border overflow-x-auto">
-                    <Table className="min-w-[560px]">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Place</TableHead>
-                          <TableHead className="text-right">Price (AED)</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
+        <TabsContent value="transport" className="mt-2 focus-visible:outline-none focus-visible:ring-0">
+          <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
+            <CardHeader className="p-6 pb-4">
+              <CardTitle className="text-base font-bold tracking-tight">
+                Transportation Charges by Location
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-6 pb-6 pt-2">
+              {canManage && (
+                <div className="mb-4 grid grid-cols-1 gap-2 md:grid-cols-3">
+                  <Input
+                    value={newTransport.Place}
+                    onChange={(event) =>
+                      setNewTransport((current) => ({ ...current, Place: event.target.value }))
+                    }
+                    placeholder="Place"
+                    disabled={disableManageActions || createTransport.isPending}
+                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                  />
+                  <Input
+                    value={newTransport.Price}
+                    onChange={(event) =>
+                      setNewTransport((current) => ({ ...current, Price: event.target.value }))
+                    }
+                    placeholder="Price"
+                    disabled={disableManageActions || createTransport.isPending}
+                    className="rounded-xl border-white/10 dark:border-white/5 bg-white/5 dark:bg-black/5 shadow-inner px-4 h-11 focus-visible:ring-primary/50"
+                  />
+                  <Button
+                    onClick={handleCreateTransport}
+                    disabled={disableManageActions || createTransport.isPending}
+                    className="h-11 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all"
+                  >
+                    <Plus className="mr-1.5 h-4 w-4" /> Add
+                  </Button>
+                </div>
+              )}
+              {transpLoading ? (
+                <Skeleton className="h-48" />
+              ) : (
+                <div className="rounded-md border overflow-x-auto">
+                  <Table className="min-w-[560px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Place</TableHead>
+                        <TableHead className="text-right">Price (AED)</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {transpCharges?.map((row) => (
+                        <TableRow key={row.id ?? row.Place}>
+                          <TableCell className="font-medium">
+                            {editingTransportId === row.id ? (
+                              <Input
+                                value={editingTransport?.Place ?? ""}
+                                onChange={(event) =>
+                                  setEditingTransport((current) =>
+                                    current ? { ...current, Place: event.target.value } : current
+                                  )
+                                }
+                                disabled={disableManageActions || updateTransport.isPending}
+                              />
+                            ) : (
+                              row.Place
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {editingTransportId === row.id ? (
+                              <Input
+                                value={numberString(editingTransport?.Price)}
+                                onChange={(event) =>
+                                  setEditingTransport((current) =>
+                                    current ? { ...current, Price: Number(event.target.value) } : current
+                                  )
+                                }
+                                disabled={disableManageActions || updateTransport.isPending}
+                              />
+                            ) : (
+                              formatCurrency(row.Price)
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {!canManage ? (
+                              <span className="text-xs text-muted-foreground">Owner/Admin only</span>
+                            ) : editingTransportId === row.id ? (
+                              <div className="flex justify-end gap-2">
+                                <Button size="sm" onClick={handleSaveTransport} disabled={updateTransport.isPending}>
+                                  Save
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setEditingTransportId(null);
+                                    setEditingTransport(null);
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    if (!row.id) return;
+                                    setEditingTransportId(row.id);
+                                    setEditingTransport({ ...row });
+                                  }}
+                                  disabled={disableManageActions || !row.id}
+                                  aria-label={`Edit transport ${row.Place}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => handleDeleteTransport(row.id)}
+                                  disabled={disableManageActions || deleteTransport.isPending || !row.id}
+                                  aria-label={`Delete transport ${row.Place}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {transpCharges?.map((row) => (
-                          <TableRow key={row.id ?? row.Place}>
-                            <TableCell className="font-medium">
-                              {editingTransportId === row.id ? (
-                                <Input
-                                  value={editingTransport?.Place ?? ""}
-                                  onChange={(event) =>
-                                    setEditingTransport((current) =>
-                                      current ? { ...current, Place: event.target.value } : current
-                                    )
-                                  }
-                                  disabled={disableManageActions || updateTransport.isPending}
-                                />
-                              ) : (
-                                row.Place
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right font-mono">
-                              {editingTransportId === row.id ? (
-                                <Input
-                                  value={numberString(editingTransport?.Price)}
-                                  onChange={(event) =>
-                                    setEditingTransport((current) =>
-                                      current ? { ...current, Price: Number(event.target.value) } : current
-                                    )
-                                  }
-                                  disabled={disableManageActions || updateTransport.isPending}
-                                />
-                              ) : (
-                                formatCurrency(row.Price)
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {!canManage ? (
-                                <span className="text-xs text-muted-foreground">Owner/Admin only</span>
-                              ) : editingTransportId === row.id ? (
-                                <div className="flex justify-end gap-2">
-                                  <Button size="sm" onClick={handleSaveTransport} disabled={updateTransport.isPending}>
-                                    Save
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setEditingTransportId(null);
-                                      setEditingTransport(null);
-                                    }}
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              ) : (
-                                <div className="flex justify-end gap-2">
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => {
-                                      if (!row.id) return;
-                                      setEditingTransportId(row.id);
-                                      setEditingTransport({ ...row });
-                                    }}
-                                    disabled={disableManageActions || !row.id}
-                                    aria-label={`Edit transport ${row.Place}`}
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => handleDeleteTransport(row.id)}
-                                    disabled={disableManageActions || deleteTransport.isPending || !row.id}
-                                    aria-label={`Delete transport ${row.Place}`}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                </div>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

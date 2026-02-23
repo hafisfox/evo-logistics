@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -139,133 +138,130 @@ export default function MembersSettingsPage() {
   };
 
   return (
-    <div>
-      <Header title="Members" description="Workspace member and invite management" />
-      <div className="space-y-6 p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Workspace</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <p className="text-sm text-muted-foreground">Loading workspaces...</p>
-            ) : (
-              <Select value={workspaceId} onValueChange={switchWorkspace}>
-                <SelectTrigger className="max-w-sm">
-                  <SelectValue placeholder="Select workspace" />
-                </SelectTrigger>
-                <SelectContent>
-                  {workspaces.map((workspace) => (
-                    <SelectItem key={workspace.workspace_id} value={workspace.workspace_id}>
-                      {workspace.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            {activeWorkspace && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Your role: {activeWorkspace.role}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+    <div className="space-y-6 p-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Workspace</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Loading workspaces...</p>
+          ) : (
+            <Select value={workspaceId} onValueChange={switchWorkspace}>
+              <SelectTrigger className="max-w-sm">
+                <SelectValue placeholder="Select workspace" />
+              </SelectTrigger>
+              <SelectContent>
+                {workspaces.map((workspace) => (
+                  <SelectItem key={workspace.workspace_id} value={workspace.workspace_id}>
+                    {workspace.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {activeWorkspace && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Your role: {activeWorkspace.role}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Invite Member</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-2">
-              <Label htmlFor="invite-email">Email</Label>
-              <Input
-                id="invite-email"
-                value={inviteEmail}
-                onChange={(event) => setInviteEmail(event.target.value)}
-                placeholder="teammate@company.com"
-              />
-            </div>
-            <div className="max-w-xs space-y-2">
-              <Label>Role</Label>
-              <Select
-                value={inviteRole}
-                onValueChange={(value) => setInviteRole(value as "admin" | "member")}
+      <Card>
+        <CardHeader>
+          <CardTitle>Invite Member</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <Label htmlFor="invite-email">Email</Label>
+            <Input
+              id="invite-email"
+              value={inviteEmail}
+              onChange={(event) => setInviteEmail(event.target.value)}
+              placeholder="teammate@company.com"
+            />
+          </div>
+          <div className="max-w-xs space-y-2">
+            <Label>Role</Label>
+            <Select
+              value={inviteRole}
+              onValueChange={(value) => setInviteRole(value as "admin" | "member")}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="member">Member</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={sendInvite}>Send Invite</Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Members</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {members.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No members found.</p>
+          ) : (
+            members.map((member) => (
+              <div
+                key={member.id}
+                className="flex items-center justify-between rounded border p-3"
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="member">Member</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button onClick={sendInvite}>Send Invite</Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Members</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {members.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No members found.</p>
-            ) : (
-              members.map((member) => (
-                <div
-                  key={member.id}
-                  className="flex items-center justify-between rounded border p-3"
+                <div>
+                  <p className="font-mono text-xs text-muted-foreground">{member.user_id}</p>
+                  <p className="text-xs text-muted-foreground">{member.status}</p>
+                </div>
+                <Select
+                  value={member.role}
+                  onValueChange={(value) =>
+                    updateRole(member.id, value as "owner" | "admin" | "member")
+                  }
                 >
-                  <div>
-                    <p className="font-mono text-xs text-muted-foreground">{member.user_id}</p>
-                    <p className="text-xs text-muted-foreground">{member.status}</p>
-                  </div>
-                  <Select
-                    value={member.role}
-                    onValueChange={(value) =>
-                      updateRole(member.id, value as "owner" | "admin" | "member")
-                    }
-                  >
-                    <SelectTrigger className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="member">Member</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="owner">Owner</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="member">Member</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="owner">Owner</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Invites</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {invites.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No invites sent yet.</p>
-            ) : (
-              invites.map((invite) => (
-                <div key={invite.id} className="rounded border p-3 text-sm">
-                  <p>{invite.email}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {invite.role} • {invite.status} • expires{" "}
-                    {new Date(invite.expires_at).toLocaleDateString()}
-                  </p>
-                  <p className="mt-1 font-mono text-xs text-muted-foreground">
-                    /signup?invite={invite.invite_token}
-                  </p>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Invites</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {invites.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No invites sent yet.</p>
+          ) : (
+            invites.map((invite) => (
+              <div key={invite.id} className="rounded border p-3 text-sm">
+                <p>{invite.email}</p>
+                <p className="text-xs text-muted-foreground">
+                  {invite.role} • {invite.status} • expires{" "}
+                  {new Date(invite.expires_at).toLocaleDateString()}
+                </p>
+                <p className="mt-1 font-mono text-xs text-muted-foreground">
+                  /signup?invite={invite.invite_token}
+                </p>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

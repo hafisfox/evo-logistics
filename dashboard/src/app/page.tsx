@@ -192,29 +192,15 @@ export default function DashboardPage() {
       {/* Middle Row: Pipeline Chart + Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Pipeline Chart */}
-        <div className="lg:col-span-2 flex flex-col rounded-[24px] bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-white/5 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white text-lg">Pipeline Overview</h3>
-              <p className="text-sm text-gray-500 mt-1">RFQ status distribution</p>
-            </div>
-            <Link href="/rfqs" className="text-sm text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors flex items-center gap-1">
-              Full pipeline <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
+        <div className="lg:col-span-2 flex flex-col">
           {pipelineLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-12 w-full rounded-2xl" />
-              <div className="flex gap-4">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-24" />
-              </div>
-            </div>
+            <Skeleton className="h-full min-h-[300px] w-full rounded-[24px]" />
           ) : pipeline && pipeline.length > 0 ? (
             <PipelineChart data={pipeline} />
           ) : (
-            <p className="text-sm text-gray-500 text-center py-8">No pipeline data yet</p>
+            <div className="flex flex-col rounded-[24px] bg-white dark:bg-[#1A1A1A] border border-gray-100 dark:border-white/5 p-6 shadow-sm items-center justify-center min-h-[300px]">
+              <p className="text-sm text-gray-500 text-center">No pipeline data yet</p>
+            </div>
           )}
         </div>
 

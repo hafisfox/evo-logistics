@@ -1,16 +1,19 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Bell, Search } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MobileNav } from "./mobile-nav";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import Link from "next/link";
+import { Settings } from "lucide-react";
 
 interface HeaderProps {
   title: string;
@@ -31,54 +34,43 @@ export function Header({ title, description }: HeaderProps) {
   };
 
   return (
-    <header className="flex h-24 shrink-0 items-center justify-between px-8 bg-transparent">
+    <header className="flex h-20 shrink-0 items-center justify-between px-6 md:px-8 border-b border-border bg-background">
+      {/* Left: mobile nav + page title */}
       <div className="flex items-center gap-3">
         <MobileNav />
-        <div className="pl-1 text-left hidden md:block">
-          <h1 className="text-2xl font-bold tracking-tight text-[#111827] dark:text-white leading-tight">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight leading-tight">
             {title}
           </h1>
           {description && (
-            <p className="text-[13px] font-medium text-gray-500 dark:text-gray-400 mt-0.5">
-              {description}
-            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
           )}
         </div>
       </div>
 
-      <div className="flex items-center gap-6">
-        {/* Search Bar */}
-        <div className="relative hidden md:flex items-center">
-          <Search className="absolute left-4 h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search"
-            className="h-11 w-64 rounded-full bg-white dark:bg-black/20 pl-11 pr-4 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-black/5 dark:focus:ring-white/10"
-          />
-        </div>
+      {/* Right: theme toggle + user menu */}
+      <div className="flex items-center gap-3">
+        <ThemeToggle />
 
-        {/* Notifications */}
-        <button className="relative flex h-11 w-11 items-center justify-center rounded-full bg-white dark:bg-black/20 hover:bg-gray-50 dark:hover:bg-black/40 transition-colors">
-          <div className="absolute top-3 right-3 h-2 w-2 rounded-full bg-red-500 border border-white dark:border-[#1A1A1A]" />
-          <Bell className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-        </button>
-
-        {/* User Profile */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-3 rounded-full hover:bg-black/5 dark:hover:bg-white/5 p-1 pr-3 transition-colors outline-none cursor-pointer">
-              <Avatar className="h-10 w-10 border-2 border-white dark:border-[#1A1A1A] shadow-sm">
-                <AvatarImage src="https://i.pravatar.cc/150?u=ethan" />
-                <AvatarFallback>EM</AvatarFallback>
+            <button className="flex items-center gap-2.5 rounded-full hover:bg-accent p-1.5 pr-3 transition-colors outline-none cursor-pointer">
+              <Avatar className="h-8 w-8">
+                <AvatarImage src="https://i.pravatar.cc/150?u=evo" />
+                <AvatarFallback>EL</AvatarFallback>
               </Avatar>
-              <div className="hidden text-left md:block">
-                <p className="text-sm font-semibold text-gray-900 dark:text-white leading-tight">Ethan Moore</p>
-                <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Logist</p>
-              </div>
+              <span className="hidden md:block text-sm font-medium">Account</span>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={handleLogout} className="text-red-600 dark:text-red-400">
+            <DropdownMenuItem asChild>
+              <Link href="/settings/account" className="flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                Settings
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
               Sign Out
             </DropdownMenuItem>
           </DropdownMenuContent>
