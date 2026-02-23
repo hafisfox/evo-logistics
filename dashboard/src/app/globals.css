@@ -7,7 +7,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-sans: var(--font-sans), "Plus Jakarta Sans", "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --font-mono: "Inter Tight", "SFMono-Regular", Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
   --color-sidebar-ring: var(--sidebar-ring);
@@ -53,9 +53,7 @@
   --radius: 1rem;
 
   --background: oklch(0.98 0.01 230);
-  /* Very light cyan-tinted gray */
-  --foreground: oklch(0.15 0.02 230);
-  /* Deep navy gray */
+  --foreground: oklch(0.12 0.02 230); /* Darker navy for better contrast */
 
   --card: oklch(1 0 0);
   /* Pure White */

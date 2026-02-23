@@ -12,7 +12,7 @@ interface ActivityFeedProps {
 
 export function ActivityFeed({ items }: ActivityFeedProps) {
   return (
-    <Card className="rounded-3xl border-white/20 dark:border-white/5 bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.02)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] transition-all duration-500 h-full flex flex-col overflow-hidden">
+    <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] transition-all duration-500 h-full flex flex-col overflow-hidden">
       <CardHeader className="p-6 pb-2">
         <CardTitle className="text-lg font-semibold tracking-tight">Recent Activity</CardTitle>
       </CardHeader>
@@ -39,11 +39,11 @@ export function ActivityFeed({ items }: ActivityFeedProps) {
               </span>
             </div>
           ))}
-          {items.length === 0 && (
+          {items.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
               No recent activity
             </p>
-          )}
+          ) : null}
         </div>
       </CardContent>
     </Card>

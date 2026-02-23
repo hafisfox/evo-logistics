@@ -13,7 +13,7 @@ export function PipelineChart({ data }: PipelineChartProps) {
   const total = data.reduce((sum, d) => sum + d.count, 0);
 
   return (
-    <Card className="rounded-3xl border-white/20 dark:border-white/5 bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.02)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] transition-all duration-500 overflow-hidden flex flex-col h-full">
+    <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] transition-all duration-500 overflow-hidden flex flex-col h-full">
       <CardHeader className="p-6 pb-4">
         <CardTitle className="text-lg font-semibold tracking-tight">Pipeline Overview</CardTitle>
       </CardHeader>

@@ -119,15 +119,17 @@ def audit_ignored_mailbox_event(
         pass
 
 
-def scoped_select(supabase, table_name: str, workspace_id: str):
-    query = supabase.table(table_name).select("*")
+def scoped_select(supabase, table_name: str, workspace_id: str, columns: str = "*"):
+    query = supabase.table(table_name).select(columns)
     if table_name in TENANT_TABLES:
         query = query.eq("workspace_id", workspace_id)
     return query.execute().data or []
 
 
-def scoped_eq_filter(supabase, table_name: str, workspace_id: str, column: str, value: Any):
-    query = supabase.table(table_name).select("*").eq(column, value)
+def scoped_eq_filter(
+    supabase, table_name: str, workspace_id: str, column: str, value: Any, columns: str = "*"
+):
+    query = supabase.table(table_name).select(columns).eq(column, value)
     if table_name in TENANT_TABLES:
         query = query.eq("workspace_id", workspace_id)
     return query.execute().data or []

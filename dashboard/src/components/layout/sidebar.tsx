@@ -60,12 +60,12 @@ export function Sidebar() {
             : "text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 hover:translate-x-1"
         )}
       >
-        {isActive && (
+        {isActive ? (
           <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full" />
-        )}
-        {isActive && (
+        ) : null}
+        {isActive ? (
           <div className="absolute inset-0 bg-primary/10 dark:bg-primary/20 opacity-50" />
-        )}
+        ) : null}
         <item.icon className={cn("h-5 w-5 relative z-10 transition-colors", isActive ? "text-primary dark:text-white" : "group-hover:text-foreground")} />
         <span className="relative z-10">{item.label}</span>
       </Link>

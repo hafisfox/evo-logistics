@@ -42,7 +42,7 @@ export function ShipmentCard({ rfq }: ShipmentCardProps) {
               <p className="text-sm font-medium">{formatDate(rfq.ready_date)}</p>
             </div>
           </div>
-          {rfq.delivery_deadline && (
+          {rfq.delivery_deadline ? (
             <div>
               <p className="text-xs text-muted-foreground mb-1">Delivery Deadline</p>
               <div className="flex items-center gap-1">
@@ -50,12 +50,12 @@ export function ShipmentCard({ rfq }: ShipmentCardProps) {
                 <p className="text-sm font-medium text-red-600">{formatDate(rfq.delivery_deadline)}</p>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
 
-        {(rfq.pickup_address || rfq.delivery_address) && (
+        {(rfq.pickup_address || rfq.delivery_address) ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t">
-            {rfq.pickup_address && (
+            {rfq.pickup_address ? (
               <div className="flex items-start gap-2">
                 <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
                 <div>
@@ -63,8 +63,8 @@ export function ShipmentCard({ rfq }: ShipmentCardProps) {
                   <p className="text-sm">{rfq.pickup_address}</p>
                 </div>
               </div>
-            )}
-            {rfq.delivery_address && (
+            ) : null}
+            {rfq.delivery_address ? (
               <div className="flex items-start gap-2">
                 <Truck className="h-4 w-4 text-muted-foreground mt-0.5" />
                 <div>
@@ -72,9 +72,9 @@ export function ShipmentCard({ rfq }: ShipmentCardProps) {
                   <p className="text-sm">{rfq.delivery_address}</p>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
-        )}
+        ) : null}
 
         <div className="flex items-center gap-4 pt-2 border-t text-sm">
           <div>
@@ -85,12 +85,12 @@ export function ShipmentCard({ rfq }: ShipmentCardProps) {
             <span className="text-muted-foreground">Received: </span>
             <span>{formatDate(rfq.received_at)}</span>
           </div>
-          {rfq.selected_agent && (
+          {rfq.selected_agent ? (
             <div>
               <span className="text-muted-foreground">Agent: </span>
               <span className="font-medium">{rfq.selected_agent}</span>
             </div>
-          )}
+          ) : null}
         </div>
       </CardContent>
     </Card>

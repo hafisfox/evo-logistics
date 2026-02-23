@@ -21,9 +21,10 @@ export function QuoteCard({ quote, rank, isSelected, onSelect }: QuoteCardProps)
   return (
     <Card
       className={cn(
-        "transition-all hover:shadow-md",
+        "transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:hover:shadow-[0_8px_30px_rgba(255,255,255,0.04)]",
+        "backdrop-blur-xl bg-card/60 dark:bg-card/40 border border-white/20 dark:border-white/10",
         isSelected && "ring-2 ring-primary shadow-md",
-        isBest && !isSelected && "border-emerald-300"
+        isBest && !isSelected && "border-emerald-300/50"
       )}
     >
       <CardHeader className="pb-3">
