@@ -9,14 +9,17 @@ const {
   fromMock,
   maybeSingleMock,
   upsertMock,
+  insertMock,
 } = vi.hoisted(() => {
   const maybeSingleMock = vi.fn();
   const eqMock = vi.fn(() => ({ maybeSingle: maybeSingleMock }));
   const selectMock = vi.fn(() => ({ eq: eqMock }));
   const upsertMock = vi.fn();
+  const insertMock = vi.fn().mockResolvedValue({ error: null });
   const fromMock = vi.fn(() => ({
     select: selectMock,
     upsert: upsertMock,
+    insert: insertMock,
   }));
   const createClientMock = vi.fn();
   return {
@@ -24,6 +27,7 @@ const {
     fromMock,
     maybeSingleMock,
     upsertMock,
+    insertMock,
   };
 });
 
