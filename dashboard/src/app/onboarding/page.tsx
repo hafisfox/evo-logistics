@@ -67,7 +67,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
 
   return (
     <div className="flex min-h-[100dvh] w-full items-center justify-center p-4">
-      <Card className="w-full max-w-xl rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl p-4 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] animate-in fade-in zoom-in-95 duration-700 overflow-hidden">
+      <Card className="w-full max-w-xl rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-xl p-4 md:p-8 shadow-[0_8px_24px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_24px_rgba(255,255,255,0.03)] overflow-hidden">
         <CardHeader className="pb-4">
           <CardTitle className="text-2xl font-bold tracking-tight text-center md:text-left">Workspace Setup</CardTitle>
         </CardHeader>

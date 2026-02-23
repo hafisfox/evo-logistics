@@ -118,11 +118,11 @@ export default function WorkspaceSettingsPage() {
   };
 
   return (
-    <div className="max-w-2xl space-y-6 md:space-y-8 p-4 md:p-6 lg:p-8 animate-in fade-in zoom-in-95 duration-700">
+    <div className="max-w-2xl space-y-6 md:space-y-8 p-4 md:p-6 lg:p-8">
       <Suspense fallback={null}>
         <OAuthCallbackToast />
       </Suspense>
-      <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
+      <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-xl shadow-[0_8px_24px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_24px_rgba(255,255,255,0.03)] overflow-hidden">
         <CardHeader className="pb-3 px-6 pt-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -222,7 +222,7 @@ export default function WorkspaceSettingsPage() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
+      <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-xl shadow-[0_8px_24px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_24px_rgba(255,255,255,0.03)] overflow-hidden">
         <CardHeader className="pb-3 px-6 pt-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">

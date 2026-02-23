@@ -3,7 +3,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MasterRFQ } from "@/types/rfq";
 
-export function useRFQs() {
+interface UseRFQsOptions {
+  enabled?: boolean;
+  refetchInterval?: number | false;
+}
+
+export function useRFQs(options: UseRFQsOptions = {}) {
+  const { enabled = true, refetchInterval = 30_000 } = options;
   return useQuery<MasterRFQ[]>({
     queryKey: ["rfqs"],
     queryFn: async () => {
@@ -11,7 +17,8 @@ export function useRFQs() {
       if (!res.ok) throw new Error("Failed to fetch RFQs");
       return res.json();
     },
-    refetchInterval: 30_000,
+    enabled,
+    refetchInterval: enabled ? refetchInterval : false,
   });
 }
 

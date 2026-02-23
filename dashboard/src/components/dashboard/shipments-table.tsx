@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RouteDisplay } from "@/components/ui/route-display";
 import { ContainerBadge } from "@/components/ui/container-badge";
 import Link from "next/link";
-import type { RFQStatus } from "@/types/rfq";
+import type { MasterRFQ, RFQStatus } from "@/types/rfq";
 
 const STATUS_DISPLAY: Record<RFQStatus, { label: string; color: string }> = {
     Processing: { label: "Processing", color: "text-primary border-primary/20 bg-primary/10" },
@@ -21,8 +21,17 @@ const STATUS_DISPLAY: Record<RFQStatus, { label: string; color: string }> = {
     Customer_Replied: { label: "Customer Replied", color: "text-chart-1 border-chart-1/20 bg-chart-1/10" },
 };
 
-export function ShipmentsTable() {
-    const { data: rfqs, isLoading } = useRFQs();
+interface ShipmentsTableProps {
+    initialRFQs?: MasterRFQ[];
+    disableLiveFetch?: boolean;
+}
+
+export function ShipmentsTable({ initialRFQs, disableLiveFetch = false }: ShipmentsTableProps) {
+    const { data: liveRFQs, isLoading: liveLoading } = useRFQs({
+        enabled: !disableLiveFetch,
+    });
+    const rfqs = disableLiveFetch ? (initialRFQs ?? []) : liveRFQs;
+    const isLoading = disableLiveFetch ? false : liveLoading;
 
     return (
         <div className="flex flex-col rounded-3xl bg-card border border-black/5 dark:border-white/5 p-6 shadow-sm overflow-hidden">
