@@ -4,7 +4,7 @@ const { requireWorkspaceApiContextMock } = vi.hoisted(() => ({
   requireWorkspaceApiContextMock: vi.fn(),
 }));
 
-const { createClientMock, fromMock, updateMock, eqMock, insertMock } = vi.hoisted(() => {
+const { createClientMock, fromMock, updateMock, eqMock } = vi.hoisted(() => {
   const eqMock = vi.fn();
   const updateMock = vi.fn(() => ({ eq: eqMock }));
   const insertMock = vi.fn().mockResolvedValue({ error: null });
@@ -15,7 +15,6 @@ const { createClientMock, fromMock, updateMock, eqMock, insertMock } = vi.hoiste
     fromMock,
     updateMock,
     eqMock,
-    insertMock,
   };
 });
 
