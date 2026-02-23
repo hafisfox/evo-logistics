@@ -23,6 +23,10 @@ Current product objective (`ACTION_PLAN.md`) is already strongly aligned with wo
 - Phase 1/2/3 automations are workspace-isolated and operational.
 - RFQ + pricing normalization is deployed with compatibility views.
 - Dashboard API and UI consume normalized data safely.
+- Workspace invite permissions are hardened:
+  - `owner/admin` can invite as `admin` or `member`
+  - `member` can invite as `member` only
+  - invite acceptance status updates are fail-fast to prevent stale `pending` drift
 
 ---
 
@@ -34,10 +38,7 @@ Current product objective (`ACTION_PLAN.md`) is already strongly aligned with wo
 
 ### Dashboard tests
 - Command: `cd dashboard && npm run test`
-- Result: `75 passed, 2 failed`
-- Failures are test-mock drift caused by new audit `.insert()` calls, not core runtime logic regressions:
-  - `dashboard/src/app/api/__tests__/workspaces-current-mailbox-oauth-callback.route.test.ts`
-  - `dashboard/src/app/api/__tests__/workspaces-current-mailbox-disconnect.route.test.ts`
+- Result: `84 passed`
 
 ---
 
@@ -110,7 +111,7 @@ Status: not implemented as requested taxonomy.
 3. Lock enum/value mappings for all new interpreter outputs.
 
 ## Phase 2: Add schema for interpreted scope
-1. Add migration: `dashboard/supabase/migrations/20260223_015_rfq_scope_interpreter.sql`.
+1. Add migration: `dashboard/supabase/migrations/20260223_016_rfq_scope_interpreter.sql`.
 2. Create table `rfq_scope_interpretations` with key `(workspace_id, rfq_id)`.
 3. Include columns:
 - `shipment_type`
@@ -256,6 +257,5 @@ Additive only.
 ---
 
 ## Immediate Next Action (future implementation start)
-1. Fix the two dashboard mailbox route test mocks to reestablish full green baseline.
-2. Start Phase 1 spec normalization and finalize interpreter field contracts.
-3. Create migration `20260223_015_rfq_scope_interpreter.sql` and begin shadow write integration.
+1. Start Phase 1 spec normalization and finalize interpreter field contracts.
+2. Create migration `20260223_016_rfq_scope_interpreter.sql` and begin shadow write integration.

@@ -120,6 +120,12 @@ Mailbox endpoint behavior:
 - `POST /api/workspaces/current/mailbox` cannot set `status="connected"` manually.
 - connected state is established only by OAuth callback token exchange.
 
+Invite endpoint behavior:
+
+- `POST /api/workspaces/[workspaceId]/invites` allows `owner`, `admin`, and `member`.
+- `member` callers can only create `role="member"` invites.
+- invite acceptance path now fails fast if invite-row status update fails after membership upsert.
+
 ## 6. Role Enforcement
 
 - `owner` and `admin`:
@@ -128,7 +134,9 @@ Mailbox endpoint behavior:
   - pricing table/settings writes
 - `member`:
   - RFQ operational reads/actions
-  - no workspace/member admin APIs
+  - can create invites with `member` role only
+  - cannot invite admins
+  - cannot update roles or manage workspace settings
 
 Primary helpers:
 - `requireWorkspaceApiContext(...)`
@@ -168,6 +176,7 @@ Legacy-constraint hardening:
 - `dashboard/supabase/migrations/20260223_011_workspace_mailbox_oauth_enforcement.sql`
 - `dashboard/supabase/migrations/20260223_012_rfq_and_pricing_normalization.sql`
 - `dashboard/supabase/migrations/20260223_013_supabase_advisors_fixes.sql`
+- `dashboard/supabase/migrations/20260223_015_workspace_invites_member_create_and_accept_hardening.sql`
 - Drops old global agent constraints and enforces:
   - `primary key (workspace_id, agent_name)`
   - `unique (workspace_id, email)`

@@ -9,11 +9,11 @@ Ship a workspace-based logistics dashboard + automation system where each authen
 
 - Tenancy: hybrid personal + team workspaces.
 - Signup: open signup with email magic link and Google OAuth.
-- Team join: invite-only (Owner/Admin issues invite token).
+- Team join: invite-only (owner/admin can invite as `admin` or `member`; members can invite as `member` only).
 - Roles:
   - `owner`: full workspace control.
   - `admin`: workspace config + member/invite management.
-  - `member`: RFQ operations only.
+  - `member`: RFQ operations + create member-role invites only.
 - Mailbox model: one mailbox mapping per workspace (`workspace_mailboxes`).
 - Automation topology: shared multi-tenant Modal workers with workspace scoping.
 - Deletion model: soft delete markers (`deleted_at`) with recovery window handled operationally.
@@ -104,6 +104,13 @@ Implemented routes:
 - `POST /api/workspaces/invites/accept`
 
 All operational API routes are now workspace-scoped and role-gated through context helpers.
+
+Invite model hardening (2026-02-23):
+
+- `POST /api/workspaces/[workspaceId]/invites` allows `owner`/`admin`/`member`.
+- `member` callers are restricted to `role='member'` invites only.
+- invite acceptance status updates are now fail-fast (no silent ignore on invite-row update failure).
+- RLS split `workspace_invites` permissions by operation (member create-only, owner/admin manage, invitee self-accept update).
 
 Mailbox hardening:
 
@@ -221,6 +228,7 @@ Executed from this workspace branch:
 - Supabase advisors fixes migration applied:
   - `dashboard/supabase/migrations/20260223_013_supabase_advisors_fixes.sql`
   - `dashboard/supabase/migrations/20260223_014_workspace_members_rls_optimization.sql`
+  - `dashboard/supabase/migrations/20260223_015_workspace_invites_member_create_and_accept_hardening.sql`
 - backfill completed:
   - `rfqsRead=2`
   - `shipmentsUpserted=7`
@@ -251,6 +259,7 @@ Executed from this workspace branch:
 - `dashboard/supabase/migrations/20260223_012_rfq_and_pricing_normalization.sql`
 - `dashboard/supabase/migrations/20260223_013_supabase_advisors_fixes.sql`
 - `dashboard/supabase/migrations/20260223_014_workspace_members_rls_optimization.sql`
+- `dashboard/supabase/migrations/20260223_015_workspace_invites_member_create_and_accept_hardening.sql`
 - `dashboard/supabase_schema.sql`
 - `dashboard/scripts/backfill_rfq_normalized.ts`
 - `dashboard/src/lib/rfq-normalization.ts`

@@ -15,6 +15,9 @@ Workspace-centric Next.js control plane for RFQ operations, pricing, and automat
 - Workspace switcher persisted with secure `workspace_id` cookie.
 - In-app workspace creation from header user menu.
 - Role-aware API guards for `owner`, `admin`, and `member`.
+- Invite permission model:
+  - `owner/admin` can invite as `admin` or `member`
+  - `member` can invite as `member` only
 - Workspace-scoped RFQ/pricing/settings APIs.
 - RFQ and pricing normalization is live behind compatibility APIs:
   - normalized RFQ tables: `rfq_shipments`, `rfq_shipment_containers`, `agent_quotes`
@@ -24,6 +27,7 @@ Workspace-centric Next.js control plane for RFQ operations, pricing, and automat
 - Workspace-scoped agent uniqueness (`workspace_id + agent_name`, `workspace_id + email`) via migration `20260222_010_fix_agents_workspace_scoping.sql`.
 - Workspace mailbox OAuth connect/reconnect/disconnect in workspace settings.
 - Invite links that carry token through auth callback and auto-accept membership.
+- Invite acceptance now treats invite-row status update failures as hard failures (no silent pending drift).
 - Account settings (`/settings/account`) with profile update, session revoke, MFA flag toggle, and soft-delete request.
 - Workspace member/invite management (`/settings/members`).
 - Workspace settings (`/settings/workspace`).
@@ -99,6 +103,7 @@ Notes:
 - Legacy agent global-constraint fix: `../dashboard/supabase/migrations/20260222_010_fix_agents_workspace_scoping.sql`
 - Mailbox OAuth enforcement: `../dashboard/supabase/migrations/20260223_011_workspace_mailbox_oauth_enforcement.sql`
 - RFQ + pricing normalization (zero-downtime): `../dashboard/supabase/migrations/20260223_012_rfq_and_pricing_normalization.sql`
+- Invite permissions + acceptance hardening: `../dashboard/supabase/migrations/20260223_015_workspace_invites_member_create_and_accept_hardening.sql`
 
 ## Related Docs
 
