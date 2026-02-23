@@ -40,6 +40,13 @@ File: `dashboard/src/lib/supabase/middleware.ts`
 - Authenticated users with no active workspace memberships -> redirect `/onboarding`
 - Authenticated users on `/login` or `/signup` -> redirect to callback/default app page
 
+### Dashboard performance path (Speed Insights hardening)
+- Homepage now reads a compact server endpoint: `GET /api/dashboard/summary`.
+- Summary aggregation is centralized in `dashboard/src/lib/dashboard-summary.ts`.
+- Summary responses are cached per workspace for 20 seconds to reduce repeated expensive reads.
+- Recent RFQ table on `/` is deferred so KPI/action content paints first.
+- Above-the-fold blur/animation intensity was reduced on `/`, `/onboarding`, and `/settings/workspace`.
+
 ## 3. Pages
 
 ### Core operations
@@ -112,6 +119,7 @@ Context resolver: `dashboard/src/lib/workspace-context.ts`
 - `/api/pricing/*`
 - `/api/settings`
 - `/api/analytics`
+- `/api/dashboard/summary`
 
 All routes now require workspace context and filter by `workspace_id`.
 
@@ -177,6 +185,7 @@ Legacy-constraint hardening:
 - `dashboard/supabase/migrations/20260223_012_rfq_and_pricing_normalization.sql`
 - `dashboard/supabase/migrations/20260223_013_supabase_advisors_fixes.sql`
 - `dashboard/supabase/migrations/20260223_015_workspace_invites_member_create_and_accept_hardening.sql`
+- `dashboard/supabase/migrations/20260223_016_dashboard_summary_perf_indexes.sql`
 - Drops old global agent constraints and enforces:
   - `primary key (workspace_id, agent_name)`
   - `unique (workspace_id, email)`

@@ -179,6 +179,26 @@ Implemented and deployed:
   - `dashboard/scripts/backfill_rfq_normalized.ts`
 - Dashboard APIs and UI are normalization-aware while preserving existing route contracts.
 
+### 8. Dashboard Speed Insights Optimization (Main branch)
+
+Implemented in commit `89eca19` (currently on `main`):
+
+- Added compact summary endpoint:
+  - `GET /api/dashboard/summary`
+  - route: `dashboard/src/app/api/dashboard/summary/route.ts`
+- Added shared summary aggregation/caching:
+  - `dashboard/src/lib/dashboard-summary.ts`
+  - workspace-keyed 20s cache TTL
+- Homepage `/` data path refactor:
+  - replaced duplicated initial `/api/analytics` + `/api/rfqs` dependence with `useDashboardSummary`
+  - deferred recent RFQ table loading for better above-the-fold paint
+- Added targeted DB indexes for received-quote aggregation:
+  - `dashboard/supabase/migrations/20260223_016_dashboard_summary_perf_indexes.sql`
+- Added regression coverage:
+  - `dashboard/src/app/api/__tests__/dashboard-summary.route.test.ts`
+  - `dashboard/src/hooks/use-dashboard-summary.test.tsx`
+  - `dashboard/src/app/page.test.tsx`
+
 ## Cutover Mode (Current)
 
 The system now runs with normalized reads active and dual-write retained:
@@ -260,6 +280,7 @@ Executed from this workspace branch:
 - `dashboard/supabase/migrations/20260223_013_supabase_advisors_fixes.sql`
 - `dashboard/supabase/migrations/20260223_014_workspace_members_rls_optimization.sql`
 - `dashboard/supabase/migrations/20260223_015_workspace_invites_member_create_and_accept_hardening.sql`
+- `dashboard/supabase/migrations/20260223_016_dashboard_summary_perf_indexes.sql`
 - `dashboard/supabase_schema.sql`
 - `dashboard/scripts/backfill_rfq_normalized.ts`
 - `dashboard/src/lib/rfq-normalization.ts`
@@ -269,8 +290,11 @@ Executed from this workspace branch:
 - `dashboard/src/app/api/workspaces/current/mailbox/oauth/start/route.ts`
 - `dashboard/src/app/api/workspaces/current/mailbox/oauth/callback/route.ts`
 - `dashboard/src/app/api/workspaces/current/mailbox/disconnect/route.ts`
+- `dashboard/src/app/api/dashboard/summary/route.ts`
 - `dashboard/src/lib/mailbox-crypto.ts`
 - `dashboard/src/lib/google-gmail-oauth.ts`
+- `dashboard/src/lib/dashboard-summary.ts`
 - `automations/gmail_workspace_auth.py`
 - `dashboard/src/hooks/use-workspace-mailbox.ts`
+- `dashboard/src/hooks/use-dashboard-summary.ts`
 - `automations/tenant_context.py`

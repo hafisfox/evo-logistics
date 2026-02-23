@@ -19,6 +19,10 @@ Workspace-centric Next.js control plane for RFQ operations, pricing, and automat
   - `owner/admin` can invite as `admin` or `member`
   - `member` can invite as `member` only
 - Workspace-scoped RFQ/pricing/settings APIs.
+- Dashboard performance path optimized for Speed Insights:
+  - homepage now consumes a compact `GET /api/dashboard/summary` endpoint
+  - per-workspace short-lived summary caching (20s) reduces repeated expensive reads
+  - recent RFQ table on `/` is deferred to protect above-the-fold LCP
 - RFQ and pricing normalization is live behind compatibility APIs:
   - normalized RFQ tables: `rfq_shipments`, `rfq_shipment_containers`, `agent_quotes`
   - normalized pricing tables: `do_charge_profiles/rates`, `destination_charge_items/rates`
@@ -95,6 +99,9 @@ Notes:
 - `src/lib/google-gmail-oauth.ts` — Google OAuth URL/token/profile helpers.
 - `src/app/api/rfqs/[rfqId]/select/route.ts` — workspace-aware Modal handoff.
 - `src/lib/validation.ts` — select-agent payload validation (`selected_match` required).
+- `src/app/api/dashboard/summary/route.ts` — compact dashboard summary API used by homepage.
+- `src/lib/dashboard-summary.ts` — summary aggregation + workspace cache (20s TTL).
+- `src/hooks/use-dashboard-summary.ts` — React Query hook for homepage summary fetch path.
 
 ## Migration Notes
 
@@ -104,6 +111,7 @@ Notes:
 - Mailbox OAuth enforcement: `../dashboard/supabase/migrations/20260223_011_workspace_mailbox_oauth_enforcement.sql`
 - RFQ + pricing normalization (zero-downtime): `../dashboard/supabase/migrations/20260223_012_rfq_and_pricing_normalization.sql`
 - Invite permissions + acceptance hardening: `../dashboard/supabase/migrations/20260223_015_workspace_invites_member_create_and_accept_hardening.sql`
+- Dashboard summary performance indexes: `../dashboard/supabase/migrations/20260223_016_dashboard_summary_perf_indexes.sql`
 
 ## Related Docs
 
