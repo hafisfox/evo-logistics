@@ -53,7 +53,7 @@ export function QuoteCard({ quote, rank, isSelected, onSelect }: QuoteCardProps)
             currency="USD"
             className="text-2xl font-bold"
           />
-          <p className="text-xs text-muted-foreground mt-0.5">per container</p>
+          <p className="text-xs text-muted-foreground mt-0.5">per shipment</p>
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-sm">

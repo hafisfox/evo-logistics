@@ -45,6 +45,12 @@ Legacy tenant-hardening patch is in `dashboard/supabase/migrations/20260222_010_
   - `unique (workspace_id, email)`
 - Legacy public-read policies removed.
 - Force RLS enabled and role-aware policy checks implemented via `public.has_workspace_role(...)`.
+- **Database Optimization Pass (Complete):**
+  - RLS Policies optimized to use cached `(SELECT auth.jwt())` wrappers to eliminate `auth_rls_initplan` warnings.
+  - Resolved `multiple_permissive_policies` overlaps by splitting `FOR ALL` roles into explicit `INSERT`/`UPDATE`/`DELETE` grants.
+  - Added B-Tree indexes on 8 foreign key columns to eliminate sequential scans on `ON DELETE CASCADE` actions.
+  - Enforced correct scalar values: `sent_at`/`received_at`/`quoted_at` are stored as `TEXT` to mirror exact UAE-time application strings without timezone coercion. `transit_time`/`free_time` stored as `INTEGER`.
+  - Added `Reminded` to the `quote_status` enum.
 
 ### 2. Dashboard auth + workspace context
 
@@ -141,6 +147,8 @@ Current behavior:
 - Unknown/disconnected mailbox events are ignored by default and logged to `audit_events`.
 - Optional fallback can be enabled with `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK=true` during cutover.
 - Phase 3 quote selection now supports exact lookup by `selected_match` with legacy fallback.
+- `scheduled_tasks.py` handles strict cross-tenant data isolation by looping explicitly and uses idempotent exact updates matching `rfq_id` + `agent_email`.
+- `phase_2_quote_analysis.py` triggers exact-match manager notifications without repeating identical thresholds.
 
 ## Dual-Mode Cutover (Active)
 

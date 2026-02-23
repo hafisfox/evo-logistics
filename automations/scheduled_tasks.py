@@ -7,7 +7,7 @@ from gmail_workspace_auth import (
     WorkspaceMailboxAuthError,
     get_gmail_service_for_workspace,
 )
-from tenant_context import scoped_select, scoped_eq_filter, scoped_update_by_eq
+from tenant_context import scoped_select, scoped_eq_filter
 
 # =====================================================================
 # TIMEZONES
@@ -159,20 +159,35 @@ def check_agent_reminders():
     
     now_utc = datetime.now(timezone.utc)
     
-    # Get all 'Processing' RFQ IDs
-    all_rfqs = _get_table(supabase, "master_rfqs")
+    # Get all connected workspace IDs
+    workspace_rows = (
+        supabase.table("workspace_mailboxes")
+        .select("workspace_id")
+        .eq("status", "connected")
+        .execute()
+        .data or []
+    )
+    workspace_ids = list({r["workspace_id"] for r in workspace_rows if r.get("workspace_id")})
+    if not workspace_ids:
+        print("No connected workspaces found for reminders.")
+        return
+
+    # Get Processing RFQs scoped per workspace
+    all_rfqs = []
+    all_agent_rows = []
+    for wid in workspace_ids:
+        all_rfqs += _get_table(supabase, "master_rfqs", wid)
+        all_agent_rows += _get_table(supabase, "agent_outbound_log", wid)
+
     processing_rfq_keys = {
         (row.get('workspace_id'), row.get('rfq_id'))
         for row in all_rfqs
         if row.get('status') == 'Processing' and row.get('rfq_id') and row.get('workspace_id')
     }
-                
+
     if not processing_rfq_keys:
         print("No active RFQs to process for reminders.")
         return
-        
-    # Get all outbound log rows for those RFQs
-    all_agent_rows = _get_table(supabase, "agent_outbound_log")
     reminders_sent = 0
     
     for row in all_agent_rows:
@@ -211,17 +226,23 @@ def check_agent_reminders():
                     f"Regards,\nPricing Team"
                 )
                 send_email(workspace_gmail_service, agent_email, subject, body)
-                
-                match_key = f"{rfq_id}_{agent_email}"
+
+                # Update ALL log rows for this agent+rfq to Reminded.
+                # Rows use match keys like `rfq_id_email_shipnum_CARRIER_hash`
+                # so we can't do an exact match — update by rfq_id + agent_email.
                 if workspace_id:
-                    scoped_update_by_eq(
-                        supabase,
-                        "agent_outbound_log",
-                        workspace_id,
-                        {"status": "Reminded"},
-                        "match",
-                        match_key,
-                    )
+                    try:
+                        (
+                            supabase.table("agent_outbound_log")
+                            .update({"status": "Reminded"})
+                            .eq("workspace_id", workspace_id)
+                            .eq("rfq_id", rfq_id)
+                            .eq("agent_email", agent_email)
+                            .eq("status", "Requested")
+                            .execute()
+                        )
+                    except Exception as upd_err:
+                        print(f"Warning: Could not update Reminded status for {rfq_id}/{agent_email}: {upd_err}")
                 print(
                     f"Sent reminder for RFQ {rfq_id} to {agent_email} "
                     f"from {workspace_mailbox_email}"
@@ -248,8 +269,20 @@ def check_customer_followups():
     
     now_uae = datetime.now(UAE_TZ)
     
-    # Get all 'Quoted' RFQs
-    all_rfqs = _get_table(supabase, "master_rfqs")
+    # Get all connected workspace IDs
+    workspace_rows = (
+        supabase.table("workspace_mailboxes")
+        .select("workspace_id")
+        .eq("status", "connected")
+        .execute()
+        .data or []
+    )
+    workspace_ids = list({r["workspace_id"] for r in workspace_rows if r.get("workspace_id")})
+
+    # Get Quoted RFQs scoped per workspace
+    all_rfqs = []
+    for wid in workspace_ids:
+        all_rfqs += _get_table(supabase, "master_rfqs", wid)
     followups_sent = 0
     
     for row in all_rfqs:

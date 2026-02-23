@@ -104,7 +104,16 @@ Enforcement migration:
 ### Scheduled Tasks (`scheduled_tasks.py`)
 
 - resolves Gmail credentials per workspace row before sending reminders/follow-ups
-- defaults notification targets to the connected workspace mailbox
+- ensures strict cross-tenant data isolation (queries explicitly loop through active `workspace_id`s instead of leaking across tenants)
+- implements idempotent agent reminder updates using compound keys (`workspace_id`, `rfq_id`, `agent_email`)
+- updates `agent_outbound_log` with the new `'Reminded'` enum status
+
+### Data Types & Schema Additions
+
+A robust optimization pass was applied to the Supabase schema:
+- **Timestamp strings:** `sent_at`, `received_at`, and `quoted_at` are stored as `TEXT` (format: `YYYY-MM-DD HH:MI AM`) to exactly match the UAE local-time strings produced by the automations without risking Postgres timezone coercion bugs.
+- **Durations:** `transit_time` and `free_time` are strictly stored as `INTEGER`.
+- **Deduplication:** Manager threshold notifications fire exactly once when `quote_count == QUOTE_THRESHOLD`, preventing duplicate emails on subsequent quotes.
 
 ## 7. Gmail Watch Renewal
 

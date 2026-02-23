@@ -84,7 +84,7 @@ class QuoteData(BaseModel):
         return v
 
 class ExtractedQuotes(BaseModel):
-    extraction_reasoning: str = Field(description="Step-by-step reasoning linking agent responses to the correct shipment numbers, multiplying per-container costs, and mapping carrier shorthands before extracting data.")
+    extraction_reasoning: str = Field(description="Step-by-step reasoning linking agent responses to the correct shipment numbers and mapping carrier shorthands. A single price is the TOTAL for all containers on that shipment. Only compute a sum when the agent provides separate per-container-type rates.")
     quotes: List[QuoteData] = Field(default_factory=list, description="List of extracted rate objects")
 
 # =====================================================================
@@ -508,7 +508,7 @@ CONSERVATIVE RULES:
 1) Extract only explicit ocean-freight quotes (O/F, Ocean Freight, Our rate, best offer, USDxxxx/20GP, USDxxxx/40HQ, table columns like 40HQ($)).
 2) If no explicit ocean-freight amount is present, return quotes: [].
 3) If multiple shipments exist and mapping to shipment_number is ambiguous, return quotes: [] for ambiguous content.
-4) Mixed container types on the same route are one shipment. If quote is per container type, multiply by RFQ quantities and sum into one total shipment price.
+4) A single price quoted for a shipment (same POL, POD, ready date) is ALWAYS the TOTAL price for ALL containers on that shipment combined — do NOT multiply it by container count or quantity. Only multiply when the agent explicitly provides SEPARATE per-container-type rates (e.g. "40FT: USD800, 20FT: USD500") — in that case multiply each rate by its RFQ quantity and sum them.
 5) If one message contains multiple valid options for the same shipment/carrier (different ETD/vessel/price), return all options as separate quote objects.
 
 EXCLUDE THESE FROM PRICE (never add into ocean-freight total):
@@ -561,6 +561,14 @@ Output: quotes=[].
 5) Mixed abbreviations:
 Input: "ETD 1/20 ... TT about 27days ... 14 FT"
 Output: etd normalized with inferred year, transit_time=27, free_time=14.
+
+6) Single price for multi-container shipment (MOST COMMON CASE):
+RFQ: 2x40FT + 1x20FT, SHENZHEN → JEBEL ALI. Agent: "Price: USD 1900"
+Output: price=1900. This is the TOTAL for all 3 containers — do NOT multiply.
+
+7) Per-container-type breakdown (requires multiplication):
+RFQ: 2x40FT + 1x20FT. Agent: "40FT: USD700, 20FT: USD500"
+Output: price = (700×2) + (500×1) = 1900.
 
 CRITICAL:
 - Use RFQ_CONTEXT shipment numbering.
@@ -1190,7 +1198,12 @@ def _check_threshold_and_notify(
     workspace_id: str,
     notification_email: str,
 ):
-    """Check if enough valid quotes received and notify manager."""
+    """Check if enough valid quotes received and notify manager.
+
+    Sends the notification exactly once: only when the RFQ status is 'Processing'
+    and the threshold is freshly met. After notifying, status is updated to prevent
+    duplicate notifications on subsequent quote arrivals.
+    """
     # Get the master RFQ
     master_rows = _get_rows_by_filter(supabase, "master_rfqs", "rfq_id", ref_id, workspace_id)
     if not master_rows:
@@ -1199,14 +1212,21 @@ def _check_threshold_and_notify(
 
     rfq = master_rows[0]
 
+    # Only notify when still in Processing state — guards against repeated notifications
+    current_status = (rfq.get("status") or "").strip()
+    if current_status.lower() != "processing":
+        print(f"Skipping threshold notify for {ref_id}: status is '{current_status}' (not Processing)")
+        return
+
     # Get all quotes for this RFQ
     all_quote_rows = _get_rows_by_filter(supabase, "agent_outbound_log", "rfq_id", ref_id, workspace_id)
 
     # Build summary
     summary = build_quote_summary(rfq, all_quote_rows)
 
-    if summary['threshold_met']:
-        print(f"Threshold met for {ref_id}: {summary['quote_count']} valid quotes")
+    if summary['threshold_met'] and summary['quote_count'] == QUOTE_THRESHOLD:
+        # Only notify at the exact threshold crossing (not on every subsequent quote)
+        print(f"Threshold crossed for {ref_id}: {summary['quote_count']} valid quotes — notifying manager")
 
         # Send manager notification
         try:
@@ -1214,6 +1234,8 @@ def _check_threshold_and_notify(
             print(f"Manager notification sent for {ref_id}")
         except Exception as e:
             print(f"Failed to send manager notification: {e}")
+    elif summary['threshold_met']:
+        print(f"Threshold already met for {ref_id}: {summary['quote_count']} quotes (notification already sent at {QUOTE_THRESHOLD})")
     else:
         print(f"Threshold not met for {ref_id}: {summary['quote_count']}/{QUOTE_THRESHOLD} valid quotes")
 

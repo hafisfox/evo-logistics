@@ -164,6 +164,12 @@ Legacy-constraint hardening:
   - `unique (workspace_id, email)`
 This prevents "Agent already exists" conflicts across different workspaces.
 
+Postgres Performance Tuning (via Supabase Best Practices):
+- **RLS Query Plan Fixing**: `auth.uid()` and `auth.jwt()` logic wrapped in `(SELECT ...)` caching subqueries.
+- **Multiple Permissive Policies**: Dropped all `FOR ALL` roles and split them into mapped `FOR INSERT`/`FOR UPDATE`/`FOR DELETE` grants to prevent overlaps with `FOR SELECT` roles during table reads.
+- **Unindexed Foreign Keys**: Indexed 8 missing composite and workspace foreign keys to avoid sequence scanning.
+- **Scalar Adjustments**: Upgraded automation-layer scalars for `sent_at`/`received_at`/`quoted_at` to use `TEXT` (safely storing UAE string outputs) and bound `transit_time`/`free_time` as explicit `INTEGER` types to avoid frontend casting mismatches. Added `Reminded` to the `quote_status` enum.
+
 ## 8. Modal Integration
 
 Selection route: `POST /api/rfqs/[rfqId]/select`
