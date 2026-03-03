@@ -7,7 +7,7 @@ from gmail_workspace_auth import (
     WorkspaceMailboxAuthError,
     get_gmail_service_for_workspace,
 )
-from tenant_context import scoped_select, scoped_eq_filter
+from tenant_context import scoped_select, scoped_eq_filter, scoped_update_by_eq
 
 # =====================================================================
 # TIMEZONES
@@ -123,29 +123,34 @@ def _is_china_business_hours(dt: datetime) -> bool:
     """Check if given datetime (in China timezone) is within Mon-Fri 09:00-17:00."""
     return dt.weekday() < 5 and 9 <= dt.hour < 17
 
-def _get_reminder_target_time(sent_at_utc: datetime) -> datetime:
+def _get_reminder_target_time(sent_at_utc: datetime, reminder_count: int = 0) -> datetime:
     """
-    Given the time the RFQ was sent, calculate when the reminder should run.
-    - If sent during business hours: 3 hours later (if still in business hours)
-    - If sending after hours or 3 hours lands after 17:00: next business day at 10:00 AM
+    Given the time the RFQ was sent and reminder count, calculate when the next reminder should run.
+
+    Escalation chain (in China business hours):
+      reminder_count=0 → 3 hours after sent (1st reminder)
+      reminder_count=1 → 6 hours after sent (2nd reminder)
+      reminder_count>=2 → 12 hours after sent (escalation to manager)
     """
+    hours_map = {0: 3, 1: 6}
+    hours_delay = hours_map.get(reminder_count, 12)
+
     sent_at_cn = sent_at_utc.astimezone(CHINA_TZ)
-    
-    # Calculate initial 3 hour mark
-    target_cn = sent_at_cn + timedelta(hours=3)
-    
-    # If the target is during business hours, return it
+    target_cn = sent_at_cn + timedelta(hours=hours_delay)
+
     if _is_china_business_hours(target_cn):
         return target_cn
-    
+
     # Target is out of hours. Move to next business day at 10:00 AM CST
     next_day = sent_at_cn + timedelta(days=1)
-    
-    # If next_day is Saturday (5) or Sunday (6), advance to Monday
     while next_day.weekday() >= 5:
         next_day += timedelta(days=1)
-        
+
     return next_day.replace(hour=10, minute=0, second=0, microsecond=0)
+
+
+# Maximum reminders before auto-closing the agent for this RFQ
+MAX_REMINDER_COUNT = 3
 
 @app.function(
     schedule=modal.Cron("*/15 * * * *"),
@@ -197,19 +202,25 @@ def check_agent_reminders():
         sent_at_str = row.get('sent_at', '')
         agent_email = row.get('agent_email', '')
         agent_name = row.get('agent_name', 'Agent')
-        
+        reminder_count = int(row.get('reminder_count') or 0)
+
         rfq_key = (workspace_id, rfq_id)
-        if rfq_key not in processing_rfq_keys or status != "Requested" or not sent_at_str or not agent_email:
+        # Process rows that are Requested or Reminded (for escalation)
+        if rfq_key not in processing_rfq_keys or status not in ("Requested", "Reminded") or not sent_at_str or not agent_email:
             continue
-            
+
+        # Skip if max reminders exceeded — auto-close
+        if reminder_count >= MAX_REMINDER_COUNT:
+            continue
+
         try:
             # Parse sent_at_str (UAE TIME: "%Y-%m-%d %I:%M %p")
             sent_at_uae_naive = datetime.strptime(sent_at_str, "%Y-%m-%d %I:%M %p")
             sent_at_uae = sent_at_uae_naive.replace(tzinfo=UAE_TZ)
             sent_at_utc = sent_at_uae.astimezone(timezone.utc)
-            
-            target_time_utc = _get_reminder_target_time(sent_at_utc).astimezone(timezone.utc)
-            
+
+            target_time_utc = _get_reminder_target_time(sent_at_utc, reminder_count).astimezone(timezone.utc)
+
             if now_utc >= target_time_utc:
                 workspace_gmail_service, workspace_mailbox_email = _get_workspace_gmail_client(
                     supabase, workspace_id, workspace_mailbox_cache
@@ -217,38 +228,61 @@ def check_agent_reminders():
                 if not workspace_gmail_service:
                     continue
 
-                subject = f"REMINDER: Quote Request [Ref:{rfq_id}]"
-                body = (
-                    f"Dear {agent_name},\n\n"
-                    f"This is a gentle reminder regarding our rate request for RFQ {rfq_id}.\n"
-                    f"If you have already responded, please disregard this email. If not, we "
-                    f"would appreciate receiving your quotation as soon as possible.\n\n"
-                    f"Regards,\nPricing Team"
-                )
+                # Escalate email tone based on reminder count
+                if reminder_count == 0:
+                    subject = f"REMINDER: Quote Request [Ref:{rfq_id}]"
+                    body = (
+                        f"Dear {agent_name},\n\n"
+                        f"This is a gentle reminder regarding our rate request for RFQ {rfq_id}.\n"
+                        f"If you have already responded, please disregard this email. If not, we "
+                        f"would appreciate receiving your quotation as soon as possible.\n\n"
+                        f"Regards,\nPricing Team"
+                    )
+                elif reminder_count == 1:
+                    subject = f"2ND REMINDER: Quote Request [Ref:{rfq_id}]"
+                    body = (
+                        f"Dear {agent_name},\n\n"
+                        f"This is a second reminder for our rate request RFQ {rfq_id}.\n"
+                        f"We need your quotation urgently. Please respond at your earliest convenience.\n\n"
+                        f"Regards,\nPricing Team"
+                    )
+                else:
+                    subject = f"URGENT: Quote Request [Ref:{rfq_id}]"
+                    body = (
+                        f"Dear {agent_name},\n\n"
+                        f"We have not received a response to our rate request RFQ {rfq_id} "
+                        f"despite multiple reminders.\n"
+                        f"This is our final follow-up. If we do not hear back, we will proceed "
+                        f"with alternative options.\n\n"
+                        f"Regards,\nPricing Team"
+                    )
+
                 send_email(workspace_gmail_service, agent_email, subject, body)
 
-                # Update ALL log rows for this agent+rfq to Reminded.
-                # Rows use match keys like `rfq_id_email_shipnum_CARRIER_hash`
-                # so we can't do an exact match — update by rfq_id + agent_email.
+                # Update status and increment reminder_count
+                new_reminder_count = reminder_count + 1
                 if workspace_id:
                     try:
                         (
                             supabase.table("agent_outbound_log")
-                            .update({"status": "Reminded"})
+                            .update({
+                                "status": "Reminded",
+                                "reminder_count": new_reminder_count,
+                            })
                             .eq("workspace_id", workspace_id)
                             .eq("rfq_id", rfq_id)
                             .eq("agent_email", agent_email)
-                            .eq("status", "Requested")
+                            .in_("status", ["Requested", "Reminded"])
                             .execute()
                         )
                     except Exception as upd_err:
                         print(f"Warning: Could not update Reminded status for {rfq_id}/{agent_email}: {upd_err}")
                 print(
-                    f"Sent reminder for RFQ {rfq_id} to {agent_email} "
+                    f"Sent reminder #{new_reminder_count} for RFQ {rfq_id} to {agent_email} "
                     f"from {workspace_mailbox_email}"
                 )
                 reminders_sent += 1
-                
+
         except Exception as e:
             print(f"Error processing reminder for RFQ {rfq_id} to {agent_email}: {e}")
 
@@ -343,6 +377,166 @@ def check_customer_followups():
             print(f"Error processing follow-up for RFQ {rfq_id}: {e}")
 
     print(f"Processed customer follow-ups. Sent {followups_sent} follow-ups.")
+
+# =====================================================================
+# QUOTE EXPIRY CHECK (Every 6 hours)
+# =====================================================================
+@app.function(
+    schedule=modal.Cron("0 */6 * * *"),
+    image=image,
+    secrets=[modal.Secret.from_name("evo-logistics-env")]
+)
+def check_quote_expiry():
+    """Mark expired quotes and warn customers about expiring quotes."""
+    supabase = get_supabase_client()
+    today = datetime.now(UAE_TZ).date()
+
+    # Get all connected workspace IDs
+    workspace_rows = (
+        supabase.table("workspace_mailboxes")
+        .select("workspace_id")
+        .eq("status", "connected")
+        .execute()
+        .data or []
+    )
+    workspace_ids = list({r["workspace_id"] for r in workspace_rows if r.get("workspace_id")})
+
+    expired_count = 0
+    for wid in workspace_ids:
+        # Find quotes with validity_date in the past
+        try:
+            expired_quotes = (
+                supabase.table("agent_quotes")
+                .select("id, rfq_id, agent_name, carrier, validity_date")
+                .eq("workspace_id", wid)
+                .eq("status", "Received")
+                .lt("validity_date", str(today))
+                .not_.is_("validity_date", "null")
+                .execute()
+                .data or []
+            )
+
+            for q in expired_quotes:
+                (
+                    supabase.table("agent_quotes")
+                    .update({"status": "Expired"})
+                    .eq("id", q["id"])
+                    .execute()
+                )
+                # Log activity
+                try:
+                    supabase.table("activity_logs").insert({
+                        "workspace_id": wid,
+                        "entity_type": "quote",
+                        "entity_id": q["id"],
+                        "action": "expired",
+                        "metadata": {
+                            "rfq_id": q.get("rfq_id"),
+                            "carrier": q.get("carrier"),
+                            "validity_date": q.get("validity_date"),
+                        },
+                    }).execute()
+                except Exception:
+                    pass
+                expired_count += 1
+
+        except Exception as e:
+            print(f"Error checking quote expiry for workspace {wid}: {e}")
+
+    print(f"Quote expiry check complete. Marked {expired_count} quotes as expired.")
+
+
+# =====================================================================
+# STALE RFQ DETECTION (Every 4 hours)
+# =====================================================================
+@app.function(
+    schedule=modal.Cron("0 */4 * * *"),
+    image=image,
+    secrets=[modal.Secret.from_name("evo-logistics-env")]
+)
+def check_stale_rfqs():
+    """Detect RFQs with no quotes after 48 hours and log for escalation."""
+    supabase = get_supabase_client()
+    now_utc = datetime.now(timezone.utc)
+    stale_threshold = now_utc - timedelta(hours=48)
+
+    workspace_rows = (
+        supabase.table("workspace_mailboxes")
+        .select("workspace_id")
+        .eq("status", "connected")
+        .execute()
+        .data or []
+    )
+    workspace_ids = list({r["workspace_id"] for r in workspace_rows if r.get("workspace_id")})
+
+    stale_count = 0
+    for wid in workspace_ids:
+        try:
+            # Get Processing RFQs older than 48 hours
+            processing_rfqs = (
+                supabase.table("master_rfqs")
+                .select("rfq_id, customer_email, received_at")
+                .eq("workspace_id", wid)
+                .eq("status", "Processing")
+                .execute()
+                .data or []
+            )
+
+            for rfq in processing_rfqs:
+                received_at_str = rfq.get("received_at", "")
+                if not received_at_str:
+                    continue
+
+                try:
+                    received_at_naive = datetime.strptime(
+                        str(received_at_str).strip(), "%Y-%m-%d %I:%M %p"
+                    )
+                    received_at = received_at_naive.replace(tzinfo=UAE_TZ).astimezone(timezone.utc)
+                except (ValueError, TypeError):
+                    continue
+
+                if received_at > stale_threshold:
+                    continue
+
+                # Check if any quotes exist
+                quotes = (
+                    supabase.table("agent_quotes")
+                    .select("id")
+                    .eq("workspace_id", wid)
+                    .eq("rfq_id", rfq["rfq_id"])
+                    .eq("status", "Received")
+                    .limit(1)
+                    .execute()
+                    .data or []
+                )
+
+                if not quotes:
+                    # Log as stale — no quotes after 48 hours
+                    hours_elapsed = (now_utc - received_at).total_seconds() / 3600
+                    try:
+                        supabase.table("activity_logs").insert({
+                            "workspace_id": wid,
+                            "entity_type": "rfq",
+                            "entity_id": rfq["rfq_id"],
+                            "action": "stale_no_quotes",
+                            "metadata": {
+                                "hours_elapsed": round(hours_elapsed, 1),
+                                "customer_email": rfq.get("customer_email"),
+                            },
+                        }).execute()
+                    except Exception:
+                        pass
+                    print(
+                        f"STALE RFQ: {rfq['rfq_id']} has no quotes after "
+                        f"{hours_elapsed:.0f} hours (workspace {wid})"
+                    )
+                    stale_count += 1
+
+        except Exception as e:
+            print(f"Error checking stale RFQs for workspace {wid}: {e}")
+
+    print(f"Stale RFQ check complete. Found {stale_count} stale RFQs.")
+
 
 if __name__ == "__main__":
     app.serve()

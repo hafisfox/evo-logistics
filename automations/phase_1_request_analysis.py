@@ -99,6 +99,17 @@ class ShipmentData(BaseModel):
     service_type: str = Field("port-to-port", description="Service Level")
     pickup_address: Optional[str] = Field(None, description="Origin Collection Address")
     delivery_address: Optional[str] = Field(None, description="Destination Delivery Address")
+    # Ocean freight detail fields
+    commodity_description: Optional[str] = Field(None, description="Cargo commodity description (e.g. steel coils, frozen food)")
+    hs_code: Optional[str] = Field(None, description="HS/HTS code if mentioned (6-10 digit)")
+    incoterms: Optional[str] = Field(None, description="Trade terms: EXW, FCA, FAS, FOB, CFR, CIF, CPT, CIP, DAP, DPU, DDP")
+    is_dangerous_goods: Optional[bool] = Field(False, description="True if cargo is hazmat/DG/IMO classified")
+    dg_class: Optional[str] = Field(None, description="IMO/IMDG dangerous goods class if applicable")
+    is_reefer: Optional[bool] = Field(False, description="True if temperature-controlled container required")
+    reefer_temperature: Optional[float] = Field(None, description="Required temperature in Celsius if reefer")
+    special_requirements: Optional[str] = Field(None, description="Special handling: fumigation, lashing, flat-rack, OOG, etc.")
+    cargo_weight_kg: Optional[float] = Field(None, description="Total cargo weight in kilograms")
+    cargo_volume_cbm: Optional[float] = Field(None, description="Total cargo volume in cubic meters")
 
     @field_validator('pod_hint', mode='before')
     @classmethod
@@ -402,6 +413,11 @@ def _build_normalized_shipments(shipments: list) -> list:
                 }
             ]
 
+        # Normalize incoterms
+        raw_incoterms = (shipment.get("incoterms") or "").strip().upper()
+        valid_incoterms = {'EXW','FCA','FAS','FOB','CFR','CIF','CPT','CIP','DAP','DPU','DDP'}
+        incoterms = raw_incoterms if raw_incoterms in valid_incoterms else None
+
         normalized.append(
             {
                 "shipment_number": idx + 1,
@@ -413,6 +429,17 @@ def _build_normalized_shipments(shipments: list) -> list:
                 "pickup_address": normalize_address(shipment.get("pickup_address")),
                 "delivery_address": normalize_address(shipment.get("delivery_address")),
                 "containers": normalized_containers,
+                # Ocean freight detail fields
+                "commodity_description": (shipment.get("commodity_description") or "").strip() or None,
+                "hs_code": (shipment.get("hs_code") or "").strip() or None,
+                "incoterms": incoterms,
+                "is_dangerous_goods": bool(shipment.get("is_dangerous_goods")),
+                "dg_class": (shipment.get("dg_class") or "").strip() or None,
+                "is_reefer": bool(shipment.get("is_reefer")),
+                "reefer_temperature": shipment.get("reefer_temperature"),
+                "special_requirements": (shipment.get("special_requirements") or "").strip() or None,
+                "cargo_weight_kg": shipment.get("cargo_weight_kg"),
+                "cargo_volume_cbm": shipment.get("cargo_volume_cbm"),
             }
         )
 
@@ -428,6 +455,16 @@ def _build_normalized_shipments(shipments: list) -> list:
                 "pickup_address": None,
                 "delivery_address": None,
                 "containers": [{"line_number": 1, "container_type": "40HQ", "qty": 1}],
+                "commodity_description": None,
+                "hs_code": None,
+                "incoterms": None,
+                "is_dangerous_goods": False,
+                "dg_class": None,
+                "is_reefer": False,
+                "reefer_temperature": None,
+                "special_requirements": None,
+                "cargo_weight_kg": None,
+                "cargo_volume_cbm": None,
             }
         )
 
@@ -457,6 +494,16 @@ def _dual_write_normalized_rfq(supabase, workspace_id: str, rfq_id: str, shipmen
                 "service_type": shipment["service_type"],
                 "pickup_address": shipment["pickup_address"],
                 "delivery_address": shipment["delivery_address"],
+                "commodity_description": shipment.get("commodity_description"),
+                "hs_code": shipment.get("hs_code"),
+                "incoterms": shipment.get("incoterms"),
+                "is_dangerous_goods": shipment.get("is_dangerous_goods", False),
+                "dg_class": shipment.get("dg_class"),
+                "is_reefer": shipment.get("is_reefer", False),
+                "reefer_temperature": shipment.get("reefer_temperature"),
+                "special_requirements": shipment.get("special_requirements"),
+                "cargo_weight_kg": shipment.get("cargo_weight_kg"),
+                "cargo_volume_cbm": shipment.get("cargo_volume_cbm"),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             },
         )
@@ -602,6 +649,25 @@ def format_pricing_content(shipments: list, is_multi: bool) -> str:
             lines.append(f"Delivery: {s['delivery_address']}")
         if s['delivery_deadline']:
             lines.append(f"Delivery Deadline: {s['delivery_deadline']}")
+        # Cargo detail fields for accurate agent quoting
+        if s.get('commodity_description'):
+            lines.append(f"Commodity: {s['commodity_description']}")
+        if s.get('hs_code'):
+            lines.append(f"HS Code: {s['hs_code']}")
+        if s.get('incoterms'):
+            lines.append(f"Incoterms: {s['incoterms']}")
+        if s.get('cargo_weight_kg'):
+            lines.append(f"Weight: {s['cargo_weight_kg']} kg")
+        if s.get('cargo_volume_cbm'):
+            lines.append(f"Volume: {s['cargo_volume_cbm']} CBM")
+        if s.get('is_dangerous_goods'):
+            dg_info = f"DG Class {s['dg_class']}" if s.get('dg_class') else "Yes"
+            lines.append(f"Dangerous Goods: {dg_info}")
+        if s.get('is_reefer'):
+            temp_info = f" ({s['reefer_temperature']}°C)" if s.get('reefer_temperature') is not None else ""
+            lines.append(f"Reefer: Yes{temp_info}")
+        if s.get('special_requirements'):
+            lines.append(f"Special Requirements: {s['special_requirements']}")
         parts.append('\n'.join(lines))
     return '\n\n'.join(parts)
 
@@ -950,7 +1016,17 @@ Return ONLY raw JSON matching:
       "delivery_deadline": null,
       "service_type": "port-to-port",
       "pickup_address": null,
-      "delivery_address": null
+      "delivery_address": null,
+      "commodity_description": null,
+      "hs_code": null,
+      "incoterms": null,
+      "is_dangerous_goods": false,
+      "dg_class": null,
+      "is_reefer": false,
+      "reefer_temperature": null,
+      "special_requirements": null,
+      "cargo_weight_kg": null,
+      "cargo_volume_cbm": null
     }
   ]
 }
@@ -1036,9 +1112,54 @@ pickup_address / delivery_address:
 - Capture full textual address blocks exactly as written (including warehouse names and map URLs if present).
 - Do not convert full addresses into port names.
 
-OUT-OF-SCHEMA DETAILS:
-- Commodity, weight, urgency, direct vessel request, dem/det requirement, SOC restrictions, ETD/ETA/TT request fields are not structured fields here.
-- Mention them briefly in extraction_reasoning if relevant to interpretation.
+CARGO DETAIL FIELDS:
+
+commodity_description:
+- Extract cargo type/description if mentioned: "steel coils", "frozen chicken", "garments", "chemicals", "furniture", "tiles", "machinery", etc.
+- Use exact wording from email. Set null if not mentioned.
+
+hs_code:
+- Extract 6-10 digit HS/HTS codes if mentioned (patterns like "HS 7208.51", "HTS 0207.14.0000", "HS code: 6910").
+- Set null if not mentioned.
+
+incoterms:
+- Extract trade terms: EXW, FCA, FAS, FOB, CFR, CIF, CPT, CIP, DAP, DPU, DDP.
+- Must be one of these exact values or null.
+- "FOB" in origin context (e.g., "FOB Shanghai") = incoterms "FOB".
+- "CIF" in pricing context = incoterms "CIF".
+
+is_dangerous_goods:
+- Set true if email mentions: DG, dangerous goods, hazmat, hazardous, IMO class, UN number, MSDS, flammable, corrosive, explosive, radioactive, toxic.
+- Default false.
+
+dg_class:
+- Extract IMO/IMDG class if mentioned (e.g., "IMO class 3", "DG class 8", "UN 1993").
+- Set null if not mentioned or not DG.
+
+is_reefer:
+- Set true if email mentions: reefer, refrigerated, frozen, chilled, temperature-controlled, cold chain, RF container.
+- Also true if container type is implicitly reefer (e.g., "20RF", "40RH").
+- Default false.
+
+reefer_temperature:
+- Extract temperature in Celsius if mentioned (e.g., "-18°C", "maintain at -25", "frozen at minus 18").
+- Convert Fahrenheit to Celsius if F is specified.
+- Set null if not mentioned.
+
+special_requirements:
+- Extract any special handling mentioned: fumigation, lashing, flat-rack, OOG (out of gauge), oversized, SOC (shipper-owned container), direct vessel, no transshipment, ventilation, stackability, food-grade container, etc.
+- Capture as comma-separated text. Set null if none.
+
+cargo_weight_kg:
+- Extract total weight in kilograms.
+- Convert from tonnes (×1000), lbs (÷2.205), MT/metric tons (×1000).
+- Patterns: "20 tonnes", "5000 kg", "44000 lbs", "25 MT".
+- Set null if not mentioned.
+
+cargo_volume_cbm:
+- Extract total volume in cubic meters (CBM/m³).
+- Patterns: "50 CBM", "30 m³", "28 cubic meters".
+- Set null if not mentioned.
 
 FEW-SHOT PATTERN A (door-to-port):
 Input: "Door to Jebel Ali port, 1x20FT, loading point in Dongguan address, cargo ready 26th December."

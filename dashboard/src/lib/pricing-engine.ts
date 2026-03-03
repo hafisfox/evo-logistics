@@ -1,10 +1,19 @@
-import type { DOCharge, DestinationCharge, TransportCharge, ShipmentCost, PricingResult } from "@/types/pricing";
+import type {
+  DOCharge,
+  DestinationCharge,
+  TransportCharge,
+  ShipmentCost,
+  PricingResult,
+  SurchargeBreakdown,
+} from "@/types/pricing";
+import type { QuoteSurcharges } from "@/types/rfq";
 
-export const EXCHANGE_RATE = 3.685;
+export const DEFAULT_EXCHANGE_RATE = 3.685;
 
 export interface PricingSettings {
   margin: number;
   quoteThreshold: number;
+  exchangeRate?: number;
 }
 
 export const DEFAULT_SETTINGS: PricingSettings = {
@@ -129,17 +138,80 @@ function getTransportCharge(
   return 0;
 }
 
+/** Sum surcharge values from a QuoteSurcharges object */
+export function sumSurcharges(surcharges: QuoteSurcharges | null | undefined): number {
+  if (!surcharges) return 0;
+  let total = 0;
+  for (const value of Object.values(surcharges)) {
+    if (typeof value === "number" && value > 0) {
+      total += value;
+    }
+  }
+  return total;
+}
+
+/** Build detailed surcharge breakdown */
+function buildSurchargeBreakdown(
+  surcharges: QuoteSurcharges | null | undefined
+): SurchargeBreakdown | null {
+  if (!surcharges) return null;
+  const breakdown: SurchargeBreakdown = {
+    BAF: surcharges.BAF ?? 0,
+    CAF: surcharges.CAF ?? 0,
+    THC: surcharges.THC ?? 0,
+    PSS: surcharges.PSS ?? 0,
+    GRI: surcharges.GRI ?? 0,
+    ISPS: surcharges.ISPS ?? 0,
+    ORC: surcharges.ORC ?? 0,
+    war_risk: surcharges.war_risk ?? 0,
+    congestion: surcharges.congestion ?? 0,
+    other: 0,
+    total: 0,
+  };
+  // Sum known keys
+  const knownKeys = new Set([
+    "BAF", "CAF", "THC", "PSS", "GRI", "ISPS", "ORC", "war_risk", "congestion",
+  ]);
+  for (const [key, value] of Object.entries(surcharges)) {
+    if (!knownKeys.has(key) && typeof value === "number" && value > 0) {
+      breakdown.other += value;
+    }
+  }
+  breakdown.total =
+    breakdown.BAF + breakdown.CAF + breakdown.THC + breakdown.PSS +
+    breakdown.GRI + breakdown.ISPS + breakdown.ORC + breakdown.war_risk +
+    breakdown.congestion + breakdown.other;
+  return breakdown.total > 0 ? breakdown : null;
+}
+
 export function calculatePortPrice(
   oceanFreightUSD: number,
-  settings: PricingSettings
-): { finalPriceAED: number; finalPriceUSD: number; marginAmount: number; oceanFreightAED: number } {
-  const oceanFreightAED = oceanFreightUSD * EXCHANGE_RATE;
-  const withMargin = oceanFreightAED * (1 + settings.margin);
+  settings: PricingSettings,
+  surchargesUSD = 0
+): {
+  finalPriceAED: number;
+  finalPriceUSD: number;
+  marginAmount: number;
+  oceanFreightAED: number;
+  surchargesAED: number;
+  exchangeRate: number;
+} {
+  const fx = settings.exchangeRate ?? DEFAULT_EXCHANGE_RATE;
+  const oceanFreightAED = oceanFreightUSD * fx;
+  const surchargesAED = surchargesUSD * fx;
+  const subtotalAED = oceanFreightAED + surchargesAED;
+  const withMargin = subtotalAED * (1 + settings.margin);
   const finalPriceAED = Math.ceil(withMargin / 10) * 10;
-  const finalPriceUSD = Math.ceil(finalPriceAED / EXCHANGE_RATE);
-  const marginAmount =
-    Math.round((withMargin - oceanFreightAED) * 100) / 100;
-  return { finalPriceAED, finalPriceUSD, marginAmount, oceanFreightAED: Math.round(oceanFreightAED * 100) / 100 };
+  const finalPriceUSD = Math.ceil(finalPriceAED / fx);
+  const marginAmount = Math.round((withMargin - subtotalAED) * 100) / 100;
+  return {
+    finalPriceAED,
+    finalPriceUSD,
+    marginAmount,
+    oceanFreightAED: Math.round(oceanFreightAED * 100) / 100,
+    surchargesAED: Math.round(surchargesAED * 100) / 100,
+    exchangeRate: fx,
+  };
 }
 
 export function calculateDoorPrice(params: {
@@ -152,6 +224,7 @@ export function calculateDoorPrice(params: {
   destCharges: DestinationCharge[];
   transpCharges: TransportCharge[];
   settings: PricingSettings;
+  surchargesUSD?: number;
 }): ShipmentCost {
   const {
     oceanFreightUSD,
@@ -163,11 +236,14 @@ export function calculateDoorPrice(params: {
     destCharges,
     transpCharges,
     settings,
+    surchargesUSD = 0,
   } = params;
 
+  const fx = settings.exchangeRate ?? DEFAULT_EXCHANGE_RATE;
   const doCol = getDOCol(containerType);
   const destCol = getDestCol(containerType);
-  const oceanFreightAED = oceanFreightUSD * EXCHANGE_RATE;
+  const oceanFreightAED = oceanFreightUSD * fx;
+  const surchargesAED = surchargesUSD * fx;
 
   // DO Charges
   const doRow = getDOChargesRow(carrier, doCharges);
@@ -183,11 +259,11 @@ export function calculateDoorPrice(params: {
   const transpTotal = transpPerContainer * qty;
 
   // Totals
-  const subtotalAED = oceanFreightAED + doTotal + destTotal + transpTotal;
+  const subtotalAED = oceanFreightAED + surchargesAED + doTotal + destTotal + transpTotal;
   const withMargin = subtotalAED * (1 + settings.margin);
   const finalPriceAED = Math.ceil(withMargin / 10) * 10;
   const pricePerContainerAED = Math.round(finalPriceAED / qty);
-  const finalPriceUSD = Math.ceil(finalPriceAED / EXCHANGE_RATE);
+  const finalPriceUSD = Math.ceil(finalPriceAED / fx);
   const pricePerContainerUSD = Math.ceil(finalPriceUSD / qty);
 
   return {
@@ -200,6 +276,9 @@ export function calculateDoorPrice(params: {
     carrier,
     oceanFreightUSD,
     oceanFreightAED: Math.round(oceanFreightAED * 100) / 100,
+    surchargesUSD: Math.round(surchargesUSD * 100) / 100,
+    surchargesAED: Math.round(surchargesAED * 100) / 100,
+    surchargeBreakdown: null,
     doDocument,
     doPerContainer,
     doTotal: Math.round(doTotal * 100) / 100,
@@ -207,11 +286,13 @@ export function calculateDoorPrice(params: {
     transpPerContainer,
     transpTotal: Math.round(transpTotal * 100) / 100,
     subtotalAED: Math.round(subtotalAED * 100) / 100,
+    marginPercent: settings.margin,
     marginAmount: Math.round((withMargin - subtotalAED) * 100) / 100,
     finalPriceAED,
     pricePerContainerAED,
     finalPriceUSD,
     pricePerContainerUSD,
+    exchangeRate: fx,
   };
 }
 
@@ -228,6 +309,7 @@ export function calculateFullPricing(params: {
   quote: {
     carrier: string;
     price: string;
+    surcharges?: QuoteSurcharges | null;
   };
   doCharges: DOCharge[];
   destCharges: DestinationCharge[];
@@ -235,6 +317,7 @@ export function calculateFullPricing(params: {
   settings: PricingSettings;
 }): PricingResult {
   const { rfq, quote, doCharges, destCharges, transpCharges, settings } = params;
+  const fx = settings.exchangeRate ?? DEFAULT_EXCHANGE_RATE;
   const rfqForCalculation =
     rfq.shipments && rfq.shipments.length > 0
       ? {
@@ -249,6 +332,10 @@ export function calculateFullPricing(params: {
   const pods = parseMultiValue(rfqForCalculation.pod);
   const carriers = parseMultiValue(quote.carrier);
   const prices = parseMultiValue(quote.price);
+
+  // Surcharges from quote
+  const surchargesUSD = sumSurcharges(quote.surcharges);
+  const surchargeBreakdown = buildSurchargeBreakdown(quote.surcharges);
 
   const serviceType = (rfqForCalculation.service_type || "port-to-port").toLowerCase().trim();
   const isPortOnly = serviceType === "port-to-port";
@@ -273,7 +360,7 @@ export function calculateFullPricing(params: {
     const pod = pods[i] || pods[0] || "N/A";
 
     if (isPortOnly) {
-      const portResult = calculatePortPrice(oceanFreightUSD, settings);
+      const portResult = calculatePortPrice(oceanFreightUSD, settings, surchargesUSD);
       const shipment: ShipmentCost = {
         shipmentNumber: i + 1,
         serviceType: "port-to-port",
@@ -284,18 +371,23 @@ export function calculateFullPricing(params: {
         carrier,
         oceanFreightUSD,
         oceanFreightAED: portResult.oceanFreightAED,
+        surchargesUSD: Math.round(surchargesUSD * 100) / 100,
+        surchargesAED: portResult.surchargesAED,
+        surchargeBreakdown,
         doDocument: 0,
         doPerContainer: 0,
         doTotal: 0,
         destTotal: 0,
         transpPerContainer: 0,
         transpTotal: 0,
-        subtotalAED: portResult.oceanFreightAED,
+        subtotalAED: portResult.oceanFreightAED + portResult.surchargesAED,
+        marginPercent: settings.margin,
         marginAmount: portResult.marginAmount,
         finalPriceAED: portResult.finalPriceAED,
         pricePerContainerAED: Math.round(portResult.finalPriceAED / qty),
         finalPriceUSD: portResult.finalPriceUSD,
         pricePerContainerUSD: Math.round((portResult.finalPriceUSD / qty) * 100) / 100,
+        exchangeRate: fx,
       };
       shipments.push(shipment);
       grandTotalAED += shipment.finalPriceAED;
@@ -311,11 +403,13 @@ export function calculateFullPricing(params: {
         destCharges,
         transpCharges,
         settings,
+        surchargesUSD,
       });
       doorResult.shipmentNumber = i + 1;
       doorResult.serviceType = serviceType;
       doorResult.pol = pol;
       doorResult.pod = pod;
+      doorResult.surchargeBreakdown = surchargeBreakdown;
       shipments.push(doorResult);
       grandTotalAED += doorResult.finalPriceAED;
       grandTotalUSD += doorResult.finalPriceUSD;
@@ -326,5 +420,7 @@ export function calculateFullPricing(params: {
     shipments,
     grandTotalAED,
     grandTotalUSD: Math.round(grandTotalUSD * 100) / 100,
+    exchangeRate: fx,
+    marginPercent: settings.margin,
   };
 }

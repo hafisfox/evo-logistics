@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   calculateFullPricing,
   calculatePortPrice,
-  EXCHANGE_RATE,
+  DEFAULT_EXCHANGE_RATE,
 } from "@/lib/pricing-engine";
+
+const EXCHANGE_RATE = DEFAULT_EXCHANGE_RATE;
 
 describe("pricing-engine", () => {
   const doCharges = [

@@ -1,10 +1,27 @@
 import type {
   AgentQuote,
+  FreightMode,
   MasterRFQ,
+  QuoteSurcharges,
+  FreeTimeDetails,
   RFQShipment,
   RFQShipmentContainer,
   ServiceType,
 } from "@/types/rfq";
+
+const DEFAULT_OCEAN_FIELDS = {
+  commodity_description: null,
+  hs_code: null,
+  incoterms: null,
+  is_dangerous_goods: false,
+  dg_class: null,
+  is_reefer: false,
+  reefer_temperature: null,
+  special_requirements: null,
+  cargo_weight_kg: null,
+  cargo_volume_cbm: null,
+  freight_mode: "ocean" as FreightMode,
+} as const;
 
 const VALID_SERVICE_TYPES = new Set<ServiceType>([
   "port-to-port",
@@ -154,6 +171,7 @@ export function buildLegacyShipmentsFromRFQ(rfq: Partial<MasterRFQ>): RFQShipmen
         pickup_address: pickupAddress,
         delivery_address: deliveryAddress,
         containers: [],
+        ...DEFAULT_OCEAN_FIELDS,
       };
       shipments.push(current);
       previousGroupKey = groupKey;
@@ -177,6 +195,7 @@ export function buildLegacyShipmentsFromRFQ(rfq: Partial<MasterRFQ>): RFQShipmen
       pickup_address: toNonEmptyOrNull(rfq.pickup_address),
       delivery_address: toNonEmptyOrNull(rfq.delivery_address),
       containers: [{ line_number: 1, container_type: "40HQ", qty: 1 }],
+      ...DEFAULT_OCEAN_FIELDS,
     });
   }
 
@@ -237,6 +256,7 @@ export function buildShipmentsByRfq(
         containers.length > 0
           ? containers
           : [{ line_number: 1, container_type: "40HQ", qty: 1 }],
+      ...DEFAULT_OCEAN_FIELDS,
     };
 
     const existing = byRfq.get(row.rfq_id) || [];
@@ -396,5 +416,10 @@ export function mapNormalizedQuoteToLegacy(row: Record<string, unknown>): AgentQ
     status: String(row.status || "Invalid_Quote") as AgentQuote["status"],
     sent_at: String(row.sent_at || ""),
     received_at: String(row.received_at || ""),
+    surcharges: (row.surcharges as QuoteSurcharges) ?? null,
+    free_time_details: (row.free_time_details as FreeTimeDetails) ?? null,
+    validity_date: typeof row.validity_date === "string" ? row.validity_date : null,
+    conditions: typeof row.conditions === "string" ? row.conditions : null,
+    freight_mode: (typeof row.freight_mode === "string" ? row.freight_mode : "ocean") as FreightMode,
   };
 }

@@ -19,6 +19,11 @@ const quote = {
   status: "Received",
   sent_at: "2026-02-20T00:00:00Z",
   received_at: "2026-02-20T01:00:00Z",
+  surcharges: null,
+  free_time_details: null,
+  validity_date: null,
+  conditions: null,
+  freight_mode: "ocean",
 } as const;
 
 describe("QuoteCard", () => {

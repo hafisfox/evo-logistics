@@ -72,11 +72,42 @@ def get_supabase_client():
 # PRICING ENGINE (Python port of dashboard/src/lib/pricing-engine.ts)
 # =====================================================================
 
-EXCHANGE_RATE = 3.685
+DEFAULT_EXCHANGE_RATE = 3.685
 RFQ_NORMALIZED_READ_SOURCE = os.environ.get(
     "RFQ_NORMALIZED_READ_SOURCE", "shadow"
 ).strip().lower()
 USE_NORMALIZED_READ = RFQ_NORMALIZED_READ_SOURCE in {"normalized", "shadow"}
+
+
+def get_exchange_rate(supabase, workspace_id: str, from_currency: str = "USD", to_currency: str = "AED") -> float:
+    """Fetch latest exchange rate from DB, falling back to default."""
+    try:
+        result = (
+            supabase.table("exchange_rates")
+            .select("rate")
+            .eq("workspace_id", workspace_id)
+            .eq("from_currency", from_currency)
+            .eq("to_currency", to_currency)
+            .order("effective_date", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if result.data:
+            return float(result.data[0]["rate"])
+    except Exception as e:
+        print(f"Warning: Could not fetch exchange rate, using default: {e}")
+    return DEFAULT_EXCHANGE_RATE
+
+
+def sum_surcharges(surcharges: dict) -> float:
+    """Sum all non-null surcharge values from a JSONB dict."""
+    if not surcharges or not isinstance(surcharges, dict):
+        return 0.0
+    total = 0.0
+    for v in surcharges.values():
+        if v is not None and isinstance(v, (int, float)):
+            total += float(v)
+    return total
 
 
 def parse_multi_value(value):
@@ -152,27 +183,37 @@ def get_transport_charge(delivery_address, all_transp):
     return 0
 
 
-def calculate_port_price(ocean_freight_usd, qty, margin):
+def calculate_port_price(ocean_freight_usd, qty, margin, exchange_rate=None, surcharges_usd=0):
     """Port-to-port pricing calculation."""
-    ocean_freight_aed = ocean_freight_usd * EXCHANGE_RATE
-    with_margin = ocean_freight_aed * (1 + margin)
+    fx = exchange_rate or DEFAULT_EXCHANGE_RATE
+    ocean_freight_aed = ocean_freight_usd * fx
+    surcharges_aed = surcharges_usd * fx
+    subtotal_aed = ocean_freight_aed + surcharges_aed
+    with_margin = subtotal_aed * (1 + margin)
     final_price_aed = math.ceil(with_margin / 10) * 10
-    final_price_usd = math.ceil(final_price_aed / EXCHANGE_RATE)
-    margin_amount = round(with_margin - ocean_freight_aed, 2)
+    final_price_usd = math.ceil(final_price_aed / fx)
+    margin_amount = round(with_margin - subtotal_aed, 2)
     return {
         "final_price_aed": final_price_aed,
         "final_price_usd": final_price_usd,
         "margin_amount": margin_amount,
+        "margin_percent": margin,
         "ocean_freight_aed": round(ocean_freight_aed, 2),
+        "surcharges_usd": round(surcharges_usd, 2),
+        "surcharges_aed": round(surcharges_aed, 2),
+        "exchange_rate": fx,
     }
 
 
 def calculate_door_price(ocean_freight_usd, qty, container_type, carrier,
-                         delivery_address, do_charges, dest_charges, transp_charges, margin):
+                         delivery_address, do_charges, dest_charges, transp_charges, margin,
+                         exchange_rate=None, surcharges_usd=0):
     """Door service pricing with all charge components."""
+    fx = exchange_rate or DEFAULT_EXCHANGE_RATE
     do_col = get_do_col(container_type)
     dest_col = get_dest_col(container_type)
-    ocean_freight_aed = ocean_freight_usd * EXCHANGE_RATE
+    ocean_freight_aed = ocean_freight_usd * fx
+    surcharges_aed = surcharges_usd * fx
 
     # DO Charges
     do_row = get_do_charges_row(carrier, do_charges)
@@ -197,20 +238,24 @@ def calculate_door_price(ocean_freight_usd, qty, container_type, carrier,
     transp_total = transp_per_container * qty
 
     # Totals
-    subtotal_aed = ocean_freight_aed + do_total + dest_total + transp_total
+    subtotal_aed = ocean_freight_aed + surcharges_aed + do_total + dest_total + transp_total
     with_margin = subtotal_aed * (1 + margin)
     final_price_aed = math.ceil(with_margin / 10) * 10
-    final_price_usd = math.ceil(final_price_aed / EXCHANGE_RATE)
+    final_price_usd = math.ceil(final_price_aed / fx)
 
     return {
         "final_price_aed": final_price_aed,
         "final_price_usd": final_price_usd,
         "ocean_freight_aed": round(ocean_freight_aed, 2),
+        "surcharges_usd": round(surcharges_usd, 2),
+        "surcharges_aed": round(surcharges_aed, 2),
         "do_total": round(do_total, 2),
         "dest_total": round(dest_total, 2),
         "transp_total": round(transp_total, 2),
         "subtotal_aed": round(subtotal_aed, 2),
         "margin_amount": round(with_margin - subtotal_aed, 2),
+        "margin_percent": margin,
+        "exchange_rate": fx,
     }
 
 
@@ -240,13 +285,16 @@ def _group_containers_by_route(pols, pods, all_cts, all_qtys):
 
 
 def calculate_door_price_multi(ocean_freight_usd, container_types, quantities, carrier,
-                               delivery_address, do_charges, dest_charges, transp_charges, margin):
+                               delivery_address, do_charges, dest_charges, transp_charges, margin,
+                               exchange_rate=None, surcharges_usd=0):
     """Door service pricing for mixed container types on a single route.
 
     Sums per-type DO and destination charges across all container types,
     then applies margin to the combined total.
     """
-    ocean_freight_aed = ocean_freight_usd * EXCHANGE_RATE
+    fx = exchange_rate or DEFAULT_EXCHANGE_RATE
+    ocean_freight_aed = ocean_freight_usd * fx
+    surcharges_aed = surcharges_usd * fx
     total_qty = sum(quantities)
 
     # DO Charges — document fee once, per-container charge per type
@@ -277,35 +325,45 @@ def calculate_door_price_multi(ocean_freight_usd, container_types, quantities, c
     transp_total = transp_per_container * total_qty
 
     # Totals
-    subtotal_aed = ocean_freight_aed + do_total + dest_total + transp_total
+    subtotal_aed = ocean_freight_aed + surcharges_aed + do_total + dest_total + transp_total
     with_margin = subtotal_aed * (1 + margin)
     final_price_aed = math.ceil(with_margin / 10) * 10
-    final_price_usd = math.ceil(final_price_aed / EXCHANGE_RATE)
+    final_price_usd = math.ceil(final_price_aed / fx)
 
     return {
         "final_price_aed": final_price_aed,
         "final_price_usd": final_price_usd,
         "ocean_freight_aed": round(ocean_freight_aed, 2),
+        "surcharges_usd": round(surcharges_usd, 2),
+        "surcharges_aed": round(surcharges_aed, 2),
         "do_total": round(do_total, 2),
         "dest_total": round(dest_total, 2),
         "transp_total": round(transp_total, 2),
         "subtotal_aed": round(subtotal_aed, 2),
         "margin_amount": round(with_margin - subtotal_aed, 2),
+        "margin_percent": margin,
+        "exchange_rate": fx,
     }
 
 
-def calculate_full_pricing(rfq, quote, do_charges, dest_charges, transp_charges, margin):
+def calculate_full_pricing(rfq, quote, do_charges, dest_charges, transp_charges, margin,
+                           exchange_rate=None):
     """Master pricing function. Handles single and multi-shipment RFQs.
 
     Key: shipment_count = len(prices), i.e. 1 price per route.
     Container types within a route are display metadata grouped by _group_containers_by_route.
     """
+    fx = exchange_rate or DEFAULT_EXCHANGE_RATE
     all_cts = parse_multi_value(rfq.get("container_type"))
     all_qtys = parse_multi_value(rfq.get("qty"))
     pols = parse_multi_value(rfq.get("pol"))
     pods = parse_multi_value(rfq.get("pod"))
     prices = parse_multi_value(quote.get("price"))
     carrier = (quote.get("carrier") or "N/A").strip()
+
+    # Get surcharges total from quote
+    surcharges_data = quote.get("surcharges") or {}
+    surcharges_usd = sum_surcharges(surcharges_data)
 
     service_type = (rfq.get("service_type") or "port-to-port").lower().strip()
     is_port_only = service_type == "port-to-port"
@@ -338,18 +396,21 @@ def calculate_full_pricing(rfq, quote, do_charges, dest_charges, transp_charges,
         container_display = ", ".join(f"{q}\u00d7{ct}" for ct, q in zip(rg["cts"], rg["qtys"]))
 
         if is_port_only:
-            result = calculate_port_price(ocean_freight_usd, total_qty, margin)
+            result = calculate_port_price(ocean_freight_usd, total_qty, margin,
+                                          exchange_rate=fx, surcharges_usd=surcharges_usd)
         else:
             delivery_addr = (delivery_addrs[i] if i < len(delivery_addrs) else delivery_addrs[0]) if delivery_addrs else None
             if len(rg["cts"]) > 1:
                 result = calculate_door_price_multi(
                     ocean_freight_usd, rg["cts"], rg["qtys"], carrier,
-                    delivery_addr, do_charges, dest_charges, transp_charges, margin
+                    delivery_addr, do_charges, dest_charges, transp_charges, margin,
+                    exchange_rate=fx, surcharges_usd=surcharges_usd
                 )
             else:
                 result = calculate_door_price(
                     ocean_freight_usd, total_qty, rg["cts"][0], carrier,
-                    delivery_addr, do_charges, dest_charges, transp_charges, margin
+                    delivery_addr, do_charges, dest_charges, transp_charges, margin,
+                    exchange_rate=fx, surcharges_usd=surcharges_usd
                 )
 
         result["shipment_number"] = i + 1
@@ -362,6 +423,7 @@ def calculate_full_pricing(rfq, quote, do_charges, dest_charges, transp_charges,
         result["total_qty"] = total_qty
         result["carrier"] = carrier
         result["ocean_freight_usd"] = ocean_freight_usd
+        result["surcharge_breakdown"] = surcharges_data if surcharges_usd > 0 else None
 
         shipments.append(result)
         grand_total_aed += result["final_price_aed"]
@@ -371,6 +433,8 @@ def calculate_full_pricing(rfq, quote, do_charges, dest_charges, transp_charges,
         "shipments": shipments,
         "grand_total_aed": grand_total_aed,
         "grand_total_usd": round(grand_total_usd, 2),
+        "exchange_rate": fx,
+        "margin_percent": margin,
     }
 
 
@@ -508,6 +572,10 @@ def _map_normalized_quotes_to_legacy(rows: list) -> list:
                 "transit_time": str(q.get("transit_time")) if q.get("transit_time") is not None else "N/A",
                 "free_time": str(q.get("free_time")) if q.get("free_time") is not None else "N/A",
                 "validity": q.get("validity") or "N/A",
+                "validity_date": q.get("validity_date"),
+                "surcharges": q.get("surcharges"),
+                "free_time_details": q.get("free_time_details"),
+                "conditions": q.get("conditions"),
                 "sent_at": q.get("sent_at"),
                 "received_at": q.get("received_at"),
             }
@@ -566,20 +634,39 @@ def _build_quotation_html(rfq_id, rfq_data, pricing, quote_data):
     shipments_html = ""
     for s in pricing["shipments"]:
         container_display = s.get('container_display', 'N/A')
+        usd_display = f" (USD {s['final_price_usd']:,.0f})" if s.get('final_price_usd') else ""
         shipments_html += f"""
         <tr>
             <td style="padding:8px;border:1px solid #ddd;">{s.get('pol','N/A')} &rarr; {s.get('pod','N/A')}</td>
             <td style="padding:8px;border:1px solid #ddd;">{container_display}</td>
             <td style="padding:8px;border:1px solid #ddd;">{s.get('carrier','N/A')}</td>
-            <td style="padding:8px;border:1px solid #ddd;font-weight:bold;">AED {s['final_price_aed']:,.0f}</td>
+            <td style="padding:8px;border:1px solid #ddd;font-weight:bold;">AED {s['final_price_aed']:,.0f}{usd_display}</td>
         </tr>"""
 
     etd = quote_data.get("etd") or "TBC"
     transit_time = quote_data.get("transit_time") or "TBC"
     free_time = quote_data.get("free_time") or "TBC"
-    validity = quote_data.get("validity") or "TBC"
+    validity = quote_data.get("validity") or quote_data.get("validity_date") or "TBC"
+    conditions = quote_data.get("conditions") or ""
     service_type = pricing["shipments"][0].get("service_type", "port-to-port") if pricing["shipments"] else "port-to-port"
     service_label = service_type.replace("-", " to ").title()
+
+    # Free time details
+    free_time_html = f"{free_time} days"
+    ftd = quote_data.get("free_time_details")
+    if ftd and isinstance(ftd, dict):
+        parts = []
+        if ftd.get("demurrage_days"):
+            parts.append(f"{ftd['demurrage_days']} days demurrage")
+        if ftd.get("detention_days"):
+            parts.append(f"{ftd['detention_days']} days detention")
+        if parts:
+            free_time_html = ", ".join(parts)
+        elif ftd.get("combined_days"):
+            free_time_html = f"{ftd['combined_days']} days (combined)"
+
+    # Conditions note
+    conditions_html = f"<li><strong>Conditions:</strong> {conditions}</li>" if conditions else ""
 
     return f"""
     <div style="font-family:Arial,sans-serif;max-width:600px;">
@@ -592,12 +679,12 @@ def _build_quotation_html(rfq_id, rfq_data, pricing, quote_data):
                 <th style="padding:8px;border:1px solid #ddd;text-align:left;">Route</th>
                 <th style="padding:8px;border:1px solid #ddd;text-align:left;">Containers</th>
                 <th style="padding:8px;border:1px solid #ddd;text-align:left;">Carrier</th>
-                <th style="padding:8px;border:1px solid #ddd;text-align:left;">Price (AED)</th>
+                <th style="padding:8px;border:1px solid #ddd;text-align:left;">Price</th>
             </tr>
             {shipments_html}
             <tr style="background:#f9fafb;font-weight:bold;">
                 <td colspan="3" style="padding:8px;border:1px solid #ddd;text-align:right;">Total</td>
-                <td style="padding:8px;border:1px solid #ddd;">AED {pricing['grand_total_aed']:,.0f}</td>
+                <td style="padding:8px;border:1px solid #ddd;">AED {pricing['grand_total_aed']:,.0f} (USD {pricing['grand_total_usd']:,.0f})</td>
             </tr>
         </table>
 
@@ -606,8 +693,9 @@ def _build_quotation_html(rfq_id, rfq_data, pricing, quote_data):
             <li><strong>Service:</strong> {service_label}</li>
             <li><strong>ETD:</strong> {etd}</li>
             <li><strong>Transit Time:</strong> {transit_time} days</li>
-            <li><strong>Free Time:</strong> {free_time} days</li>
+            <li><strong>Free Time:</strong> {free_time_html}</li>
             <li><strong>Validity:</strong> {validity}</li>
+            {conditions_html}
         </ul>
 
         <h3 style="color:#374151;">Terms & Conditions</h3>
@@ -676,17 +764,22 @@ def _notify_sales(
         return
     total_aed = pricing["grand_total_aed"]
     total_usd = pricing["grand_total_usd"]
+    margin_pct = pricing.get("margin_percent", 0.13)
+    fx_rate = pricing.get("exchange_rate", DEFAULT_EXCHANGE_RATE)
 
     # Build shipment rows for the breakdown table
     rows_html = ""
     for s in pricing["shipments"]:
         container_display = s.get('container_display', 'N/A')
+        margin_amt = s.get('margin_amount', 0)
+        surcharges_aed = s.get('surcharges_aed', 0)
         rows_html += (
             f"<tr>"
             f"<td style='padding:6px 10px;border:1px solid #e0e0e0;'>{s.get('pol','N/A')} &rarr; {s.get('pod','N/A')}</td>"
             f"<td style='padding:6px 10px;border:1px solid #e0e0e0;'>{container_display}</td>"
             f"<td style='padding:6px 10px;border:1px solid #e0e0e0;'>{s.get('carrier','N/A')}</td>"
             f"<td style='padding:6px 10px;border:1px solid #e0e0e0;text-align:right;'>AED {s['final_price_aed']:,.0f}</td>"
+            f"<td style='padding:6px 10px;border:1px solid #e0e0e0;text-align:right;color:#16a34a;'>AED {margin_amt:,.0f}</td>"
             f"</tr>"
         )
 
@@ -695,7 +788,7 @@ def _notify_sales(
 
     subject = f"Quotation Sent - {rfq_id} - AED {total_aed:,.0f}"
     body_html = f"""
-    <div style="font-family:Arial,sans-serif;max-width:600px;">
+    <div style="font-family:Arial,sans-serif;max-width:650px;">
         <h3 style="color:#1a56db;">Quotation Sent for {rfq_id}</h3>
         <table style="border-collapse:collapse;margin:10px 0;">
             <tr><td style="padding:4px 10px;color:#666;">Customer</td><td style="padding:4px 10px;font-weight:bold;">{customer_email}</td></tr>
@@ -703,6 +796,8 @@ def _notify_sales(
             <tr><td style="padding:4px 10px;color:#666;">Carrier</td><td style="padding:4px 10px;font-weight:bold;">{carrier}</td></tr>
             <tr><td style="padding:4px 10px;color:#666;">Service</td><td style="padding:4px 10px;">{service_type}</td></tr>
             <tr><td style="padding:4px 10px;color:#666;">Ready Date</td><td style="padding:4px 10px;">{ready_date}</td></tr>
+            <tr><td style="padding:4px 10px;color:#666;">Margin</td><td style="padding:4px 10px;font-weight:bold;color:#16a34a;">{margin_pct*100:.0f}%</td></tr>
+            <tr><td style="padding:4px 10px;color:#666;">FX Rate</td><td style="padding:4px 10px;">{fx_rate}</td></tr>
         </table>
 
         <h4 style="margin-top:16px;">Shipment Breakdown</h4>
@@ -712,11 +807,13 @@ def _notify_sales(
                 <th style="padding:6px 10px;border:1px solid #e0e0e0;text-align:left;">Containers</th>
                 <th style="padding:6px 10px;border:1px solid #e0e0e0;text-align:left;">Carrier</th>
                 <th style="padding:6px 10px;border:1px solid #e0e0e0;text-align:right;">Price</th>
+                <th style="padding:6px 10px;border:1px solid #e0e0e0;text-align:right;">Margin</th>
             </tr>
             {rows_html}
             <tr style="font-weight:bold;background:#f9fafb;">
                 <td colspan="3" style="padding:6px 10px;border:1px solid #e0e0e0;text-align:right;">Total</td>
                 <td style="padding:6px 10px;border:1px solid #e0e0e0;text-align:right;">AED {total_aed:,.0f} (USD {total_usd:,.2f})</td>
+                <td style="padding:6px 10px;border:1px solid #e0e0e0;text-align:right;"></td>
             </tr>
         </table>
     </div>"""
@@ -793,14 +890,19 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
     dest_charges = _load_destination_charges_for_pricing(supabase, workspace_id)
     transp_charges = _get_table(supabase, "transportation_charges", workspace_id)
 
-    # 5. Calculate pricing
+    # 5. Fetch exchange rate
+    fx = get_exchange_rate(supabase, workspace_id)
+    print(f"Using exchange rate: {fx}")
+
+    # 6. Calculate pricing (surcharges auto-extracted from quote_data)
     pricing = calculate_full_pricing(
         rfq_for_pricing,
         quote_data,
         do_charges,
         dest_charges,
         transp_charges,
-        request.margin
+        request.margin,
+        exchange_rate=fx
     )
     print(f"Pricing calculated: AED {pricing['grand_total_aed']:,.0f} / USD {pricing['grand_total_usd']:,.2f}")
 

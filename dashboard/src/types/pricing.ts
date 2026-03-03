@@ -21,6 +21,20 @@ export interface TransportCharge {
   Price: number;
 }
 
+export interface SurchargeBreakdown {
+  BAF: number;
+  CAF: number;
+  THC: number;
+  PSS: number;
+  GRI: number;
+  ISPS: number;
+  ORC: number;
+  war_risk: number;
+  congestion: number;
+  other: number;
+  total: number;
+}
+
 export interface ShipmentCost {
   shipmentNumber: number;
   serviceType: string;
@@ -31,6 +45,9 @@ export interface ShipmentCost {
   carrier: string;
   oceanFreightUSD: number;
   oceanFreightAED: number;
+  surchargesUSD: number;
+  surchargesAED: number;
+  surchargeBreakdown: SurchargeBreakdown | null;
   doDocument: number;
   doPerContainer: number;
   doTotal: number;
@@ -38,15 +55,19 @@ export interface ShipmentCost {
   transpPerContainer: number;
   transpTotal: number;
   subtotalAED: number;
+  marginPercent: number;
   marginAmount: number;
   finalPriceAED: number;
   pricePerContainerAED: number;
   finalPriceUSD: number;
   pricePerContainerUSD: number;
+  exchangeRate: number;
 }
 
 export interface PricingResult {
   shipments: ShipmentCost[];
   grandTotalAED: number;
   grandTotalUSD: number;
+  exchangeRate: number;
+  marginPercent: number;
 }

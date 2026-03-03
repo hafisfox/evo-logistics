@@ -19,6 +19,9 @@ const STATUS_DISPLAY: Record<RFQStatus, { label: string; color: string }> = {
     Reminded: { label: "Reminded", color: "text-chart-3 border-chart-3/20 bg-chart-3/10" },
     Followed_Up: { label: "Followed Up", color: "text-chart-5 border-chart-5/20 bg-chart-5/10" },
     Customer_Replied: { label: "Customer Replied", color: "text-chart-1 border-chart-1/20 bg-chart-1/10" },
+    Cancelled: { label: "Cancelled", color: "text-muted-foreground border-muted-foreground/20 bg-muted-foreground/10" },
+    On_Hold: { label: "On Hold", color: "text-amber-600 border-amber-600/20 bg-amber-600/10" },
+    Expired: { label: "Expired", color: "text-red-600 border-red-600/20 bg-red-600/10" },
 };
 
 interface ShipmentsTableProps {

@@ -56,15 +56,35 @@ RFQ_NORMALIZED_DUAL_WRITE = os.environ.get(
 # =====================================================================
 # CORE DATA MODELS
 # =====================================================================
+class FreeTimeDetails(BaseModel):
+    demurrage_days: Optional[int] = Field(None, description="Free demurrage days")
+    detention_days: Optional[int] = Field(None, description="Free detention days")
+    combined_days: Optional[int] = Field(None, description="Combined free time if not split")
+
+class SurchargeData(BaseModel):
+    BAF: Optional[float] = Field(None, description="Bunker Adjustment Factor")
+    CAF: Optional[float] = Field(None, description="Currency Adjustment Factor")
+    THC: Optional[float] = Field(None, description="Terminal Handling Charges")
+    PSS: Optional[float] = Field(None, description="Peak Season Surcharge")
+    GRI: Optional[float] = Field(None, description="General Rate Increase")
+    ISPS: Optional[float] = Field(None, description="Security Surcharge")
+    ORC: Optional[float] = Field(None, description="Origin Receiving Charge")
+    war_risk: Optional[float] = Field(None, description="War Risk Surcharge")
+    congestion: Optional[float] = Field(None, description="Port Congestion Surcharge")
+
 class QuoteData(BaseModel):
     shipment_number: int = Field(1, description="Shipment block number from original request")
     price: Optional[float] = Field(None, description="Total ocean freight amount quoted")
     currency: str = Field("USD", description="Currency code")
     carrier: str = Field("N/A", description="Carrier Name (e.g. COSCO, MAERSK)")
     validity: Optional[str] = Field(None, description="Expiry date YYYY-MM-DD")
+    validity_date: Optional[str] = Field(None, description="Parsed concrete validity date YYYY-MM-DD")
     transit_time: Optional[int] = Field(None, description="Transit time in days")
     free_time: Optional[int] = Field(None, description="Free detention/demurrage days")
+    free_time_details: Optional[FreeTimeDetails] = Field(None, description="Structured free time breakdown")
     etd: Optional[str] = Field(None, description="Estimated departure YYYY-MM-DD")
+    surcharges: Optional[SurchargeData] = Field(None, description="Surcharge breakdown")
+    conditions: Optional[str] = Field(None, description="Rate conditions/caveats")
 
     @field_validator('price', mode='before')
     @classmethod
@@ -368,15 +388,55 @@ def sanitize_extracted_quotes(
         validity_text = _normalize_contextual_validity(quote.validity)
         validity = normalize_partial_date(validity_text, anchor_date)
 
+        # Sanitize validity_date
+        validity_date = normalize_partial_date(quote.validity_date, anchor_date) if quote.validity_date else validity
+
+        # Sanitize free_time_details — cap at 90 days
+        free_time_details = None
+        if quote.free_time_details:
+            ftd = quote.free_time_details
+            free_time_details = FreeTimeDetails(
+                demurrage_days=min(ftd.demurrage_days, 90) if ftd.demurrage_days and ftd.demurrage_days > 0 else None,
+                detention_days=min(ftd.detention_days, 90) if ftd.detention_days and ftd.detention_days > 0 else None,
+                combined_days=min(ftd.combined_days, 90) if ftd.combined_days and ftd.combined_days > 0 else None,
+            )
+
+        # Sanitize surcharges — must be non-negative
+        surcharges = None
+        if quote.surcharges:
+            raw_sc = quote.surcharges
+            surcharges = SurchargeData(
+                BAF=raw_sc.BAF if raw_sc.BAF and raw_sc.BAF >= 0 else None,
+                CAF=raw_sc.CAF if raw_sc.CAF and raw_sc.CAF >= 0 else None,
+                THC=raw_sc.THC if raw_sc.THC and raw_sc.THC >= 0 else None,
+                PSS=raw_sc.PSS if raw_sc.PSS and raw_sc.PSS >= 0 else None,
+                GRI=raw_sc.GRI if raw_sc.GRI and raw_sc.GRI >= 0 else None,
+                ISPS=raw_sc.ISPS if raw_sc.ISPS and raw_sc.ISPS >= 0 else None,
+                ORC=raw_sc.ORC if raw_sc.ORC and raw_sc.ORC >= 0 else None,
+                war_risk=raw_sc.war_risk if raw_sc.war_risk and raw_sc.war_risk >= 0 else None,
+                congestion=raw_sc.congestion if raw_sc.congestion and raw_sc.congestion >= 0 else None,
+            )
+
+        # Cap free_time at 90 days
+        free_time = quote.free_time
+        if free_time is not None and (free_time < 0 or free_time > 90):
+            free_time = None
+
+        conditions = (quote.conditions or "").strip() or None
+
         sanitized = QuoteData(
             shipment_number=shipment_number,
             price=float(price),
             currency="USD",
             carrier=carrier,
             validity=validity,
+            validity_date=validity_date,
             transit_time=quote.transit_time,
-            free_time=quote.free_time,
+            free_time=free_time,
+            free_time_details=free_time_details,
             etd=etd,
+            surcharges=surcharges,
+            conditions=conditions,
         )
 
         dedupe_key = (
@@ -569,9 +629,13 @@ def _dual_write_agent_quote(
             "transit_time": _parse_nullable_int(log_data.get("transit_time")),
             "free_time": _parse_nullable_int(log_data.get("free_time")),
             "validity": _normalize_iso_date(log_data.get("validity")),
+            "validity_date": _normalize_iso_date(log_data.get("validity_date")),
             "status": log_data.get("status") or "Invalid_Quote",
             "sent_at": log_data.get("sent_at"),
             "received_at": log_data.get("received_at"),
+            "surcharges": log_data.get("surcharges"),
+            "free_time_details": log_data.get("free_time_details"),
+            "conditions": log_data.get("conditions"),
             "raw_meta": {"source": source},
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -660,16 +724,19 @@ CONSERVATIVE RULES:
 
 EXCLUDE THESE FROM PRICE (never add into ocean-freight total):
 EXW, THC, DOC, CUS, ENS, NOC, COMMODITY INSPECTION, INSPECTION, TLX, CO, handling fee, local charges, POD local charges.
+Instead, extract them into the surcharges object when explicitly listed with amounts.
 
 DATE RULES:
 1) Normalize dates as YYYY-MM-DD.
 2) If year is omitted, infer from email_received_at.
 3) If only contextual validity is provided (e.g., "valid to this vessel", "subject to vessel"), set validity to null.
 4) ETD range: choose earlier date.
+5) If validity is a concrete date or "valid for X days", compute validity_date as YYYY-MM-DD.
 
 TIME RULES:
 1) Parse transit time from TT/T,T/transit days.
 2) Parse free time from phrases like "14 days free", "14 FT", "free time 14".
+3) If free time is split (e.g., "14 days free demurrage, 7 days free detention"), capture in free_time_details.
 
 OUTPUT SCHEMA (RAW JSON ONLY):
 {
@@ -681,12 +748,34 @@ OUTPUT SCHEMA (RAW JSON ONLY):
       "currency": "USD",
       "carrier": "SSL",
       "validity": null,
+      "validity_date": null,
       "transit_time": 15,
       "free_time": 14,
-      "etd": "2026-01-20"
+      "free_time_details": {"demurrage_days": null, "detention_days": null, "combined_days": 14},
+      "etd": "2026-01-20",
+      "surcharges": {"BAF": null, "CAF": null, "THC": null, "PSS": null, "GRI": null, "ISPS": null, "ORC": null, "war_risk": null, "congestion": null},
+      "conditions": null
     }
   ]
 }
+
+SURCHARGES EXTRACTION RULES:
+- Extract surcharges ONLY when explicitly listed with dollar/numeric amounts.
+- BAF = Bunker Adjustment Factor / fuel surcharge.
+- CAF = Currency Adjustment Factor.
+- THC = Terminal Handling Charges.
+- PSS = Peak Season Surcharge.
+- GRI = General Rate Increase.
+- ISPS = Security surcharge.
+- ORC = Origin Receiving Charge.
+- war_risk = War Risk Surcharge.
+- congestion = Port Congestion Surcharge.
+- Set null for surcharges not mentioned (do NOT assume zero).
+- Never include surcharges in the price field.
+
+CONDITIONS EXTRACTION:
+- Capture "subject to space", "subject to equipment", "subject to confirmation", rate conditions.
+- Set null if no conditions mentioned.
 
 FEW-SHOT PATTERNS:
 1) Narrative with extras:
@@ -1297,6 +1386,21 @@ def _process_agent_quotes(pubsub_payload=None):
                 )
 
                 match_key = build_quote_match_key(canonical_ref_id, agent_email, quote)
+                # Serialize surcharges and free_time_details for DB
+                surcharges_dict = None
+                if quote.surcharges:
+                    surcharges_dict = {
+                        k: v for k, v in quote.surcharges.model_dump().items()
+                        if v is not None
+                    } or None
+
+                free_time_details_dict = None
+                if quote.free_time_details:
+                    free_time_details_dict = {
+                        k: v for k, v in quote.free_time_details.model_dump().items()
+                        if v is not None
+                    } or None
+
                 log_data = {
                     'rfq_id': canonical_ref_id,
                     'match': match_key,
@@ -1311,6 +1415,10 @@ def _process_agent_quotes(pubsub_payload=None):
                     'transit_time': str(quote.transit_time) if quote.transit_time else 'N/A',
                     'free_time': str(quote.free_time) if quote.free_time else 'N/A',
                     'validity': quote.validity or None,
+                    'validity_date': quote.validity_date or None,
+                    'surcharges': surcharges_dict,
+                    'free_time_details': free_time_details_dict,
+                    'conditions': quote.conditions,
                     'received_at': now_str,
                 }
 

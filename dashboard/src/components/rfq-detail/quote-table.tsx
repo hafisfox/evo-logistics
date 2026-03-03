@@ -13,7 +13,23 @@ import { Badge } from "@/components/ui/badge";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
 import { StatusBadge } from "@/components/rfqs/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import type { AgentQuote } from "@/types/rfq";
+import type { AgentQuote, QuoteSurcharges } from "@/types/rfq";
+
+function sumSurcharges(surcharges: QuoteSurcharges | null): number {
+  if (!surcharges) return 0;
+  return Object.values(surcharges).reduce<number>(
+    (sum, val) => sum + (typeof val === "number" && Number.isFinite(val) ? val : 0),
+    0
+  );
+}
+
+function formatSurchargeTooltip(surcharges: QuoteSurcharges | null): string {
+  if (!surcharges) return "";
+  const entries = Object.entries(surcharges)
+    .filter(([, val]) => typeof val === "number" && val > 0)
+    .map(([key, val]) => `${key.toUpperCase()}: $${Number(val).toLocaleString()}`);
+  return entries.length > 0 ? entries.join(", ") : "";
+}
 
 interface QuoteTableProps {
   quotes: AgentQuote[];
@@ -49,7 +65,8 @@ export function QuoteTable({ quotes }: QuoteTableProps) {
                 <TableRow>
                   <TableHead>Agent</TableHead>
                   <TableHead>Carrier</TableHead>
-                  <TableHead>Price (USD)</TableHead>
+                  <TableHead>Base (USD)</TableHead>
+                  <TableHead>Surcharges</TableHead>
                   <TableHead>ETD</TableHead>
                   <TableHead>Transit</TableHead>
                   <TableHead>Free Time</TableHead>
@@ -58,37 +75,57 @@ export function QuoteTable({ quotes }: QuoteTableProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sorted.map((q) => (
-                  <TableRow
-                    key={q.match || `${q.agent_email}-${q.carrier}`}
-                    className={
-                      q.price === bestPrice && q.status === "Received"
-                        ? "bg-emerald-50"
-                        : undefined
-                    }
-                  >
-                    <TableCell className="text-sm font-medium">
-                      {q.agent_name}
-                    </TableCell>
-                    <TableCell className="text-sm">{q.carrier}</TableCell>
-                    <TableCell>
-                      <CurrencyDisplay amount={q.price} currency="USD" />
-                    </TableCell>
-                    <TableCell className="text-sm">{q.etd || "—"}</TableCell>
-                    <TableCell className="text-sm">
-                      {q.transit_time ? `${q.transit_time}d` : "—"}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {q.free_time ? `${q.free_time}d` : "—"}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {q.validity || "—"}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={q.status} />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {sorted.map((q) => {
+                  const surchargeTotal = sumSurcharges(q.surcharges);
+                  const surchargeTooltip = formatSurchargeTooltip(q.surcharges);
+                  const ftd = q.free_time_details;
+                  const freeTimeDisplay = ftd
+                    ? [
+                        ftd.demurrage_days != null ? `Dem: ${ftd.demurrage_days}d` : null,
+                        ftd.detention_days != null ? `Det: ${ftd.detention_days}d` : null,
+                        ftd.combined_days != null ? `Comb: ${ftd.combined_days}d` : null,
+                      ].filter(Boolean).join(", ") || (q.free_time ? `${q.free_time}d` : "—")
+                    : q.free_time ? `${q.free_time}d` : "—";
+
+                  return (
+                    <TableRow
+                      key={q.match || `${q.agent_email}-${q.carrier}`}
+                      className={
+                        q.price === bestPrice && q.status === "Received"
+                          ? "bg-emerald-50 dark:bg-emerald-950/20"
+                          : undefined
+                      }
+                    >
+                      <TableCell className="text-sm font-medium">
+                        {q.agent_name}
+                      </TableCell>
+                      <TableCell className="text-sm">{q.carrier}</TableCell>
+                      <TableCell>
+                        <CurrencyDisplay amount={q.price} currency="USD" />
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {surchargeTotal > 0 ? (
+                          <span title={surchargeTooltip} className="cursor-help border-b border-dashed border-muted-foreground">
+                            ${surchargeTotal.toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">{q.etd || "—"}</TableCell>
+                      <TableCell className="text-sm">
+                        {q.transit_time ? `${q.transit_time}d` : "—"}
+                      </TableCell>
+                      <TableCell className="text-sm">{freeTimeDisplay}</TableCell>
+                      <TableCell className="text-sm">
+                        {q.validity_date || q.validity || "—"}
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={q.status} />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

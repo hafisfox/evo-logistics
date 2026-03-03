@@ -126,13 +126,21 @@ export async function POST(request: Request) {
   try {
     const supabase = await createClient();
 
-    const [doCharges, mappedDestCharges, transpRes, settings] = await Promise.all([
+    const [doCharges, mappedDestCharges, transpRes, fxRes, settings] = await Promise.all([
       fetchDoCharges(supabase, workspaceId),
       fetchDestinationCharges(supabase, workspaceId),
       supabase
         .from("transportation_charges")
         .select("*")
         .eq("workspace_id", workspaceId),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not yet in generated types
+      (supabase.from as any)("exchange_rates")
+        .select("rate")
+        .eq("workspace_id", workspaceId)
+        .eq("from_currency", "USD")
+        .eq("to_currency", "AED")
+        .order("effective_date", { ascending: false })
+        .limit(1),
       getSettings(workspaceId),
     ]);
 
@@ -145,6 +153,13 @@ export async function POST(request: Request) {
       })
     );
 
+    // Get exchange rate from DB or fall back to default
+    const fxData = fxRes.data as Array<{ rate: number }> | null;
+    const exchangeRate =
+      fxData && fxData.length > 0
+        ? Number(fxData[0].rate)
+        : undefined;
+
     const result = calculateFullPricing({
       rfq: validation.data.rfq,
       quote: validation.data.quote,
@@ -154,6 +169,7 @@ export async function POST(request: Request) {
       settings: {
         margin: settings.profitMargin / 100,
         quoteThreshold: settings.quoteThreshold,
+        exchangeRate,
       },
     });
 

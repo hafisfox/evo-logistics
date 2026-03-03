@@ -53,16 +53,32 @@ describe("/api/pricing/calculate route", () => {
   });
 
   it("calculates pricing for valid payload", async () => {
-    const tableData = {
+    const tableData: Record<string, unknown[]> = {
       do_charges: [{ carrier: "COSCO", document: 100, "20FT": 200, "40FT": 300, "40HQ": 350 }],
       destination_charges: [{ charge_type: "THC", basis: "Fixed", "20FT": 150, "40FT": 250 }],
       transportation_charges: [{ place: "DUBAI", price: 250 }],
+      exchange_rates: [{ rate: 3.685 }],
+    };
+
+    const makeChain = (data: unknown) => {
+      const chain: Record<string, unknown> = {};
+      const withResult = () => Promise.resolve({ data, error: null });
+      chain.select = () => chain;
+      chain.eq = () => chain;
+      chain.order = () => chain;
+      chain.limit = () => withResult();
+      // Also resolve directly for simple .eq() chains
+      chain.then = withResult().then.bind(withResult());
+      return chain;
     };
 
     createClientMock.mockResolvedValue({
-      from: (table: keyof typeof tableData) => ({
+      from: (table: string) => ({
         select: () => ({
-          eq: () => Promise.resolve({ data: tableData[table], error: null }),
+          eq: () => {
+            const inner = makeChain(tableData[table] ?? []);
+            return inner;
+          },
         }),
       }),
     });
@@ -98,7 +114,7 @@ describe("/api/pricing/calculate route", () => {
 
     expect(calculateFullPricingMock).toHaveBeenCalledTimes(1);
     const callArg = calculateFullPricingMock.mock.calls[0][0];
-    expect(callArg.settings).toEqual({ margin: 0.13, quoteThreshold: 2 });
+    expect(callArg.settings).toEqual({ margin: 0.13, quoteThreshold: 2, exchangeRate: 3.685 });
     expect(getSettingsMock).toHaveBeenCalledWith("ws-1");
 
     await expect(response.json()).resolves.toEqual({

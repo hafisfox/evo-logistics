@@ -7,15 +7,25 @@ export type RFQStatus =
   | "Quoted"
   | "Reminded"
   | "Followed_Up"
-  | "Customer_Replied";
+  | "Customer_Replied"
+  | "Cancelled"
+  | "On_Hold"
+  | "Expired";
 
-export type QuoteStatus = "Requested" | "Reminded" | "Received" | "Invalid_Quote";
+export type QuoteStatus = "Requested" | "Reminded" | "Received" | "Invalid_Quote" | "Expired";
 
 export type ServiceType =
   | "port-to-port"
   | "door-to-port"
   | "port-to-door"
   | "door-to-door";
+
+export type FreightMode = "ocean" | "air" | "land";
+
+export type Incoterms =
+  | "EXW" | "FCA" | "FAS" | "FOB"
+  | "CFR" | "CIF" | "CPT" | "CIP"
+  | "DAP" | "DPU" | "DDP";
 
 export interface RFQShipmentContainer {
   line_number: number;
@@ -33,6 +43,37 @@ export interface RFQShipment {
   pickup_address: string | null;
   delivery_address: string | null;
   containers: RFQShipmentContainer[];
+  // Ocean freight fields
+  commodity_description: string | null;
+  hs_code: string | null;
+  incoterms: Incoterms | null;
+  is_dangerous_goods: boolean;
+  dg_class: string | null;
+  is_reefer: boolean;
+  reefer_temperature: number | null;
+  special_requirements: string | null;
+  cargo_weight_kg: number | null;
+  cargo_volume_cbm: number | null;
+  freight_mode: FreightMode;
+}
+
+export interface QuoteSurcharges {
+  BAF?: number;
+  CAF?: number;
+  THC?: number;
+  PSS?: number;
+  GRI?: number;
+  ISPS?: number;
+  ORC?: number;
+  war_risk?: number;
+  congestion?: number;
+  [key: string]: number | undefined;
+}
+
+export interface FreeTimeDetails {
+  demurrage_days?: number | null;
+  detention_days?: number | null;
+  combined_days?: number | null;
 }
 
 export interface MasterRFQ {
@@ -57,6 +98,13 @@ export interface MasterRFQ {
   shipments?: RFQShipment[];
   shipment_count?: number;
   deleted_at?: string | null;
+  // New aggregated fields
+  commodity_description?: string | null;
+  hs_code?: string | null;
+  incoterms?: Incoterms | null;
+  is_dangerous_goods?: boolean;
+  is_reefer?: boolean;
+  freight_mode?: FreightMode;
 }
 
 export interface AgentQuote {
@@ -75,10 +123,43 @@ export interface AgentQuote {
   status: QuoteStatus;
   sent_at: string;
   received_at: string;
+  // New fields
+  surcharges: QuoteSurcharges | null;
+  free_time_details: FreeTimeDetails | null;
+  validity_date: string | null;
+  conditions: string | null;
+  freight_mode: FreightMode;
 }
 
 export interface RFQDetail extends MasterRFQ {
   quotes: AgentQuote[];
+}
+
+export interface RFQNote {
+  id: string;
+  rfq_id: string;
+  author_id: string;
+  content: string;
+  created_at: string;
+}
+
+export interface ActivityLog {
+  id: string;
+  entity_type: "rfq" | "quote" | "agent" | "pricing";
+  entity_id: string;
+  action: string;
+  actor_id: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface ExchangeRate {
+  id: string;
+  from_currency: string;
+  to_currency: string;
+  rate: number;
+  effective_date: string;
+  created_at: string;
 }
 
 export interface SelectAgentPayload {

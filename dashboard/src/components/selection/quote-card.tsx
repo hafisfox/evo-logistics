@@ -4,9 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
-import type { AgentQuote } from "@/types/rfq";
+import type { AgentQuote, QuoteSurcharges } from "@/types/rfq";
 import { cn } from "@/lib/utils";
-import { Check, Star, Clock, Ship, Calendar } from "lucide-react";
+import { Check, Star, Clock, Ship, Calendar, DollarSign } from "lucide-react";
 
 interface QuoteCardProps {
   quote: AgentQuote;
@@ -15,8 +15,22 @@ interface QuoteCardProps {
   onSelect: () => void;
 }
 
+function sumSurcharges(surcharges: QuoteSurcharges | null): number {
+  if (!surcharges) return 0;
+  return Object.values(surcharges).reduce<number>(
+    (sum, val) => sum + (typeof val === "number" && Number.isFinite(val) ? val : 0),
+    0
+  );
+}
+
 export function QuoteCard({ quote, rank, isSelected, onSelect }: QuoteCardProps) {
   const isBest = rank === 1;
+  const surchargeTotal = sumSurcharges(quote.surcharges);
+  const basePrice = parseFloat(quote.price) || 0;
+  const totalWithSurcharges = basePrice + surchargeTotal;
+  const surchargeEntries = quote.surcharges
+    ? Object.entries(quote.surcharges).filter(([, val]) => typeof val === "number" && val > 0)
+    : [];
 
   return (
     <Card
@@ -49,13 +63,44 @@ export function QuoteCard({ quote, rank, isSelected, onSelect }: QuoteCardProps)
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="text-center py-2 bg-muted/50 rounded-md">
-          <CurrencyDisplay
-            amount={quote.price}
-            currency="USD"
-            className="text-2xl font-bold"
-          />
-          <p className="text-xs text-muted-foreground mt-0.5">per shipment</p>
+          {surchargeTotal > 0 ? (
+            <>
+              <CurrencyDisplay
+                amount={String(totalWithSurcharges)}
+                currency="USD"
+                className="text-2xl font-bold"
+              />
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Base ${basePrice.toLocaleString()} + ${surchargeTotal.toLocaleString()} surcharges
+              </p>
+            </>
+          ) : (
+            <>
+              <CurrencyDisplay
+                amount={quote.price}
+                currency="USD"
+                className="text-2xl font-bold"
+              />
+              <p className="text-xs text-muted-foreground mt-0.5">per shipment</p>
+            </>
+          )}
         </div>
+
+        {surchargeEntries.length > 0 && (
+          <div className="rounded-lg bg-muted/30 px-3 py-2 space-y-1">
+            <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+              <DollarSign className="h-3 w-3" /> Surcharge Breakdown
+            </p>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+              {surchargeEntries.map(([key, val]) => (
+                <div key={key} className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">{key.toUpperCase()}</span>
+                  <span className="font-medium">${Number(val).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2 text-sm">
           <div className="flex items-center gap-1.5">
@@ -84,9 +129,26 @@ export function QuoteCard({ quote, rank, isSelected, onSelect }: QuoteCardProps)
           </div>
         </div>
 
-        {quote.validity && (
+        {(quote.free_time_details?.demurrage_days != null || quote.free_time_details?.detention_days != null) && (
+          <div className="text-xs text-muted-foreground text-center space-x-2">
+            {quote.free_time_details.demurrage_days != null && (
+              <span>Dem: {quote.free_time_details.demurrage_days}d</span>
+            )}
+            {quote.free_time_details.detention_days != null && (
+              <span>Det: {quote.free_time_details.detention_days}d</span>
+            )}
+          </div>
+        )}
+
+        {(quote.validity_date || quote.validity) && (
           <p className="text-xs text-muted-foreground text-center">
-            Valid until: {quote.validity}
+            Valid until: {quote.validity_date || quote.validity}
+          </p>
+        )}
+
+        {quote.conditions && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 text-center italic">
+            {quote.conditions}
           </p>
         )}
 

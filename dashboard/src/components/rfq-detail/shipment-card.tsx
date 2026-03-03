@@ -7,7 +7,9 @@ import { StatusBadge } from "@/components/rfqs/status-badge";
 import { formatDate } from "@/lib/utils";
 import { buildLegacyShipmentsFromRFQ } from "@/lib/rfq-normalization";
 import type { MasterRFQ } from "@/types/rfq";
-import { MapPin, Calendar, Truck } from "lucide-react";
+import {
+  MapPin, Calendar, Truck, Package, AlertTriangle, Thermometer, Scale, FileText,
+} from "lucide-react";
 
 interface ShipmentCardProps {
   rfq: MasterRFQ;
@@ -88,6 +90,84 @@ export function ShipmentCard({ rfq }: ShipmentCardProps) {
                         <p className="text-xs text-muted-foreground">Delivery</p>
                         <p className="text-sm">{shipment.delivery_address}</p>
                       </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {/* Cargo Detail Fields */}
+              {(shipment.commodity_description || shipment.is_dangerous_goods || shipment.is_reefer || shipment.incoterms || shipment.cargo_weight_kg || shipment.cargo_volume_cbm || shipment.hs_code || shipment.special_requirements) ? (
+                <div className="mt-4 border-t pt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Cargo Details</p>
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                    {shipment.commodity_description ? (
+                      <div className="flex items-start gap-1.5">
+                        <Package className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Commodity</p>
+                          <p className="text-sm font-medium">{shipment.commodity_description}</p>
+                        </div>
+                      </div>
+                    ) : null}
+                    {shipment.hs_code ? (
+                      <div className="flex items-start gap-1.5">
+                        <FileText className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">HS Code</p>
+                          <p className="text-sm font-medium font-mono">{shipment.hs_code}</p>
+                        </div>
+                      </div>
+                    ) : null}
+                    {shipment.incoterms ? (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Incoterms</p>
+                        <span className="inline-block mt-0.5 rounded-md bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 text-xs font-bold text-blue-700 dark:text-blue-300">
+                          {shipment.incoterms}
+                        </span>
+                      </div>
+                    ) : null}
+                    {shipment.is_dangerous_goods ? (
+                      <div className="flex items-start gap-1.5">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 text-amber-500" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Dangerous Goods</p>
+                          <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
+                            {shipment.dg_class ? `IMO Class ${shipment.dg_class}` : "Yes"}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                    {shipment.is_reefer ? (
+                      <div className="flex items-start gap-1.5">
+                        <Thermometer className="mt-0.5 h-3.5 w-3.5 text-cyan-500" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Reefer</p>
+                          <p className="text-sm font-medium text-cyan-600 dark:text-cyan-400">
+                            {shipment.reefer_temperature != null ? `${shipment.reefer_temperature}°C` : "Yes"}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                    {shipment.cargo_weight_kg ? (
+                      <div className="flex items-start gap-1.5">
+                        <Scale className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Weight</p>
+                          <p className="text-sm font-medium">{Number(shipment.cargo_weight_kg).toLocaleString()} kg</p>
+                        </div>
+                      </div>
+                    ) : null}
+                    {shipment.cargo_volume_cbm ? (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Volume</p>
+                        <p className="text-sm font-medium">{Number(shipment.cargo_volume_cbm).toLocaleString()} CBM</p>
+                      </div>
+                    ) : null}
+                  </div>
+                  {shipment.special_requirements ? (
+                    <div className="mt-2">
+                      <p className="text-xs text-muted-foreground">Special Requirements</p>
+                      <p className="text-sm mt-0.5 text-amber-700 dark:text-amber-300">{shipment.special_requirements}</p>
                     </div>
                   ) : null}
                 </div>

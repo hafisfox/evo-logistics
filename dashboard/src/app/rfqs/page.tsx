@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { RFQTable } from "@/components/rfqs/rfq-table";
 import { RFQKanban } from "@/components/rfqs/rfq-kanban";
 import { RFQFilters } from "@/components/rfqs/rfq-filters";
@@ -8,6 +9,8 @@ import { ViewToggle } from "@/components/rfqs/view-toggle";
 import { useRFQs } from "@/hooks/use-rfqs";
 import { useUIStore } from "@/store/ui-store";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
 
 export default function RFQPipelinePage() {
   const { data: rfqs, isLoading } = useRFQs();
@@ -54,7 +57,15 @@ export default function RFQPipelinePage() {
           serviceFilter={serviceFilter}
           onServiceFilterChange={setServiceFilter}
         />
-        <ViewToggle view={pipelineView} onViewChange={setPipelineView} />
+        <div className="flex items-center gap-2">
+          <Button asChild size="sm" className="h-9 rounded-xl font-semibold shadow-sm">
+            <Link href="/rfqs/new">
+              <Plus className="h-4 w-4 mr-1" />
+              Create RFQ
+            </Link>
+          </Button>
+          <ViewToggle view={pipelineView} onViewChange={setPipelineView} />
+        </div>
       </div>
 
       {isLoading ? (

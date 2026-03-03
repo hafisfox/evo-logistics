@@ -6,6 +6,8 @@ import Link from "next/link";
 import { ShipmentCard } from "@/components/rfq-detail/shipment-card";
 import { QuoteTable } from "@/components/rfq-detail/quote-table";
 import { PricingBreakdown } from "@/components/rfq-detail/pricing-breakdown";
+import { NotesSection } from "@/components/rfq-detail/notes-section";
+import { ActivityTimeline } from "@/components/rfq-detail/activity-timeline";
 import { useRFQDetail } from "@/hooks/use-rfq-detail";
 import { useDeleteRFQ } from "@/hooks/use-rfqs";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
@@ -96,8 +98,10 @@ export default function RFQDetailPage() {
         <div className="lg:col-span-2 animate-in slide-in-from-bottom-8 duration-700 delay-200 fill-mode-both">
           <QuoteTable quotes={quotes} />
         </div>
-        <div className="animate-in slide-in-from-bottom-8 duration-700 delay-300 fill-mode-both">
+        <div className="space-y-6 animate-in slide-in-from-bottom-8 duration-700 delay-300 fill-mode-both">
           <PricingBreakdown rfq={rfq} />
+          <NotesSection rfqId={rfqId} />
+          <ActivityTimeline rfqId={rfqId} />
         </div>
       </div>
     </div>
