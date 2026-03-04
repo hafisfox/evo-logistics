@@ -6,8 +6,9 @@ import type { Settings } from "@/lib/settings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, DollarSign, Link2, Mail, Save, Unplug } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, DollarSign, Link2, Mail, Plus, Save, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { useSettings, useUpdateSettings } from "@/hooks/use-settings";
 import {
@@ -15,6 +16,7 @@ import {
   useStartWorkspaceMailboxOAuth,
   useWorkspaceMailbox,
 } from "@/hooks/use-workspace-mailbox";
+import { useExchangeRates, useCreateExchangeRate } from "@/hooks/use-exchange-rates";
 
 function formatSliderValue(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
@@ -293,6 +295,111 @@ export default function WorkspaceSettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      <ExchangeRateCard />
     </div>
+  );
+}
+
+function ExchangeRateCard() {
+  const { data: rates, isLoading } = useExchangeRates();
+  const { mutate: createRate, isPending: creating } = useCreateExchangeRate();
+  const [newRate, setNewRate] = useState("");
+
+  const currentRate = rates?.[0];
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsed = parseFloat(newRate);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      toast.error("Enter a valid positive rate");
+      return;
+    }
+    createRate(
+      { rate: parsed },
+      {
+        onSuccess: () => {
+          setNewRate("");
+          toast.success("Exchange rate updated");
+        },
+        onError: (err) => {
+          toast.error(err instanceof Error ? err.message : "Failed to update rate");
+        },
+      }
+    );
+  };
+
+  return (
+    <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-xl shadow-[0_8px_24px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_24px_rgba(255,255,255,0.03)] overflow-hidden">
+      <CardHeader className="pb-3 px-6 pt-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <ArrowRightLeft className="h-5 w-5" />
+          </div>
+          <CardTitle className="text-lg font-bold tracking-tight">Exchange Rate (USD → AED)</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5 px-6 pb-6">
+        {isLoading ? (
+          <Skeleton className="h-20" />
+        ) : (
+          <>
+            <div className="rounded-2xl border border-white/10 bg-white/5 dark:bg-black/5 p-5 shadow-inner">
+              <div className="flex items-baseline gap-3">
+                <span className="text-3xl font-light tracking-tighter text-foreground">
+                  {currentRate ? currentRate.rate.toFixed(4) : "3.6850"}
+                </span>
+                <span className="text-sm text-muted-foreground font-medium">AED per USD</span>
+              </div>
+              <p className="text-xs text-muted-foreground/70 mt-2 font-medium">
+                {currentRate
+                  ? `Effective ${new Date(currentRate.effective_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}`
+                  : "Using default fallback rate (3.685)"}
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="flex gap-3">
+              <Input
+                type="number"
+                step="0.0001"
+                min="0.0001"
+                placeholder="New rate (e.g. 3.6730)"
+                value={newRate}
+                onChange={(e) => setNewRate(e.target.value)}
+                className="h-11 rounded-xl font-mono"
+              />
+              <Button
+                type="submit"
+                disabled={creating || !newRate}
+                className="h-11 rounded-xl bg-primary text-primary-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all shrink-0"
+              >
+                <Plus className="mr-1.5 h-4 w-4" />
+                {creating ? "Saving..." : "Update"}
+              </Button>
+            </form>
+
+            {rates && rates.length > 1 && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">History</p>
+                <div className="space-y-1 max-h-40 overflow-y-auto scrollbar-hide">
+                  {rates.slice(1, 6).map((r) => (
+                    <div key={r.id} className="flex items-center justify-between text-sm px-3 py-1.5 rounded-lg bg-black/[0.02] dark:bg-white/[0.02]">
+                      <span className="font-mono font-medium">{r.rate.toFixed(4)}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(r.effective_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground/80 font-medium">
+              Used by the pricing engine to convert USD ocean freight rates to AED. Falls back to 3.685 if no rate is set.
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

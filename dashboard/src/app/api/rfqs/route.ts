@@ -11,21 +11,10 @@ import {
   type RFQShipmentContainerRow,
   type RFQShipmentRow,
 } from "@/lib/rfq-normalization";
+import { isMissingRelationError } from "@/lib/supabase-errors";
 
 export const dynamic = "force-dynamic";
 
-function isMissingRelationError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const code = "code" in error ? String((error as { code?: string }).code || "") : "";
-  const message =
-    "message" in error ? String((error as { message?: string }).message || "") : "";
-  return (
-    code === "PGRST205" ||
-    code === "42P01" ||
-    message.includes("Could not find the table") ||
-    (message.includes("relation") && message.includes("does not exist"))
-  );
-}
 
 export async function GET() {
   const scope = await requireWorkspaceApiContext({
@@ -265,48 +254,58 @@ export async function POST(request: Request) {
 
     if (rfqError) throw rfqError;
 
-    // Insert normalized shipments + containers
-    for (let i = 0; i < shipments.length; i++) {
-      const s = shipments[i];
-      const shipmentNumber = i + 1;
+    // Insert normalized shipments + containers (with cleanup on partial failure)
+    try {
+      for (let i = 0; i < shipments.length; i++) {
+        const s = shipments[i];
+        const shipmentNumber = i + 1;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new columns not yet in generated types
-      const { error: shipmentError } = await (supabase.from as any)("rfq_shipments").insert({
-        workspace_id: workspaceId,
-        rfq_id: rfqId,
-        shipment_number: shipmentNumber,
-        pol: s.pol,
-        pod: s.pod,
-        ready_date: s.ready_date,
-        delivery_deadline: s.delivery_deadline,
-        service_type: s.service_type,
-        pickup_address: s.pickup_address,
-        delivery_address: s.delivery_address,
-        commodity_description: s.commodity_description,
-        hs_code: s.hs_code,
-        incoterms: s.incoterms,
-        is_dangerous_goods: s.is_dangerous_goods,
-        is_reefer: s.is_reefer,
-        special_requirements: s.special_requirements,
-        cargo_weight_kg: s.cargo_weight_kg,
-        cargo_volume_cbm: s.cargo_volume_cbm,
-        freight_mode: "ocean",
-      });
-
-      if (shipmentError) throw shipmentError;
-
-      for (let j = 0; j < s.containers.length; j++) {
-        const c = s.containers[j];
-        const { error: containerError } = await supabase.from("rfq_shipment_containers").insert({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new columns not yet in generated types
+        const { error: shipmentError } = await (supabase.from as any)("rfq_shipments").insert({
           workspace_id: workspaceId,
           rfq_id: rfqId,
           shipment_number: shipmentNumber,
-          line_number: j + 1,
-          container_type: c.container_type,
-          qty: c.qty,
+          pol: s.pol,
+          pod: s.pod,
+          ready_date: s.ready_date,
+          delivery_deadline: s.delivery_deadline,
+          service_type: s.service_type,
+          pickup_address: s.pickup_address,
+          delivery_address: s.delivery_address,
+          commodity_description: s.commodity_description,
+          hs_code: s.hs_code,
+          incoterms: s.incoterms,
+          is_dangerous_goods: s.is_dangerous_goods,
+          is_reefer: s.is_reefer,
+          special_requirements: s.special_requirements,
+          cargo_weight_kg: s.cargo_weight_kg,
+          cargo_volume_cbm: s.cargo_volume_cbm,
+          freight_mode: "ocean",
         });
-        if (containerError) throw containerError;
+
+        if (shipmentError) throw shipmentError;
+
+        for (let j = 0; j < s.containers.length; j++) {
+          const c = s.containers[j];
+          const { error: containerError } = await supabase.from("rfq_shipment_containers").insert({
+            workspace_id: workspaceId,
+            rfq_id: rfqId,
+            shipment_number: shipmentNumber,
+            line_number: j + 1,
+            container_type: c.container_type,
+            qty: c.qty,
+          });
+          if (containerError) throw containerError;
+        }
       }
+    } catch (insertError) {
+      // Clean up orphaned rows on partial failure
+      console.error("Shipment/container insert failed, cleaning up:", insertError);
+      await supabase.from("rfq_shipment_containers").delete().eq("rfq_id", rfqId).eq("workspace_id", workspaceId);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase.from as any)("rfq_shipments").delete().eq("rfq_id", rfqId).eq("workspace_id", workspaceId);
+      await supabase.from("master_rfqs").delete().eq("rfq_id", rfqId).eq("workspace_id", workspaceId);
+      throw insertError;
     }
 
     // Log activity

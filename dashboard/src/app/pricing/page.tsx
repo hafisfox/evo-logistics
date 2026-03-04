@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import {
   Table,
   TableBody,
@@ -33,6 +33,7 @@ import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import type { DestinationCharge, DOCharge, TransportCharge } from "@/types/pricing";
+import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 
 function toNumber(value: string | number) {
   if (typeof value === "number") return value;
@@ -84,6 +85,12 @@ export default function PricingPage() {
   const [newTransport, setNewTransport] = useState({ Place: "", Price: "" });
   const [editingTransportId, setEditingTransportId] = useState<number | null>(null);
   const [editingTransport, setEditingTransport] = useState<TransportCharge | null>(null);
+
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: "do" | "dest" | "transport";
+    id: number;
+    label: string;
+  } | null>(null);
 
   const disableManageActions = useMemo(
     () => accessLoading || !canManage,
@@ -139,10 +146,7 @@ export default function PricingPage() {
     }
   };
 
-  const handleDeleteDo = async (id?: number) => {
-    if (!id) return;
-    if (!window.confirm("Delete this DO charge row?")) return;
-
+  const handleDeleteDo = async (id: number) => {
     try {
       await deleteDo.mutateAsync({ id });
       toast.success("DO charge row deleted");
@@ -198,10 +202,7 @@ export default function PricingPage() {
     }
   };
 
-  const handleDeleteDest = async (id?: number) => {
-    if (!id) return;
-    if (!window.confirm("Delete this destination charge row?")) return;
-
+  const handleDeleteDest = async (id: number) => {
     try {
       await deleteDest.mutateAsync({ id });
       toast.success("Destination charge row deleted");
@@ -253,10 +254,7 @@ export default function PricingPage() {
     }
   };
 
-  const handleDeleteTransport = async (id?: number) => {
-    if (!id) return;
-    if (!window.confirm("Delete this transport charge row?")) return;
-
+  const handleDeleteTransport = async (id: number) => {
     try {
       await deleteTransport.mutateAsync({ id });
       toast.success("Transport charge row deleted");
@@ -264,6 +262,15 @@ export default function PricingPage() {
       toast.error(error instanceof Error ? error.message : "Failed to delete transport charge row");
     }
   };
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    const { type, id } = deleteTarget;
+    if (type === "do") await handleDeleteDo(id);
+    else if (type === "dest") await handleDeleteDest(id);
+    else if (type === "transport") await handleDeleteTransport(id);
+    setDeleteTarget(null);
+  }, [deleteTarget]);
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 animate-in fade-in zoom-in-95 duration-700">
@@ -457,7 +464,7 @@ export default function PricingPage() {
                                 <Button
                                   size="icon"
                                   variant="ghost"
-                                  onClick={() => handleDeleteDo(row.id)}
+                                  onClick={() => row.id && setDeleteTarget({ type: "do", id: row.id, label: `DO charge "${row.carrier}"` })}
                                   disabled={disableManageActions || deleteDo.isPending || !row.id}
                                   aria-label={`Delete DO ${row.carrier}`}
                                   className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
@@ -640,7 +647,7 @@ export default function PricingPage() {
                                 <Button
                                   size="icon"
                                   variant="ghost"
-                                  onClick={() => handleDeleteDest(row.id)}
+                                  onClick={() => row.id && setDeleteTarget({ type: "dest", id: row.id, label: `destination charge "${row["Charge Type"]}"` })}
                                   disabled={disableManageActions || deleteDest.isPending || !row.id}
                                   aria-label={`Delete destination ${row["Charge Type"]}`}
                                   className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
@@ -783,7 +790,7 @@ export default function PricingPage() {
                                 <Button
                                   size="icon"
                                   variant="ghost"
-                                  onClick={() => handleDeleteTransport(row.id)}
+                                  onClick={() => row.id && setDeleteTarget({ type: "transport", id: row.id, label: `transport charge "${row.Place}"` })}
                                   disabled={disableManageActions || deleteTransport.isPending || !row.id}
                                   aria-label={`Delete transport ${row.Place}`}
                                   className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
@@ -803,6 +810,14 @@ export default function PricingPage() {
           </Card>
         </TabsContent>
       </Tabs>
+      <ConfirmDeleteDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title={`Delete ${deleteTarget?.label ?? "this row"}?`}
+        description="This action cannot be undone. The pricing row will be permanently removed."
+        onConfirm={handleConfirmDelete}
+        isPending={deleteDo.isPending || deleteDest.isPending || deleteTransport.isPending}
+      />
     </div>
   );
 }

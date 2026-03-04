@@ -10,10 +10,10 @@ import { useRFQs } from "@/hooks/use-rfqs";
 import { useUIStore } from "@/store/ui-store";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { AlertCircle, Plus } from "lucide-react";
 
 export default function RFQPipelinePage() {
-  const { data: rfqs, isLoading } = useRFQs();
+  const { data: rfqs, isLoading, isError } = useRFQs();
   const { pipelineView, setPipelineView } = useUIStore();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -73,6 +73,11 @@ export default function RFQPipelinePage() {
           {[1, 2, 3, 4, 5].map((i) => (
             <Skeleton key={i} className="h-16 w-full rounded-2xl" />
           ))}
+        </div>
+      ) : isError ? (
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+          <AlertCircle className="h-8 w-8 text-destructive/60" />
+          <p className="text-sm font-medium">Failed to load RFQs. Please try refreshing the page.</p>
         </div>
       ) : pipelineView === "table" ? (
         <RFQTable rfqs={filtered} />

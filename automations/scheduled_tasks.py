@@ -482,6 +482,24 @@ def check_stale_rfqs():
                 .data or []
             )
 
+            if not processing_rfqs:
+                continue
+
+            # Batch-fetch all received quotes for this workspace's processing RFQs
+            processing_rfq_ids = [r["rfq_id"] for r in processing_rfqs if r.get("rfq_id")]
+            quoted_rfq_ids = set()
+            if processing_rfq_ids:
+                quoted_rows = (
+                    supabase.table("agent_quotes")
+                    .select("rfq_id")
+                    .eq("workspace_id", wid)
+                    .eq("status", "Received")
+                    .in_("rfq_id", processing_rfq_ids)
+                    .execute()
+                    .data or []
+                )
+                quoted_rfq_ids = {r["rfq_id"] for r in quoted_rows if r.get("rfq_id")}
+
             for rfq in processing_rfqs:
                 received_at_str = rfq.get("received_at", "")
                 if not received_at_str:
@@ -498,19 +516,7 @@ def check_stale_rfqs():
                 if received_at > stale_threshold:
                     continue
 
-                # Check if any quotes exist
-                quotes = (
-                    supabase.table("agent_quotes")
-                    .select("id")
-                    .eq("workspace_id", wid)
-                    .eq("rfq_id", rfq["rfq_id"])
-                    .eq("status", "Received")
-                    .limit(1)
-                    .execute()
-                    .data or []
-                )
-
-                if not quotes:
+                if rfq["rfq_id"] not in quoted_rfq_ids:
                     # Log as stale — no quotes after 48 hours
                     hours_elapsed = (now_utc - received_at).total_seconds() / 3600
                     try:

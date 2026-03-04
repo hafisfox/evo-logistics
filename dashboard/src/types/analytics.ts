@@ -4,6 +4,12 @@ export interface DashboardKPIs {
   pendingSelection: number;
   quotedToday: number;
   avgResponseTimeHours: number | null;
+  totalRFQs: number;
+  selectedCount: number;
+  quotedCount: number;
+  conversionRate: number;
+  totalRevenueAED: number;
+  totalRevenueUSD: number;
 }
 
 export interface PipelineCount {

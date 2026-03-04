@@ -26,6 +26,12 @@ const summaryFixture = {
     pendingSelection: 1,
     quotedToday: 2,
     avgResponseTimeHours: 2.4,
+    totalRFQs: 5,
+    selectedCount: 0,
+    quotedCount: 2,
+    conversionRate: 0,
+    totalRevenueAED: 0,
+    totalRevenueUSD: 0,
   },
   pipeline: [
     { status: "Processing", count: 3 },

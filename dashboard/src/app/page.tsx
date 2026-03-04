@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { format } from "date-fns";
-import { ArrowRight, MoveUpRight, Plus } from "lucide-react";
+import { ArrowRight, BadgeDollarSign, MoveUpRight, Plus, TrendingUp } from "lucide-react";
 
 import { useDashboardSummary } from "@/hooks/use-dashboard-summary";
 import { CircularProgress } from "@/components/dashboard/circular-progress";
@@ -238,6 +238,97 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Conversion funnel + Revenue row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="group flex flex-col rounded-3xl bg-card border border-black/5 dark:border-white/5 p-6 shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-chart-4/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-5">
+              <TrendingUp className="h-4 w-4 text-chart-4" />
+              <h3 className="font-semibold text-foreground tracking-tight">Conversion Funnel</h3>
+            </div>
+            {isLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-6 w-full" />
+                <Skeleton className="h-6 w-3/4" />
+                <Skeleton className="h-6 w-1/2" />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {(() => {
+                  const total = kpis?.totalRFQs ?? 0;
+                  const quoted = kpis?.quotedCount ?? 0;
+                  const selected = kpis?.selectedCount ?? 0;
+                  const quotedPct = total > 0 ? Math.round((quoted / total) * 100) : 0;
+                  const selectedPct = total > 0 ? Math.round((selected / total) * 100) : 0;
+                  return (
+                    <>
+                      <FunnelRow label="Total RFQs" count={total} percent={100} color="bg-primary" />
+                      <FunnelRow label="Quoted" count={quoted} percent={quotedPct} color="bg-chart-4" />
+                      <FunnelRow label="Selected" count={selected} percent={selectedPct} color="bg-chart-2" />
+                      <div className="pt-3 border-t border-dashed border-black/5 dark:border-white/10">
+                        <p className="text-sm text-muted-foreground font-medium">
+                          Win rate: <span className="text-foreground font-bold">{kpis?.conversionRate ?? 0}%</span>
+                        </p>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="group flex flex-col rounded-3xl bg-card border border-black/5 dark:border-white/5 p-6 shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-chart-2/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-5">
+              <BadgeDollarSign className="h-4 w-4 text-chart-2" />
+              <h3 className="font-semibold text-foreground tracking-tight">Revenue (Selected Quotes)</h3>
+            </div>
+            {isLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-12 w-40" />
+                <Skeleton className="h-6 w-32" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-4xl font-light tracking-tighter text-foreground">
+                    AED {(kpis?.totalRevenueAED ?? 0).toLocaleString("en-US")}
+                  </p>
+                  <p className="text-sm text-muted-foreground font-medium mt-1">
+                    USD {(kpis?.totalRevenueUSD ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="flex items-center gap-4 pt-3 border-t border-dashed border-black/5 dark:border-white/10">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-foreground tracking-tight">{kpis?.selectedCount ?? 0}</p>
+                    <p className="text-[11px] text-muted-foreground font-medium">Completed</p>
+                  </div>
+                  <div className="h-8 w-px bg-border" />
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-foreground tracking-tight">{kpis?.quotedToday ?? 0}</p>
+                    <p className="text-[11px] text-muted-foreground font-medium">Quoted Today</p>
+                  </div>
+                  <div className="h-8 w-px bg-border" />
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-foreground tracking-tight">
+                      {kpis?.avgResponseTimeHours != null
+                        ? kpis.avgResponseTimeHours < 1
+                          ? `${Math.round(kpis.avgResponseTimeHours * 60)}m`
+                          : `${kpis.avgResponseTimeHours.toFixed(1)}h`
+                        : "—"}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground font-medium">Avg Response</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col">
           {isLoading ? (
@@ -316,6 +407,23 @@ export default function DashboardPage() {
           <DeferredShipmentsTable initialRFQs={summary?.recentRfqs ?? []} disableLiveFetch />
         )}
       </div>
+    </div>
+  );
+}
+
+function FunnelRow({ label, count, percent, color }: { label: string; count: number; percent: number; color: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-sm font-medium text-muted-foreground w-20 shrink-0">{label}</span>
+      <div className="flex-1 h-6 bg-black/[0.03] dark:bg-white/[0.03] rounded-full overflow-hidden">
+        <div
+          className={`h-full ${color} rounded-full transition-all duration-700 ease-out flex items-center justify-end pr-2`}
+          style={{ width: `${Math.max(percent, 4)}%` }}
+        >
+          {percent >= 15 && <span className="text-[10px] font-bold text-white">{percent}%</span>}
+        </div>
+      </div>
+      <span className="text-sm font-bold text-foreground w-8 text-right">{count}</span>
     </div>
   );
 }

@@ -3,21 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import type { AgentQuote } from "@/types/rfq";
 import { requireWorkspaceApiContext } from "@/lib/workspace-context";
 import { mapNormalizedQuoteToLegacy } from "@/lib/rfq-normalization";
+import { isMissingRelationError } from "@/lib/supabase-errors";
 
 export const dynamic = "force-dynamic";
 
-function isMissingRelationError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const code = "code" in error ? String((error as { code?: string }).code || "") : "";
-  const message =
-    "message" in error ? String((error as { message?: string }).message || "") : "";
-  return (
-    code === "PGRST205" ||
-    code === "42P01" ||
-    message.includes("Could not find the table") ||
-    (message.includes("relation") && message.includes("does not exist"))
-  );
-}
 
 export async function GET(
   _request: Request,

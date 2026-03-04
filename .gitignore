@@ -3,6 +3,12 @@ screenshots/
 .worktrees/
 .vercel
 
+# OAuth credentials (never commit)
+automations/credentials.json
+automations/token.json
+credentials.json
+token.json
+
 # Local AI skill packs (keep local, do not commit)
 .agents/skills/
 .claude/skills/

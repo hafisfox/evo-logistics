@@ -4,6 +4,19 @@
 
 ---
 
+## Quick Status
+
+| Phase | Status | Blocker |
+|-------|--------|---------|
+| Phase 1: Air Foundation | Not started | Automation `freight_mode` gap (P0) |
+| Phase 2: Air API Integration | Not started | Depends on Phase 1 |
+| Phase 3: Land Foundation | Not started | Depends on Phase 1 schema patterns |
+| Phase 4: Land API Integration | Not started | Depends on Phase 3 |
+| Phase 5: Multimodal/Intermodal | Not started | Depends on Phases 2 + 4 |
+| Phase 6: Intelligence/Optimization | Not started | Depends on Phase 5 |
+
+---
+
 ## Executive Summary
 
 | Metric | Current (Ocean Only) | Target (Multimodal) |
@@ -21,24 +34,45 @@
 
 ---
 
-## Current State — Ocean Freight Automation
+## Current State — Ocean Freight Automation (Updated 2026-03-04)
 
 | Component | Status | Key Details |
 |-----------|--------|-------------|
-| Phase 1: RFQ Ingestion | Live | Gmail Pub/Sub → GPT-4o extraction → `rfq_shipments` + `rfq_shipment_containers` |
-| Phase 2: Quote Analysis | Live | Agent email replies → LLM parsing → `agent_quotes` with dedup |
-| Phase 3: Quote Selection | Live | Dashboard selection → 13% margin → AED/USD pricing |
+| Phase 1: RFQ Ingestion | Live | Gmail Pub/Sub → GPT-4o extraction → `rfq_shipments` + `rfq_shipment_containers`; extracts commodity, HS code, incoterms, DG/reefer, weight/volume |
+| Phase 2: Quote Analysis | Live | Agent email replies → LLM parsing → `agent_quotes` with dedup; extracts surcharges (BAF/CAF/THC/etc), free_time_details, validity_date, conditions |
+| Phase 3: Quote Selection | Live | Dashboard selection → surcharge-aware pricing → dynamic exchange rate → AED/USD pricing |
+| Scheduled Tasks | Live | Multi-step agent escalation (0→3hrs→6hrs→12hrs→auto-close); quote expiry checks; stale RFQ detection |
 | Carriers | 11 | COSCO, EVERGREEN, MSC, ONE, MAERSK, HAPAG-LLOYD, CMA CGM, YANG MING, HMM, PIL, ZIM |
-| Container types | 7 | 20FT, 40FT, 40HC, 40HQ, 20OT, 40OT, 45FT |
+| Container types | 8 | 20FT, 40FT, 40HC, 40HQ, 20OT, 40OT, 45FT, 20RF/40RF (reefer) |
 | Service types | 4 | port-to-port, door-to-port, port-to-door, door-to-door |
-| Pricing tables | 3 | DO charges (per carrier/container), destination charges, transportation charges |
-| Dashboard | Live | Next.js 16 + React 19 + Supabase + multi-tenant RLS |
+| Pricing tables | 4 | DO charges, destination charges, transportation charges, exchange rates |
+| Dashboard | Live | Next.js 16 + React 19 + Supabase + multi-tenant RLS; sortable/paginated RFQ table; CSV export; conversion funnel + revenue KPIs; exchange rate management; manual RFQ creation; notes + activity log |
+| Schema | `freight_mode` ready | `rfq_shipments.freight_mode` and `agent_quotes.freight_mode` columns live with `CHECK ('ocean','air','land')` default `'ocean'` (migration 017) |
+| TypeScript types | Done | `FreightMode`, `QuoteSurcharges`, `FreeTimeDetails`, `ExchangeRate`, `ActivityLog`, `RFQNote` in `dashboard/src/types/rfq.ts` |
+| Extra tables | Live | `exchange_rates` (USD→AED history), `activity_logs`, `rfq_notes` |
 
 **Key files for extension:**
-- `automations/phase_1_request_analysis.py` — RFQ parsing template
-- `automations/phase_2_quote_analysis.py` — Quote extraction template
-- `dashboard/src/lib/pricing-engine.ts` — Pricing calculation logic
+- `automations/phase_1_request_analysis.py` — RFQ parsing template (ocean-specific prompts; needs air/land variants)
+- `automations/phase_2_quote_analysis.py` — Quote extraction template (ocean-specific; needs per-kg and per-mile parsing)
+- `dashboard/src/lib/pricing-engine.ts` — Pricing calculation logic (ocean only; needs DIM weight, FTL/LTL engines)
 - `dashboard/supabase/migrations/` — Schema templates
+- `dashboard/src/types/rfq.ts` — `FreightMode`, `RFQShipment`, `AgentQuote` types (multimodal-ready)
+
+**Critical gap for multimodal:** Phase 1 automation (`ShipmentData` Pydantic model) has **no `freight_mode` field** — the column defaults to `'ocean'` silently. The GPT-4o extraction prompt and agent outreach email are 100% ocean-specific.
+
+**Ocean hardcoding audit** — these locations must be updated for multimodal:
+| Location | What's Hardcoded |
+|----------|-----------------|
+| `automations/phase_1_request_analysis.py` | `ShipmentData` model missing `freight_mode`; GPT-4o prompt ocean-only; email says "Ocean Freight rates" |
+| `automations/phase_2_quote_analysis.py` | Quote parsing prompt ocean-only |
+| `dashboard/src/app/api/rfqs/route.ts` ~line 293 | `freight_mode: "ocean"` on manual RFQ creation |
+| `dashboard/src/lib/constants.ts` | `CARRIERS` = 11 ocean lines only; `CONTAINER_TYPES` = ocean only |
+| `dashboard/src/app/rfqs/new/page.tsx` | New RFQ form only shows ocean fields (containers, POL/POD) |
+| `dashboard/src/lib/pricing-engine.ts` | Entirely ocean-specific (DO/dest/transport charges, container-based) |
+| `dashboard/src/lib/dashboard-summary.ts` | KPIs, revenue, pipeline counts don't segment by freight mode |
+| `dashboard/src/types/analytics.ts` | No per-mode KPI breakdown |
+| Sidebar icon | Ship icon, no air/land nav |
+| `STATUS_CONFIG` | No air/land-specific statuses |
 
 ---
 
@@ -198,16 +232,20 @@ rfq_shipment_truck_details  -- weight, class, equipment, commodity
 
 ```
 master_rfqs (existing)
-  └── rfq_shipments (existing, add `freight_mode` column)
+  └── rfq_shipments (existing — `freight_mode` column LIVE, CHECK ocean/air/land)
         ├── rfq_shipment_containers (ocean — existing)
-        ├── rfq_shipment_pieces (air — new)
-        └── rfq_shipment_truck_details (land — new)
+        ├── rfq_shipment_pieces (air — NEW)
+        ├── rfq_shipment_truck_details (land — NEW)
+        └── rfq_shipment_legs (intermodal — NEW, for multi-leg journeys)
+              - leg_number, freight_mode, origin, destination, carrier, price, transit_time
 
-agent_quotes (existing, add `freight_mode` column)
+agent_quotes (existing — `freight_mode` column LIVE)
   ├── Ocean-specific: carrier (shipping line), container type, transit days
   ├── Air-specific: airline, chargeable weight, flight number
   └── Land-specific: truck carrier, equipment type, per-mile rate
 ```
+
+**Air surcharge strategy:** Air-specific surcharges (FSC, SSC, TSA, handling, DG surcharge, AWB fee) use the `[key: string]` catch-all on the existing `QuoteSurcharges` interface — no schema change needed.
 
 ### Carrier Connectivity Layer
 
@@ -261,13 +299,17 @@ agent_quotes (existing, add `freight_mode` column)
 
 | Task | Details | Priority |
 |------|---------|----------|
-| Add `freight_mode` to `rfq_shipments` + `agent_quotes` | `ENUM('ocean', 'air', 'land')` — backward-compatible, default `ocean` | P0 |
+| ~~Add `freight_mode` to `rfq_shipments` + `agent_quotes`~~ | ~~DONE — migration 017, columns live~~ | ~~P0~~ |
+| ~~`FreightMode` TypeScript type~~ | ~~DONE — `dashboard/src/types/rfq.ts`~~ | ~~P0~~ |
+| Add `freight_mode` to Phase 1 automation | Add to `ShipmentData` Pydantic model; update GPT-4o prompt to detect mode from email; update `_dual_write_normalized_rfq()` to write mode; update agent outreach email template | **P0** |
+| Add `freight_mode` to Phase 2 automation | Update quote parsing prompt for mode-aware extraction | **P0** |
 | Create air DB tables | `air_carrier_profiles`, `air_charge_rates`, `rfq_shipment_pieces` | P0 |
-| Extend Phase 1 prompt | New GPT-4o system prompt for air RFQ extraction (airline, weight, dims, airport codes) | P0 |
-| Extend Phase 2 prompt | Air quote parsing (per-kg rates, FSC, SSC, chargeable weight) | P0 |
+| Extend Phase 1 prompt for air | New GPT-4o system prompt for air RFQ extraction (airline, weight, dims, airport codes) | P0 |
+| Extend Phase 2 prompt for air | Air quote parsing (per-kg rates, FSC, SSC, chargeable weight) | P0 |
 | DIM weight calculator | `max(actual, L×W×H/6000)` utility in both Python + TypeScript | P1 |
-| Dashboard mode selector | Toggle ocean/air on RFQ creation + display | P1 |
+| Dashboard mode selector | Toggle ocean/air on RFQ creation + display; update constants (carriers, container types) | P1 |
 | Air pricing engine | Weight-tier based pricing with surcharge stacking | P1 |
+| Analytics mode breakdown | Extend `DashboardKPIs` and `buildDashboardSummary()` to support per-mode filtering | P2 |
 
 ### Phase 2: Air Freight API Integration (Weeks 7–12)
 
@@ -319,6 +361,19 @@ agent_quotes (existing, add `freight_mode` column)
 | Predictive pricing models | XGBoost/LightGBM per mode, trained on accumulated data | P1 |
 | Mode comparison engine | Auto-recommend ocean vs air vs land based on cost/time/reliability | P2 |
 | Carbon footprint tracking | CargoAi Cargo2ZERO API + mode-specific emission factors | P2 |
+
+---
+
+## API Integration Priority
+
+| Priority | API | Mode | Why This Order | Effort |
+|----------|-----|------|----------------|--------|
+| 1 | Freightos Rate Estimator | Air+Ocean | Free tier, REST, covers 2 modes at once | Low |
+| 2 | FedEx Freight LTL | Land (LTL) | Free developer portal, standard LTL API | Low |
+| 3 | DAT | Land (FTL) | Largest NA trucking marketplace, spot market | Medium ($50–300/mo) |
+| 4 | CargoAi CargoCONNECT | Air | 680+ airline schedules, requires IATA/CASS | High (enterprise) |
+| 5 | SMC3 | Land (LTL) | Industry-standard LTL rating | High (enterprise) |
+| 6 | project44 | All modes | Visibility layer, do last after rate APIs | High (enterprise) |
 
 ---
 
@@ -374,41 +429,4 @@ agent_quotes (existing, add `freight_mode` column)
 
 ## Sources
 
-### Air Freight
-- [Freightos Developer Portal](https://developers.freightos.com)
-- [Freightos Rate Estimator API](https://developers.freightos.com/docs/freightos---freight-estimator/1/overview)
-- [WebCargo Air Cargo Rate Management](https://www.webcargo.co/air-cargo-rate-management-software/)
-- [Freightos Ocean Expansion (Nov 2025)](https://www.prnewswire.com/il/news-releases/freightos-eliminates-modal-divide-302605382.html)
-- [CargoAi CargoCONNECT](https://www.cargoai.co/products/cargoconnect/)
-- [CargoAi API Docs](https://cargoai.readme.io/reference/introduction)
-- [cargo.one Enterprise](https://www.cargo.one/enterprise)
-- [cargo.one AI Quoting (Oct 2025)](https://www.cargo.one/press/ai-powered-quoting)
-- [cargo.one Multimodal OS (Mar 2026)](https://www.aircargonews.net/technology/2026/03/cargo-one-launches-multimodal-ai-native-operating-system/)
-- [IATA ONE Record](https://www.iata.org/en/iata-repository/pressroom/fact-sheets/fact-sheet-one-record/)
-- [Air Freight Market — Mordor Intelligence](https://www.mordorintelligence.com/industry-reports/global-air-freight-market)
-- [Veryfi AWB OCR API](https://www.veryfi.com/airway-bill-awb-ocr-api/)
-
-### Land Freight
-- [DAT API Integration](https://www.dat.com/api-integration)
-- [project44 AI Freight Agent (Mar 2026)](https://www.freightwaves.com/news/project44-launches-ai-agent-to-automate-freight-procurement-cut-costs)
-- [Uber Freight API](https://www.uberfreight.com/en-US/blog/uber-freight-api-benefits)
-- [SMC3 LTL APIs](https://www.smc3.com/ltl-api.htm)
-- [FedEx Freight LTL API](https://developer.fedex.com/api/en-us/catalog/ltl-freight.html)
-- [Greenscreens.ai / Triumph](https://triumph.io/solutions/rates/)
-- [Turvo + SMC3 LTL Partnership](https://turvo.com/news/turvo-and-smc3-partner-ltl-freight-management/)
-- [BNSF API Center](https://www.bnsf.com/ship-with-bnsf/support-services/customer-api/)
-- [Union Pacific API Developer](https://www.up.com/shipping/resources/api-developer)
-- [Railinc API Portal](https://public.railinc.com/developers)
-- [Digital Freight Trucking Market — Mordor Intelligence](https://www.mordorintelligence.com/industry-reports/digital-freight-trucking-market)
-- [US Trucking Market — GM Insights](https://www.gminsights.com/industry-analysis/freight-trucking-market)
-- [FreightWaves SONAR](https://gosonar.com/)
-- [Digital LTL Council API Standard](https://www.truckinginfo.com/news/new-ltl-api-standard-offers-freight-charge-visibility)
-- [Scheduling Standards Consortium](https://www.truckinginfo.com/news/consortium-publishes-api-freight-scheduling-standards)
-- [Windward D&D Automation](https://www.prnewswire.com/news-releases/windward-launches-detention--demurrage-automation-solution-302385814.html)
-
-### Multimodal / General
-- [project44 LTL Updates](https://www.project44.com/blog/project44s-ltl-updates-announcements-carrier-spotlights-and-new-apis-in-2024/)
-- [OneRail Last Mile](https://www.onerail.com/)
-- [Locus Dispatch Management](https://locus.sh/)
-- [Rail-Flow Digital Platform](https://www.rail-flow.com/en/)
-- [research_data.md](research_data.md) — internal research document
+Full source list extracted to [FUTURE_PLAN_SOURCES.md](FUTURE_PLAN_SOURCES.md) to keep this document focused on actionable items.

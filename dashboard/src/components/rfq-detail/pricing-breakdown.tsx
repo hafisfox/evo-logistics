@@ -3,6 +3,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/utils";
+import { useSettings } from "@/hooks/use-settings";
+import { useExchangeRates } from "@/hooks/use-exchange-rates";
 import type { MasterRFQ } from "@/types/rfq";
 import { Calculator } from "lucide-react";
 
@@ -11,7 +13,13 @@ interface PricingBreakdownProps {
 }
 
 export function PricingBreakdown({ rfq }: PricingBreakdownProps) {
+  const { data: settings } = useSettings();
+  const { data: exchangeRates } = useExchangeRates();
+
   if (!rfq.final_price_aed) return null;
+
+  const margin = settings?.profitMargin;
+  const latestRate = exchangeRates?.[0]?.rate;
 
   return (
     <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-hidden">
@@ -56,11 +64,11 @@ export function PricingBreakdown({ rfq }: PricingBreakdownProps) {
           )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">Margin</span>
-            <span>13%</span>
+            <span>{margin != null ? `${margin}%` : "—"}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Exchange Rate</span>
-            <span>1 USD = 3.685 AED</span>
+            <span>{latestRate != null ? `1 USD = ${latestRate} AED` : "—"}</span>
           </div>
         </div>
       </CardContent>

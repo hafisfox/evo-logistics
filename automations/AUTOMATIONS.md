@@ -1,6 +1,6 @@
 # AUTOMATIONS.md — Modal Automations (Workspace-Aware)
 
-Updated: 2026-02-23
+Updated: 2026-03-04
 
 ## 1. Purpose
 
@@ -59,6 +59,9 @@ Tenant-scoped tables include:
 - `workspace_invites`
 - `workspace_members`
 - `audit_events`
+- `exchange_rates`
+- `activity_logs`
+- `rfq_notes`
 
 Constraint note:
 
@@ -97,6 +100,7 @@ Enforcement migration:
 - dual-write mode persists normalized shipments and shipment containers when `RFQ_NORMALIZED_DUAL_WRITE=true`
 - preserves workspace-safe thread correlation and deterministic extraction behavior
 - unread query intentionally excludes self-sent messages (`-from:<connected mailbox>`) to prevent reply loops; RFQ ingestion tests must use a different sender mailbox.
+- **Ocean freight fields (2026-03-04):** extracts `commodity_description`, `hs_code`, `incoterms` (EXW/FOB/CIF/CFR/CPT/CIP/DAP/DPU/DDP/FCA/FAS), `is_dangerous_goods`, `dg_class`, `is_reefer`, `reefer_temperature`, `special_requirements`, `cargo_weight_kg`, `cargo_volume_cbm` from customer emails; writes to `rfq_shipments` new columns; includes all cargo details in agent outreach emails.
 
 ### Phase 2 (`phase_2_quote_analysis.py`)
 
@@ -105,6 +109,7 @@ Enforcement migration:
 - parses/normalizes quote replies with workspace-scoped RFQ context
 - writes quote outcomes with workspace scoping and deduplicated `match` identity
 - dual-write mode persists normalized quote rows in `agent_quotes` when `RFQ_NORMALIZED_DUAL_WRITE=true`
+- **Surcharge extraction (2026-03-04):** extracts surcharges as JSONB (`baf`, `caf`, `thc`, `pss`, `gri`, `isps`, `orc`, `war_risk`, `congestion`); structured `free_time_details` (demurrage_days, detention_days, combined_days); `validity_date` (ISO date parsed from free-text); `conditions` (quoted string). Sanitization: non-negative surcharges, free_time cap at 90 days.
 
 ### Phase 3 (`phase_3_select_and_quote.py`)
 
@@ -112,6 +117,7 @@ Enforcement migration:
 - resolves Gmail credentials from `workspace_id`
 - reads/writes RFQ and quote tables in that workspace only
 - reads normalized tables first when `RFQ_NORMALIZED_READ_SOURCE=normalized|shadow`, with legacy fallback retained for safety
+- **Surcharge-aware pricing (2026-03-04):** replaced hardcoded `EXCHANGE_RATE = 3.685` with `get_exchange_rate()` DB lookup (fallback to 3.685); `sum_surcharges()` + surcharge-inclusive subtotals in `calculate_port_price`/`calculate_door_price`/`calculate_full_pricing`; quotation email shows USD amounts, surcharge breakdown, free_time_details, conditions, validity_date; sales notification includes margin %, FX rate, per-shipment margin column.
 
 ### Scheduled Tasks (`scheduled_tasks.py`)
 
@@ -119,6 +125,9 @@ Enforcement migration:
 - ensures strict cross-tenant data isolation (queries explicitly loop through active `workspace_id`s instead of leaking across tenants)
 - implements idempotent agent reminder updates using compound keys (`workspace_id`, `rfq_id`, `agent_email`)
 - updates `agent_outbound_log` with the new `'Reminded'` enum status
+- **Multi-step escalation (2026-03-04):** `reminder_count` column tracks escalation level; timing: 0→3hrs, 1→6hrs, 2→12hrs, 3→auto-close (MAX_REMINDER_COUNT=3); escalating tone (gentle → 2nd follow-up → urgent).
+- **Quote expiry check (2026-03-04):** runs every 6 hours; marks quotes past `validity_date` as `Expired`; logs to `activity_logs`.
+- **Stale RFQ detection (2026-03-04):** runs every 4 hours; flags RFQs with no quotes after 48 hours; logs to `activity_logs`.
 
 ### Data Types & Schema Additions
 

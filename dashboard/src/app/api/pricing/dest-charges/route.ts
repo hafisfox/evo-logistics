@@ -7,6 +7,7 @@ import {
   validateIdDeleteBody,
   type ApiErrorPayload,
 } from "@/lib/validation";
+import { isMissingRelationError } from "@/lib/supabase-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -31,18 +32,6 @@ function isUniqueViolation(error: unknown) {
   );
 }
 
-function isMissingRelationError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const code = "code" in error ? String((error as { code?: string }).code || "") : "";
-  const message =
-    "message" in error ? String((error as { message?: string }).message || "") : "";
-  return (
-    code === "PGRST205" ||
-    code === "42P01" ||
-    message.includes("Could not find the table") ||
-    (message.includes("relation") && message.includes("does not exist"))
-  );
-}
 
 function mapDestinationRow(row: Record<string, unknown>): DestinationRow {
   return {

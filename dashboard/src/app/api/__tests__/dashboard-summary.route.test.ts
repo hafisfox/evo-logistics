@@ -210,6 +210,12 @@ describe("/api/dashboard/summary route", () => {
       pendingSelection: 0,
       quotedToday: 0,
       avgResponseTimeHours: null,
+      totalRFQs: 0,
+      selectedCount: 0,
+      quotedCount: 0,
+      conversionRate: 0,
+      totalRevenueAED: 0,
+      totalRevenueUSD: 0,
     });
     expect(payload.pipeline).toEqual([]);
     expect(payload.activity).toEqual([]);

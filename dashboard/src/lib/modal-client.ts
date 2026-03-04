@@ -1,4 +1,4 @@
-const MODAL_WEBHOOK_SECRET = process.env.MODAL_WEBHOOK_SECRET || "";
+const MODAL_WEBHOOK_SECRET = process.env.MODAL_WEBHOOK_SECRET;
 const MODAL_WEBHOOK_TIMEOUT_MS = Number(
   process.env.MODAL_WEBHOOK_TIMEOUT_MS || "15000"
 );
@@ -14,13 +14,14 @@ export async function callModalWebhook<T = unknown>({
   method = "POST",
   body,
 }: WebhookOptions): Promise<T> {
+  if (!MODAL_WEBHOOK_SECRET) {
+    throw new Error("MODAL_WEBHOOK_SECRET environment variable is required");
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    Authorization: `Bearer ${MODAL_WEBHOOK_SECRET}`,
   };
-
-  if (MODAL_WEBHOOK_SECRET) {
-    headers["Authorization"] = `Bearer ${MODAL_WEBHOOK_SECRET}`;
-  }
 
   const controller = new AbortController();
   const timeout = Number.isFinite(MODAL_WEBHOOK_TIMEOUT_MS)

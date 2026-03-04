@@ -29,7 +29,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Pencil, Plus, Trash2, Users, X } from "lucide-react";
+import { AlertCircle, Pencil, Plus, Trash2, Users, X } from "lucide-react";
+import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 
 type DraftAgent = {
   agent_name: string;
@@ -38,7 +39,7 @@ type DraftAgent = {
 };
 
 export default function AgentsPage() {
-  const { data: agents, isLoading } = useAgents();
+  const { data: agents, isLoading, isError } = useAgents();
   const { canManage, isLoading: accessLoading } = useWorkspaceAccess();
   const createMutation = useCreateAgent();
   const updateMutation = useUpdateAgent();
@@ -51,6 +52,7 @@ export default function AgentsPage() {
   });
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingAgent, setEditingAgent] = useState<DraftAgent | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const disableManageActions = useMemo(
     () => accessLoading || !canManage,
@@ -91,14 +93,13 @@ export default function AgentsPage() {
     }
   };
 
-  const deleteAgent = async (agentName: string) => {
-    const confirmed = window.confirm(`Delete agent \"${agentName}\"?`);
-    if (!confirmed) return;
-
+  const confirmDeleteAgent = async () => {
+    if (!deleteTarget) return;
     try {
-      await deleteMutation.mutateAsync({ agent_name: agentName });
+      await deleteMutation.mutateAsync({ agent_name: deleteTarget });
       toast.success("Agent deleted");
-      if (editingKey === agentName) cancelEditing();
+      if (editingKey === deleteTarget) cancelEditing();
+      setDeleteTarget(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete agent");
     }
@@ -174,6 +175,11 @@ export default function AgentsPage() {
               {[1, 2, 3].map((i) => (
                 <Skeleton key={i} className="h-10 w-full" />
               ))}
+            </div>
+          ) : isError ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3">
+              <AlertCircle className="h-8 w-8 text-destructive/60" />
+              <p className="text-sm font-medium">Failed to load agents. Please try refreshing the page.</p>
             </div>
           ) : (
             <div className="rounded-2xl border border-black/5 dark:border-white/5 overflow-x-auto scrollbar-hide">
@@ -305,7 +311,7 @@ export default function AgentsPage() {
                               variant="ghost"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                deleteAgent(agent.agent_name);
+                                setDeleteTarget(agent.agent_name);
                               }}
                               disabled={disableManageActions || deleteMutation.isPending}
                               aria-label={`Delete ${agent.agent_name}`}
@@ -335,6 +341,14 @@ export default function AgentsPage() {
           )}
         </CardContent>
       </Card>
+      <ConfirmDeleteDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title={`Delete agent "${deleteTarget}"?`}
+        description="This agent will be permanently removed and will no longer receive quote requests."
+        onConfirm={confirmDeleteAgent}
+        isPending={deleteMutation.isPending}
+      />
     </div>
   );
 }

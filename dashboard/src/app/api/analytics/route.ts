@@ -11,21 +11,10 @@ import {
   type RFQShipmentContainerRow,
   type RFQShipmentRow,
 } from "@/lib/rfq-normalization";
+import { isMissingRelationError } from "@/lib/supabase-errors";
 
 export const dynamic = "force-dynamic";
 
-function isMissingRelationError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const code = "code" in error ? String((error as { code?: string }).code || "") : "";
-  const message =
-    "message" in error ? String((error as { message?: string }).message || "") : "";
-  return (
-    code === "PGRST205" ||
-    code === "42P01" ||
-    message.includes("Could not find the table") ||
-    (message.includes("relation") && message.includes("does not exist"))
-  );
-}
 
 function buildRouteSummary(rfq: {
   pol: string;
@@ -172,12 +161,35 @@ export async function GET() {
         Math.round((totalHours / completedRFQs.length) * 10) / 10;
     }
 
+    const totalRFQs = rfqs.length;
+    const selectedCount = rfqs.filter(
+      (r) => r.status === "Selected" || (r.selected_agent && r.selected_agent.length > 0)
+    ).length;
+    const quotedCount = rfqs.filter(
+      (r) => ["Quoted", "Followed_Up", "Customer_Replied", "Selected"].includes(r.status as string)
+    ).length;
+    const conversionRate = totalRFQs > 0 ? Math.round((selectedCount / totalRFQs) * 100) : 0;
+    const totalRevenueAED = rfqs.reduce(
+      (sum, r) => sum + (typeof r.final_price_aed === "number" ? r.final_price_aed : 0),
+      0
+    );
+    const totalRevenueUSD = rfqs.reduce(
+      (sum, r) => sum + (typeof r.final_price_usd === "number" ? r.final_price_usd : 0),
+      0
+    );
+
     const kpis: DashboardKPIs = {
       activeRFQs,
       awaitingQuotes,
       pendingSelection,
       quotedToday,
       avgResponseTimeHours,
+      totalRFQs,
+      selectedCount,
+      quotedCount,
+      conversionRate,
+      totalRevenueAED,
+      totalRevenueUSD,
     };
 
     // Pipeline counts

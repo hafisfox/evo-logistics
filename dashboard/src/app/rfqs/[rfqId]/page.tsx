@@ -13,7 +13,9 @@ import { useDeleteRFQ } from "@/hooks/use-rfqs";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import { toast } from "sonner";
+import { useState } from "react";
 import { ArrowLeft, Trash2, UserCheck } from "lucide-react";
 
 export default function RFQDetailPage() {
@@ -22,14 +24,13 @@ export default function RFQDetailPage() {
   const { data, isLoading } = useRFQDetail(rfqId);
   const deleteMutation = useDeleteRFQ();
   const { canManage } = useWorkspaceAccess();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const deleteRFQ = async () => {
-    const confirmed = window.confirm(`Delete RFQ \"${rfqId}\"?`);
-    if (!confirmed) return;
-
     try {
       await deleteMutation.mutateAsync(rfqId);
       toast.success("RFQ deleted");
+      setShowDeleteDialog(false);
       router.push("/rfqs");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete RFQ");
@@ -79,7 +80,7 @@ export default function RFQDetailPage() {
           {canManage && (
             <Button
               variant="destructive"
-              onClick={deleteRFQ}
+              onClick={() => setShowDeleteDialog(true)}
               disabled={deleteMutation.isPending}
               className="h-10 rounded-xl font-semibold shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
             >
@@ -104,6 +105,14 @@ export default function RFQDetailPage() {
           <ActivityTimeline rfqId={rfqId} />
         </div>
       </div>
+      <ConfirmDeleteDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title={`Delete RFQ "${rfqId}"?`}
+        description="This action cannot be undone. The RFQ and all associated data will be permanently removed."
+        onConfirm={deleteRFQ}
+        isPending={deleteMutation.isPending}
+      />
     </div>
   );
 }

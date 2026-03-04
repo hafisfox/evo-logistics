@@ -11,12 +11,14 @@ import {
   type RFQShipmentContainerRow,
   type RFQShipmentRow,
 } from "@/lib/rfq-normalization";
+import { isMissingRelationError } from "@/lib/supabase-errors";
 
 const DASHBOARD_RECENT_RFQ_LIMIT = 8;
 const DASHBOARD_ACTIVITY_LIMIT = 10;
 export const DASHBOARD_SUMMARY_CACHE_TTL_MS = 20_000;
 
 const QUOTED_TODAY_STATUSES = new Set(["Quoted", "Followed_Up", "Customer_Replied"]);
+const QUOTED_STATUSES = new Set(["Quoted", "Followed_Up", "Customer_Replied", "Selected"]);
 
 type DashboardSupabaseClient = SupabaseClient<Database>;
 
@@ -25,6 +27,9 @@ type DashboardMetricRow = {
   status: string | null;
   quoted_at: string | null;
   received_at: string | null;
+  selected_agent: string | null;
+  final_price_usd: number | null;
+  final_price_aed: number | null;
 };
 
 type DashboardRecentRFQRow = Record<string, unknown>;
@@ -50,18 +55,6 @@ interface DashboardSummaryCacheEntry {
 
 const dashboardSummaryCache = new Map<string, DashboardSummaryCacheEntry>();
 
-function isMissingRelationError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const code = "code" in error ? String((error as { code?: string }).code || "") : "";
-  const message =
-    "message" in error ? String((error as { message?: string }).message || "") : "";
-  return (
-    code === "PGRST205" ||
-    code === "42P01" ||
-    message.includes("Could not find the table") ||
-    (message.includes("relation") && message.includes("does not exist"))
-  );
-}
 
 function buildRouteSummary(rfq: {
   pol: string;
@@ -120,7 +113,7 @@ export async function buildDashboardSummary({
   const [metricsRes, recentRfqsRes] = await Promise.all([
     supabase
       .from("master_rfqs")
-      .select("rfq_id, status, quoted_at, received_at")
+      .select("rfq_id, status, quoted_at, received_at, selected_agent, final_price_usd, final_price_aed")
       .eq("workspace_id", workspaceId)
       .is("deleted_at", null),
     supabase
@@ -215,12 +208,35 @@ export async function buildDashboardSummary({
     avgResponseTimeHours = Math.round((totalHours / completedRows.length) * 10) / 10;
   }
 
+  const totalRFQs = metricRows.length;
+  const selectedCount = metricRows.filter(
+    (row) => row.status === "Selected" || (row.selected_agent && row.selected_agent.length > 0)
+  ).length;
+  const quotedCount = metricRows.filter(
+    (row) => QUOTED_STATUSES.has(String(row.status || ""))
+  ).length;
+  const conversionRate = totalRFQs > 0 ? Math.round((selectedCount / totalRFQs) * 100) : 0;
+  const totalRevenueAED = metricRows.reduce(
+    (sum, row) => sum + (typeof row.final_price_aed === "number" ? row.final_price_aed : 0),
+    0
+  );
+  const totalRevenueUSD = metricRows.reduce(
+    (sum, row) => sum + (typeof row.final_price_usd === "number" ? row.final_price_usd : 0),
+    0
+  );
+
   const kpis: DashboardKPIs = {
     activeRFQs,
     awaitingQuotes,
     pendingSelection,
     quotedToday,
     avgResponseTimeHours,
+    totalRFQs,
+    selectedCount,
+    quotedCount,
+    conversionRate,
+    totalRevenueAED,
+    totalRevenueUSD,
   };
 
   const baseRecentRfqs = toMasterRFQRows((recentRfqsRes.data || []) as DashboardRecentRFQRow[]);

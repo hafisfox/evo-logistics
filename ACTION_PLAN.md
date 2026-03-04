@@ -199,6 +199,55 @@ Implemented in commit `89eca19` (currently on `main`):
   - `dashboard/src/hooks/use-dashboard-summary.test.tsx`
   - `dashboard/src/app/page.test.tsx`
 
+### 9. Ocean Freight Hardening (2026-03-04)
+
+Migration: `dashboard/supabase/migrations/20260304_017_ocean_freight_fields.sql`
+
+**Schema additions:**
+- `rfq_shipments` — 11 new columns: `commodity_description`, `hs_code`, `incoterms`, `is_dangerous_goods`, `dg_class`, `is_reefer`, `reefer_temperature`, `special_requirements`, `cargo_weight_kg`, `cargo_volume_cbm`, `freight_mode`
+- `agent_quotes` — 5 new columns: `surcharges` (JSONB), `free_time_details` (JSONB), `validity_date`, `conditions`, `freight_mode`
+- `agent_outbound_log` — `reminder_count` column for multi-step escalation
+- New tables: `exchange_rates`, `activity_logs`, `rfq_notes` (all RLS-enabled, workspace-scoped)
+- New indexes: `idx_agent_quotes_rfq_id`, `idx_rfq_shipments_rfq_id`, `idx_agent_quotes_status`, `idx_agent_quotes_validity_date`, `idx_master_rfqs_quoted_at`
+- Updated view: `v_master_rfq_legacy_projection` with aggregated ocean freight fields
+
+**Automation changes:**
+- Phase 1: extracts commodity, HS code, incoterms, DG/reefer flags, weight/volume from customer emails; writes to new DB columns; includes in agent outreach emails
+- Phase 2: extracts surcharges (BAF, CAF, THC, PSS, GRI, ISPS, ORC, war_risk, congestion) as JSONB; structured free_time_details (demurrage/detention/combined); validity_date; conditions
+- Phase 3: dynamic exchange rate from `exchange_rates` table (fallback 3.685); surcharge-aware pricing; enhanced quotation email with surcharge/free_time breakdown; enhanced sales notification with margin %
+- Scheduled tasks: multi-step escalation (reminder_count 0→3hrs, 1→6hrs, 2→12hrs, 3→auto-close); quote expiry check (marks expired by validity_date); stale RFQ detection (no quotes after 48hrs → activity_logs)
+
+**Dashboard changes:**
+- Types: `QuoteSurcharges`, `FreeTimeDetails`, `SurchargeBreakdown`, `RFQNote`, `ActivityLog`, `ExchangeRate`, `FreightMode`, `Incoterms` added; `RFQShipment` and `AgentQuote` extended
+- Pricing engine: surcharge-aware calculations, dynamic exchange rate, margin % in results
+- RFQ detail page: cargo details section (commodity, HS code, incoterms, DG, reefer, weight, volume); notes section with add/view; activity log timeline
+- Quote table: surcharges column with tooltip breakdown; structured free time display; validity_date
+- Quote selection cards: surcharge breakdown panel; conditions display; free time details
+- New API routes: `GET/POST /api/rfqs/[rfqId]/notes`, `GET /api/rfqs/[rfqId]/activity`, `GET/POST /api/settings/exchange-rates`, `POST /api/rfqs` (manual RFQ creation)
+- New pages: `/rfqs/new` — manual RFQ creation form with all ocean freight fields
+- Pipeline page: "Create RFQ" button added
+- Status badge: added `Cancelled`, `On_Hold`, `Expired` statuses
+
+### 10. Dashboard Polish (2026-03-04)
+
+**RFQ table enhancements:**
+- Column sorting: click-to-sort on RFQ ID, Customer, Status, Ready Date, Price (AED) — toggles asc/desc with arrow indicators
+- Pagination: 25 items per page, numbered page buttons with previous/next navigation, "Showing X–Y of Z" counter
+- CSV export: "Export CSV" button exports all filtered RFQs with 13 columns (ID, customer, route, containers, service, status, dates, prices, agent)
+
+**Exchange rate management UI:**
+- New `ExchangeRateCard` component on Workspace Settings page (`/settings/workspace`)
+- Shows current active rate (or fallback 3.685), effective date
+- Form to submit new rate (owner/admin only)
+- History of last 5 rate entries with effective dates
+- Hook: `dashboard/src/hooks/use-exchange-rates.ts` (`useExchangeRates`, `useCreateExchangeRate`)
+
+**Home page KPI enhancements:**
+- New conversion funnel card: horizontal bar chart showing Total RFQs → Quoted → Selected with win rate %
+- New revenue card: total AED/USD from selected quotes, plus completed count, quoted today, avg response time
+- Extended `DashboardKPIs` type with: `totalRFQs`, `selectedCount`, `quotedCount`, `conversionRate`, `totalRevenueAED`, `totalRevenueUSD`
+- Revenue computed from `final_price_aed`/`final_price_usd` of "Selected" status RFQs in `buildDashboardSummary()`
+
 ## Cutover Mode (Current)
 
 The system now runs with normalized reads active and dual-write retained:
@@ -284,6 +333,7 @@ Executed from this workspace branch:
 - `dashboard/supabase/migrations/20260223_014_workspace_members_rls_optimization.sql`
 - `dashboard/supabase/migrations/20260223_015_workspace_invites_member_create_and_accept_hardening.sql`
 - `dashboard/supabase/migrations/20260223_016_dashboard_summary_perf_indexes.sql`
+- `dashboard/supabase/migrations/20260304_017_ocean_freight_fields.sql`
 - `dashboard/supabase_schema.sql`
 - `dashboard/scripts/backfill_rfq_normalized.ts`
 - `dashboard/src/lib/rfq-normalization.ts`
@@ -300,4 +350,7 @@ Executed from this workspace branch:
 - `automations/gmail_workspace_auth.py`
 - `dashboard/src/hooks/use-workspace-mailbox.ts`
 - `dashboard/src/hooks/use-dashboard-summary.ts`
+- `dashboard/src/hooks/use-exchange-rates.ts`
+- `dashboard/src/components/rfqs/rfq-table.tsx`
+- `dashboard/src/types/analytics.ts`
 - `automations/tenant_context.py`
