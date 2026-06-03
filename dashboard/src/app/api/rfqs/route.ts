@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import type { MasterRFQ, RFQShipment } from "@/types/rfq";
+import type { FreightMode, MasterRFQ, RFQShipment } from "@/types/rfq";
 import { requireWorkspaceApiContext } from "@/lib/workspace-context";
 import type { ApiErrorPayload } from "@/lib/validation";
 import {
@@ -49,7 +49,7 @@ export async function GET() {
         supabase
           .from("rfq_shipments")
           .select(
-            "workspace_id, rfq_id, shipment_number, pol, pod, ready_date, delivery_deadline, service_type, pickup_address, delivery_address"
+            "workspace_id, rfq_id, shipment_number, pol, pod, ready_date, delivery_deadline, service_type, pickup_address, delivery_address, freight_mode"
           )
           .eq("workspace_id", workspaceId)
           .in("rfq_id", rfqIds),
@@ -64,7 +64,7 @@ export async function GET() {
       if (containersRes.error) throw containersRes.error;
 
       shipmentMap = buildShipmentsByRfq(
-        (shipmentsRes.data || []) as RFQShipmentRow[],
+        (shipmentsRes.data || []) as unknown as RFQShipmentRow[],
         (containersRes.data || []) as RFQShipmentContainerRow[]
       );
     } catch (error) {
@@ -93,11 +93,29 @@ const VALID_SERVICE_TYPES = new Set([
   "door-to-port",
   "port-to-door",
   "door-to-door",
+  "airport-to-airport",
+  "door-to-airport",
+  "airport-to-door",
+  "terminal-to-terminal",
+  "door-to-terminal",
+  "terminal-to-door",
 ]);
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
+const VALID_FREIGHT_MODES = new Set<FreightMode>(["ocean", "air", "land"]);
+
+interface ManualRFQPiece {
+  count: number | null;
+  length_cm: number | null;
+  width_cm: number | null;
+  height_cm: number | null;
+  weight_kg: number | null;
+  packaging_type: string | null;
+}
+
 interface ManualRFQShipment {
+  freight_mode: FreightMode;
   pol: string;
   pod: string;
   service_type: string;
@@ -106,6 +124,7 @@ interface ManualRFQShipment {
   pickup_address: string | null;
   delivery_address: string | null;
   containers: Array<{ container_type: string; qty: number }>;
+  pieces: ManualRFQPiece[];
   commodity_description: string | null;
   hs_code: string | null;
   incoterms: string | null;
@@ -157,6 +176,11 @@ export async function POST(request: Request) {
     }
     const shipment = s as Record<string, unknown>;
 
+    const freightMode = (typeof shipment.freight_mode === "string" ? shipment.freight_mode.trim() : "ocean") as FreightMode;
+    if (!VALID_FREIGHT_MODES.has(freightMode)) {
+      details.push(`shipments[${i}].freight_mode must be one of: ocean, air, land.`);
+    }
+
     const pol = typeof shipment.pol === "string" ? shipment.pol.trim() : "";
     if (!pol) details.push(`shipments[${i}].pol is required.`);
 
@@ -165,12 +189,13 @@ export async function POST(request: Request) {
 
     const serviceType = typeof shipment.service_type === "string" ? shipment.service_type.trim() : "port-to-port";
     if (!VALID_SERVICE_TYPES.has(serviceType)) {
-      details.push(`shipments[${i}].service_type must be one of: port-to-port, door-to-port, port-to-door, door-to-door.`);
+      details.push(`shipments[${i}].service_type is invalid.`);
     }
 
+    // Containers (required for ocean, optional for air/land)
     const rawContainers = Array.isArray(shipment.containers) ? shipment.containers : [];
-    if (rawContainers.length === 0) {
-      details.push(`shipments[${i}].containers must have at least one entry.`);
+    if (freightMode === "ocean" && rawContainers.length === 0) {
+      details.push(`shipments[${i}].containers must have at least one entry for ocean freight.`);
     }
 
     const containers: Array<{ container_type: string; qty: number }> = [];
@@ -185,7 +210,24 @@ export async function POST(request: Request) {
       }
     }
 
+    // Pieces (for air freight)
+    const rawPieces = Array.isArray(shipment.pieces) ? shipment.pieces : [];
+    const pieces: ManualRFQPiece[] = [];
+    for (const rp of rawPieces) {
+      if (!rp || typeof rp !== "object") continue;
+      const p = rp as Record<string, unknown>;
+      pieces.push({
+        count: typeof p.count === "number" && Number.isFinite(p.count) ? p.count : null,
+        length_cm: typeof p.length_cm === "number" && Number.isFinite(p.length_cm) ? p.length_cm : null,
+        width_cm: typeof p.width_cm === "number" && Number.isFinite(p.width_cm) ? p.width_cm : null,
+        height_cm: typeof p.height_cm === "number" && Number.isFinite(p.height_cm) ? p.height_cm : null,
+        weight_kg: typeof p.weight_kg === "number" && Number.isFinite(p.weight_kg) ? p.weight_kg : null,
+        packaging_type: typeof p.packaging_type === "string" && p.packaging_type.trim() ? p.packaging_type.trim() : null,
+      });
+    }
+
     shipments.push({
+      freight_mode: freightMode,
       pol,
       pod,
       service_type: serviceType,
@@ -194,6 +236,7 @@ export async function POST(request: Request) {
       pickup_address: typeof shipment.pickup_address === "string" && shipment.pickup_address.trim() ? shipment.pickup_address.trim() : null,
       delivery_address: typeof shipment.delivery_address === "string" && shipment.delivery_address.trim() ? shipment.delivery_address.trim() : null,
       containers,
+      pieces,
       commodity_description: typeof shipment.commodity_description === "string" && shipment.commodity_description.trim() ? shipment.commodity_description.trim() : null,
       hs_code: typeof shipment.hs_code === "string" && shipment.hs_code.trim() ? shipment.hs_code.trim() : null,
       incoterms: typeof shipment.incoterms === "string" && shipment.incoterms.trim() ? shipment.incoterms.trim() : null,
@@ -280,7 +323,7 @@ export async function POST(request: Request) {
           special_requirements: s.special_requirements,
           cargo_weight_kg: s.cargo_weight_kg,
           cargo_volume_cbm: s.cargo_volume_cbm,
-          freight_mode: "ocean",
+          freight_mode: s.freight_mode || "ocean",
         });
 
         if (shipmentError) throw shipmentError;
@@ -297,10 +340,33 @@ export async function POST(request: Request) {
           });
           if (containerError) throw containerError;
         }
+
+        // Insert pieces for air freight
+        if (s.freight_mode === "air" && s.pieces.length > 0) {
+          for (let k = 0; k < s.pieces.length; k++) {
+            const p = s.pieces[k];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { error: pieceError } = await (supabase.from as any)("rfq_shipment_pieces").insert({
+              workspace_id: workspaceId,
+              rfq_id: rfqId,
+              shipment_number: shipmentNumber,
+              piece_number: k + 1,
+              count: p.count,
+              length_cm: p.length_cm,
+              width_cm: p.width_cm,
+              height_cm: p.height_cm,
+              weight_kg: p.weight_kg,
+              packaging_type: p.packaging_type,
+            });
+            if (pieceError) throw pieceError;
+          }
+        }
       }
     } catch (insertError) {
       // Clean up orphaned rows on partial failure
-      console.error("Shipment/container insert failed, cleaning up:", insertError);
+      console.error("Shipment/container/pieces insert failed, cleaning up:", insertError);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase.from as any)("rfq_shipment_pieces").delete().eq("rfq_id", rfqId).eq("workspace_id", workspaceId);
       await supabase.from("rfq_shipment_containers").delete().eq("rfq_id", rfqId).eq("workspace_id", workspaceId);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase.from as any)("rfq_shipments").delete().eq("rfq_id", rfqId).eq("workspace_id", workspaceId);

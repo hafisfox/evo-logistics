@@ -5,7 +5,7 @@ import base64
 import hashlib
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 UAE_TZ = timezone(timedelta(hours=4))
 
@@ -53,7 +53,7 @@ image = modal.Image.debian_slim(python_version="3.11").pip_install(
 # =====================================================================
 # CONSTANTS
 # =====================================================================
-VALID_TYPES = ['20FT', '40FT', '40HC', '40HQ', '45FT', '20OT', '40OT']
+VALID_TYPES = ['20FT', '40FT', '40HC', '40HQ', '45FT', '20OT', '40OT', '20RF', '40RF']
 VALID_SERVICE_TYPES = ['port-to-port', 'door-to-port', 'port-to-door', 'door-to-door']
 RFQ_NORMALIZED_DUAL_WRITE = os.environ.get(
     "RFQ_NORMALIZED_DUAL_WRITE", "true"
@@ -70,6 +70,20 @@ DOOR_FIELD_INFO = {
     **PORT_FIELD_INFO,
     'pickup_address':   {'label': 'Pickup Address (Origin)',        'example': 'Factory name, street, city, country'},
     'delivery_address': {'label': 'Delivery Address (Destination)', 'example': 'Warehouse name, street, area, city'},
+}
+
+AIRPORT_FIELD_INFO = {
+    'pol':    {'label': 'Origin Airport (IATA code or city)',      'example': 'PVG, SHJ, DXB'},
+    'pod':    {'label': 'Destination Airport (IATA code or city)', 'example': 'DXB, JED, DOH'},
+    'pieces': {'label': 'Piece Count, Dims & Weight',             'example': '10 pallets, 120x100x150cm, 500kg each'},
+    'date':   {'label': 'Cargo Ready Date',                        'example': '2026-02-15'},
+}
+
+TRUCK_FIELD_INFO = {
+    'pol':            {'label': 'Origin Location (city/ZIP)',      'example': 'Dubai, Jebel Ali Free Zone'},
+    'pod':            {'label': 'Destination Location (city/ZIP)', 'example': 'Riyadh, Dammam Industrial Area'},
+    'cargo_weight_kg': {'label': 'Cargo Weight',                   'example': '5000 kg, 20 tonnes'},
+    'date':           {'label': 'Cargo Ready Date',                'example': '2026-02-15'},
 }
 
 # =====================================================================
@@ -89,17 +103,37 @@ class ContainerItem(BaseModel):
                 return None
         return v
 
+class PieceItem(BaseModel):
+    count: Optional[int] = Field(None, description="Number of pieces")
+    length_cm: Optional[float] = Field(None, description="Length in centimeters")
+    width_cm: Optional[float] = Field(None, description="Width in centimeters")
+    height_cm: Optional[float] = Field(None, description="Height in centimeters")
+    weight_kg: Optional[float] = Field(None, description="Weight per piece in kilograms")
+    packaging_type: Optional[str] = Field(None, description="pallet, box, skid, loose, crate")
+
+    @field_validator('count', mode='before')
+    @classmethod
+    def coerce_count(cls, v):
+        if isinstance(v, str):
+            try:
+                return int(v)
+            except ValueError:
+                return None
+        return v
+
 class ShipmentData(BaseModel):
+    freight_mode: Literal["ocean", "air", "land"] = Field("ocean", description="Freight mode: ocean, air, or land")
     pol: Optional[str] = Field(None, description="Port of Loading (Origin)")
     pod: Optional[str] = Field(None, description="Port of Discharge (Destination)")
     pod_hint: List[str] = Field(default_factory=list, description="Port of Discharge Options if not confirmed")
     containers: List[ContainerItem] = Field(default_factory=list, description="Container types and quantities")
+    pieces: List[PieceItem] = Field(default_factory=list, description="Piece dimensions for air freight")
     date: Optional[str] = Field(None, description="Cargo Ready Date YYYY-MM-DD")
     delivery_deadline: Optional[str] = Field(None, description="Required Delivery Date YYYY-MM-DD")
     service_type: str = Field("port-to-port", description="Service Level")
     pickup_address: Optional[str] = Field(None, description="Origin Collection Address")
     delivery_address: Optional[str] = Field(None, description="Destination Delivery Address")
-    # Ocean freight detail fields
+    # Cargo detail fields
     commodity_description: Optional[str] = Field(None, description="Cargo commodity description (e.g. steel coils, frozen food)")
     hs_code: Optional[str] = Field(None, description="HS/HTS code if mentioned (6-10 digit)")
     incoterms: Optional[str] = Field(None, description="Trade terms: EXW, FCA, FAS, FOB, CFR, CIF, CPT, CIP, DAP, DPU, DDP")
@@ -165,7 +199,8 @@ def classify_email(modal_llm_client, subject: str, sender: str, body_preview: st
         "- agent_rate_reply: Email from a freight agent containing shipping rates, carrier names, pricing, "
         "validity dates, or a decline/no space response. Subject usually contains a Ref ID like \"Ref: RFQ-XXXXXXXX\".\n"
         "- customer_rfq: New email from a customer requesting a freight quote. Contains container types, "
-        "port mentions, or shipping inquiry language. No Ref ID in subject.\n"
+        "port/airport mentions, shipping inquiry language, air cargo terms (AWB, per-kg, airline rates), "
+        "or trucking terms (FTL, LTL, per-mile, dry van). No Ref ID in subject.\n"
         "- customer_followup: Customer replying to an existing quote thread. May reference a previous "
         "conversation, ask for clarification, or confirm details.\n"
         "- booking_confirmation: Booking confirmation, B/L notification, or vessel confirmation.\n"
@@ -202,6 +237,48 @@ def classify_email(modal_llm_client, subject: str, sender: str, body_preview: st
         print(f"Classification error: {e}, defaulting to out_of_scope")
         return 'out_of_scope'
 
+def detect_freight_mode(llm_client, subject: str, body_preview: str,
+                        fallback_llm_client=None) -> str:
+    """Detect freight mode from email content. Returns 'ocean', 'air', or 'land'."""
+    system_prompt = (
+        "Determine the freight mode for this shipping inquiry. "
+        "Reply with ONLY one word: ocean, air, or land.\n\n"
+        "Signal words:\n"
+        "- OCEAN: container (20FT, 40FT, 40HC), FCL, LCL, vessel, port, POL, POD, "
+        "shipping line, B/L, bill of lading, TEU, sea freight\n"
+        "- AIR: airline, AWB, airway bill, per-kg, air cargo, airport, IATA, "
+        "flight, air freight, charter, express, ULD, pallet (air context)\n"
+        "- LAND: trucking, FTL, LTL, per-mile, dry van, flatbed, trailer, "
+        "overland, road freight, drayage, intermodal truck\n\n"
+        "If unclear or mixed, default to: ocean"
+    )
+    input_text = f"Subject: {subject}\nBody: {body_preview[:800]}"
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": input_text}
+    ]
+    try:
+        response = llm_client.chat.completions.create(
+            model="zai-org/GLM-5-FP8",
+            messages=messages,
+            max_tokens=10
+        )
+        raw = response.choices[0].message.content
+        if raw is None and fallback_llm_client:
+            response = fallback_llm_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                max_tokens=10
+            )
+            raw = response.choices[0].message.content
+        if raw is None:
+            return "ocean"
+        mode = raw.strip().lower()
+        return mode if mode in ("ocean", "air", "land") else "ocean"
+    except Exception as e:
+        print(f"Mode detection error: {e}, defaulting to ocean")
+        return "ocean"
+
 # =====================================================================
 # DATA NORMALIZERS (ported from n8n Parse & Route)
 # =====================================================================
@@ -220,17 +297,24 @@ def normalize_qty(qty):
     except (ValueError, TypeError):
         return None
 
-def normalize_type(container_type):
+def normalize_type(container_type, freight_mode="ocean"):
     if not container_type or not isinstance(container_type, str):
         return None
-    t = re.sub(r'[^A-Z0-9]', '', container_type.strip().upper())
-    # Aliases
+    t = re.sub(r'[^A-Z0-9_]', '', container_type.strip().upper())
+    if not t:
+        return None
+    # Air/land: no container type validation — return raw value
+    if freight_mode in ("air", "land"):
+        return t
+    # Ocean: alias map + VALID_TYPES check
     alias_map = {
         '40FTHC': '40HC', '40HQ': '40HC', '40FTHQ': '40HC',
         '20FTGP': '20FT', '20GP': '20FT',
         '40FTGP': '40FT', '40GP': '40FT',
         '40FTOP': '40OT', '40OP': '40OT', '40OPEN': '40OT', '40OPENTOP': '40OT',
         '20FTOP': '20OT', '20OP': '20OT', '20OPEN': '20OT', '20OPENTOP': '20OT',
+        '20REEFER': '20RF', '20RH': '20RF', '20FTRF': '20RF',
+        '40REEFER': '40RF', '40RH': '40RF', '40FTRF': '40RF',
     }
     t = alias_map.get(t, t)
     return t if t in VALID_TYPES else None
@@ -273,20 +357,50 @@ def normalize_pod_hint(hints):
 
 def validate_shipment(s_data: dict, index: int) -> dict:
     """Normalize and validate a single shipment dict."""
+    freight_mode = s_data.get('freight_mode', 'ocean')
+    if freight_mode not in ('ocean', 'air', 'land'):
+        freight_mode = 'ocean'
+
     raw_containers = s_data.get('containers', [])
     validated_containers = []
     for c in raw_containers:
         nq = normalize_qty(c.get('qty'))
-        nt = normalize_type(c.get('type'))
+        nt = normalize_type(c.get('type'), freight_mode=freight_mode)
         if nq or nt:
             validated_containers.append({'qty': nq, 'type': nt})
 
+    # Validate pieces for air freight
+    raw_pieces = s_data.get('pieces', [])
+    validated_pieces = []
+    for p in raw_pieces:
+        piece = {}
+        if p.get('count') is not None:
+            try:
+                piece['count'] = int(p['count'])
+            except (ValueError, TypeError):
+                piece['count'] = None
+        else:
+            piece['count'] = None
+        for dim in ('length_cm', 'width_cm', 'height_cm', 'weight_kg'):
+            val = p.get(dim)
+            if val is not None:
+                try:
+                    piece[dim] = float(val)
+                except (ValueError, TypeError):
+                    piece[dim] = None
+            else:
+                piece[dim] = None
+        piece['packaging_type'] = p.get('packaging_type')
+        validated_pieces.append(piece)
+
     return {
         'num': index + 1,
+        'freight_mode': freight_mode,
         'pol': normalize_port(s_data.get('pol')),
         'pod': normalize_port(s_data.get('pod')),
         'pod_hint': normalize_pod_hint(s_data.get('pod_hint', [])),
         'containers': validated_containers,
+        'pieces': validated_pieces,
         'date': normalize_date(s_data.get('date')),
         'delivery_deadline': normalize_date(s_data.get('delivery_deadline')),
         'service_type': normalize_service_type(s_data.get('service_type')),
@@ -299,12 +413,20 @@ def validate_shipment(s_data: dict, index: int) -> dict:
 # =====================================================================
 def get_missing_port_fields(shipment: dict) -> list:
     missing = []
+    freight_mode = shipment.get('freight_mode', 'ocean')
     if not shipment['pol']:
         missing.append('pol')
     if not shipment['pod'] and len(shipment['pod_hint']) == 0:
         missing.append('pod')
-    if not shipment['containers'] or any(not c['qty'] or not c['type'] for c in shipment['containers']):
-        missing.append('containers')
+    # Ocean requires containers, air requires pieces, land requires neither
+    if freight_mode == 'ocean':
+        if not shipment['containers'] or any(not c['qty'] or not c['type'] for c in shipment['containers']):
+            missing.append('containers')
+    elif freight_mode == 'air':
+        pieces = shipment.get('pieces', [])
+        if not pieces or all(not p.get('count') for p in pieces):
+            missing.append('pieces')
+    # Land: no container/piece requirements
     if not shipment['date']:
         missing.append('date')
     return missing
@@ -387,14 +509,36 @@ def concatenate_shipments(shipments: list) -> dict:
     }
 
 
+def _normalize_pieces(raw_pieces: list) -> list:
+    """Normalize air freight piece data for DB persistence."""
+    normalized = []
+    for idx, p in enumerate(raw_pieces):
+        piece = {
+            "piece_number": idx + 1,
+            "count": p.get("count"),
+            "length_cm": p.get("length_cm"),
+            "width_cm": p.get("width_cm"),
+            "height_cm": p.get("height_cm"),
+            "weight_kg": p.get("weight_kg"),
+            "packaging_type": (p.get("packaging_type") or "").strip() or None,
+        }
+        if any(v is not None for k, v in piece.items() if k != "piece_number"):
+            normalized.append(piece)
+    return normalized
+
+
 def _build_normalized_shipments(shipments: list) -> list:
     """Convert parsed shipment payload into normalized rows."""
     normalized = []
     for idx, shipment in enumerate(shipments):
+        freight_mode = shipment.get("freight_mode", "ocean")
+        if freight_mode not in ("ocean", "air", "land"):
+            freight_mode = "ocean"
+
         containers = shipment.get("containers") or []
         normalized_containers = []
         for c_idx, container in enumerate(containers):
-            container_type = normalize_type(container.get("type")) or "40HQ"
+            container_type = normalize_type(container.get("type"), freight_mode=freight_mode) or "40HQ"
             qty = normalize_qty(container.get("qty")) or 1
             normalized_containers.append(
                 {
@@ -404,7 +548,8 @@ def _build_normalized_shipments(shipments: list) -> list:
                 }
             )
 
-        if not normalized_containers:
+        # Only add default container for ocean freight
+        if not normalized_containers and freight_mode == "ocean":
             normalized_containers = [
                 {
                     "line_number": 1,
@@ -421,6 +566,7 @@ def _build_normalized_shipments(shipments: list) -> list:
         normalized.append(
             {
                 "shipment_number": idx + 1,
+                "freight_mode": freight_mode,
                 "pol": normalize_port(shipment.get("pol")) or "TBD",
                 "pod": normalize_port(shipment.get("pod")) or "TBD",
                 "ready_date": normalize_date(shipment.get("date")),
@@ -440,6 +586,7 @@ def _build_normalized_shipments(shipments: list) -> list:
                 "special_requirements": (shipment.get("special_requirements") or "").strip() or None,
                 "cargo_weight_kg": shipment.get("cargo_weight_kg"),
                 "cargo_volume_cbm": shipment.get("cargo_volume_cbm"),
+                "pieces": _normalize_pieces(shipment.get("pieces", [])),
             }
         )
 
@@ -447,6 +594,7 @@ def _build_normalized_shipments(shipments: list) -> list:
         normalized.append(
             {
                 "shipment_number": 1,
+                "freight_mode": "ocean",
                 "pol": "TBD",
                 "pod": "TBD",
                 "ready_date": None,
@@ -487,6 +635,7 @@ def _dual_write_normalized_rfq(supabase, workspace_id: str, rfq_id: str, shipmen
             {
                 "rfq_id": rfq_id,
                 "shipment_number": shipment["shipment_number"],
+                "freight_mode": shipment.get("freight_mode", "ocean"),
                 "pol": shipment["pol"],
                 "pod": shipment["pod"],
                 "ready_date": shipment["ready_date"],
@@ -533,8 +682,48 @@ def _dual_write_normalized_rfq(supabase, workspace_id: str, rfq_id: str, shipmen
             .execute()
         )
 
+        # Persist air freight pieces
+        pieces = shipment.get("pieces", [])
+        for piece in pieces:
+            scoped_upsert(
+                supabase,
+                "rfq_shipment_pieces",
+                workspace_id,
+                {
+                    "rfq_id": rfq_id,
+                    "shipment_number": shipment["shipment_number"],
+                    "piece_number": piece["piece_number"],
+                    "count": piece.get("count"),
+                    "length_cm": piece.get("length_cm"),
+                    "width_cm": piece.get("width_cm"),
+                    "height_cm": piece.get("height_cm"),
+                    "weight_kg": piece.get("weight_kg"),
+                    "packaging_type": piece.get("packaging_type"),
+                },
+            )
+
+        piece_count = len(pieces)
+        (
+            supabase.table("rfq_shipment_pieces")
+            .delete()
+            .eq("workspace_id", workspace_id)
+            .eq("rfq_id", rfq_id)
+            .eq("shipment_number", shipment["shipment_number"])
+            .gt("piece_number", piece_count)
+            .execute()
+        )
+
     (
         supabase.table("rfq_shipment_containers")
+        .delete()
+        .eq("workspace_id", workspace_id)
+        .eq("rfq_id", rfq_id)
+        .gt("shipment_number", shipment_count)
+        .execute()
+    )
+
+    (
+        supabase.table("rfq_shipment_pieces")
         .delete()
         .eq("workspace_id", workspace_id)
         .eq("rfq_id", rfq_id)
@@ -564,7 +753,16 @@ def format_missing_fields(shipments: list, has_door: bool) -> str:
         if not s['pod'] and len(s['pod_hint']) > 0:
             all_missing.add('pod')
 
-    field_info = DOOR_FIELD_INFO if has_door else PORT_FIELD_INFO
+    # Pick field info based on freight mode
+    freight_mode = shipments[0].get('freight_mode', 'ocean') if shipments else 'ocean'
+    if freight_mode == 'air':
+        field_info = AIRPORT_FIELD_INFO
+    elif freight_mode == 'land':
+        field_info = TRUCK_FIELD_INFO
+    elif has_door:
+        field_info = DOOR_FIELD_INFO
+    else:
+        field_info = PORT_FIELD_INFO
     lines = []
     for f in all_missing:
         info = field_info.get(f)
@@ -626,21 +824,52 @@ def format_pricing_content(shipments: list, is_multi: bool) -> str:
     for s in shipments:
         header = f"Shipment {s['num']} of {len(shipments)}\n" if is_multi else ''
         pod_display = s['pod'] or (f"TBD (options: {' / '.join(s['pod_hint'])})" if s['pod_hint'] else '???')
+        freight_mode = s.get('freight_mode', 'ocean')
         route = f"{s['pol'] or '???'} > {pod_display}"
-        if s['containers']:
-            container_strs = []
-            for c in s['containers']:
-                if c['qty'] and c['type']:
-                    container_strs.append(f"{c['qty']} x {c['type']}")
-                elif c['qty']:
-                    container_strs.append(f"{c['qty']} containers (type TBD)")
-                else:
-                    container_strs.append('TBD')
-            containers = ', '.join(container_strs)
-        else:
-            containers = 'TBD'
         ready = s['date'] or 'TBD'
-        lines = [f"{header}Route: {route}", f"Containers: {containers}", f"Ready Date: {ready}"]
+
+        if freight_mode == 'air':
+            # Air freight: display pieces instead of containers
+            pieces = s.get('pieces', [])
+            if pieces:
+                piece_strs = []
+                for p in pieces:
+                    parts_p = []
+                    if p.get('count'):
+                        pkg = p.get('packaging_type', 'pcs') or 'pcs'
+                        parts_p.append(f"{p['count']} {pkg}")
+                    dims = []
+                    for d in ('length_cm', 'width_cm', 'height_cm'):
+                        if p.get(d):
+                            dims.append(f"{p[d]}")
+                    if dims:
+                        parts_p.append(f"{'x'.join(dims)} cm")
+                    if p.get('weight_kg'):
+                        parts_p.append(f"{p['weight_kg']} kg each")
+                    piece_strs.append(', '.join(parts_p) if parts_p else 'TBD')
+                cargo_info = '; '.join(piece_strs)
+            else:
+                cargo_info = 'TBD'
+            lines = [f"{header}Route: {route}", f"Cargo: {cargo_info}", f"Ready Date: {ready}"]
+        elif freight_mode == 'land':
+            # Land freight: display weight/commodity instead of containers
+            weight_info = f"{s['cargo_weight_kg']} kg" if s.get('cargo_weight_kg') else 'TBD'
+            lines = [f"{header}Route: {route}", f"Cargo Weight: {weight_info}", f"Ready Date: {ready}"]
+        else:
+            # Ocean freight: display containers
+            if s['containers']:
+                container_strs = []
+                for c in s['containers']:
+                    if c['qty'] and c['type']:
+                        container_strs.append(f"{c['qty']} x {c['type']}")
+                    elif c['qty']:
+                        container_strs.append(f"{c['qty']} containers (type TBD)")
+                    else:
+                        container_strs.append('TBD')
+                containers = ', '.join(container_strs)
+            else:
+                containers = 'TBD'
+            lines = [f"{header}Route: {route}", f"Containers: {containers}", f"Ready Date: {ready}"]
         if s['service_type'] != 'port-to-port':
             lines.append(f"Service: {s['service_type'].upper()}")
         if s['pickup_address']:
@@ -946,20 +1175,47 @@ def _send_agent_outreach(gmail_service, supabase, workspace_id, rfq_id, shipment
         if not agent_email:
             continue
 
-        # 2. Send rate request email
+        # 2. Send rate request email — mode-conditional content
+        freight_mode = shipments[0].get('freight_mode', 'ocean') if shipments else 'ocean'
+        mode_labels = {'ocean': 'Ocean Freight', 'air': 'Air Freight', 'land': 'Land/Trucking'}
+        mode_label = mode_labels.get(freight_mode, 'Ocean Freight')
+
+        if freight_mode == 'air':
+            rate_items = (
+                f"1. Airline Name\n"
+                f"2. Rate per Kg (USD)\n"
+                f"3. Minimum Charge (USD)\n"
+                f"4. ETD\n"
+                f"5. Transit Time (days)\n"
+                f"6. Rate Validity Date"
+            )
+        elif freight_mode == 'land':
+            rate_items = (
+                f"1. Carrier/Trucker Name\n"
+                f"2. Price per Load (USD)\n"
+                f"3. Equipment Type (FTL, LTL, flatbed, etc.)\n"
+                f"4. Pickup Date\n"
+                f"5. Transit Time (days)\n"
+                f"6. Rate Validity Date"
+            )
+        else:
+            rate_items = (
+                f"1. Carrier Name\n"
+                f"2. Price (USD) — TOTAL for ALL containers in that shipment combined\n"
+                f"   (If rates differ per container type, specify: e.g. 40FT: USD X, 20FT: USD Y)\n"
+                f"3. ETD\n"
+                f"4. Transit Time (days)\n"
+                f"5. Free Time at Destination (days)\n"
+                f"6. Rate Validity Date"
+            )
+
         email_subject = f"RFQ: {subject_line} [Ref:{rfq_id}]"
         email_body = (
             f"Dear {agent_name},\n\n"
-            f"Please provide your best Ocean Freight rates for ALL shipments listed below:\n\n"
+            f"Please provide your best {mode_label} rates for ALL shipments listed below:\n\n"
             f"{pricing_content}\n\n"
             f"Please reply with the following for EACH shipment:\n\n"
-            f"1. Carrier Name\n"
-            f"2. Price (USD) — TOTAL for ALL containers in that shipment combined\n"
-            f"   (If rates differ per container type, specify: e.g. 40FT: USD X, 20FT: USD Y)\n"
-            f"3. ETD\n"
-            f"4. Transit Time (days)\n"
-            f"5. Free Time at Destination (days)\n"
-            f"6. Rate Validity Date\n\n"
+            f"{rate_items}\n\n"
             f"Regards,\nPricing Team"
         )
 
@@ -1011,7 +1267,9 @@ Return ONLY raw JSON matching:
       "pol": null,
       "pod": null,
       "pod_hint": [],
+      "freight_mode": "ocean",
       "containers": [{"qty": null, "type": null}],
+      "pieces": [],
       "date": null,
       "delivery_deadline": null,
       "service_type": "port-to-port",
@@ -1038,7 +1296,9 @@ STRICT OUTPUT RULES:
 - Use null for unknown values.
 - pod_hint must always be an array.
 - containers must always be a non-empty array.
-- Container type must be one of: 20FT, 40FT, 40HC, 40HQ, 45FT, 20OT, 40OT.
+- Container type must be one of: 20FT, 40FT, 40HC, 40HQ, 45FT, 20OT, 40OT, 20RF, 40RF.
+- freight_mode must always be "ocean".
+- pieces must always be an empty array [].
 - pol/pod/pod_hint values must be UPPERCASE.
 - extraction_reasoning must be concise deterministic summary (max 2 short sentences).
 
@@ -1186,6 +1446,188 @@ Input:
 "Let me know the rates for 1x40
 1x40 going to be ready on 22nd from Shanghai"
 Output intent: one shipment with containers=[{"qty":2,"type":"40FT"}], not qty=1."""
+
+# =====================================================================
+# AIR FREIGHT SYSTEM PROMPT (stub — expand with prompt engineering later)
+# =====================================================================
+AI_SYSTEM_PROMPT_AIR = """You are a Freight RFQ Intake Parser for AIR CARGO shipments.
+
+You receive:
+1) EMAIL_METADATA
+- email_received_at (YYYY-MM-DD)
+- subject
+- from
+2) EMAIL_BODY (raw customer message)
+
+Return ONLY raw JSON matching:
+{
+  "extraction_reasoning": "concise deterministic summary",
+  "multi": false,
+  "count": 1,
+  "shipments": [
+    {
+      "freight_mode": "air",
+      "pol": null,
+      "pod": null,
+      "pod_hint": [],
+      "containers": [],
+      "pieces": [{"count": null, "length_cm": null, "width_cm": null, "height_cm": null, "weight_kg": null, "packaging_type": null}],
+      "date": null,
+      "delivery_deadline": null,
+      "service_type": "port-to-port",
+      "pickup_address": null,
+      "delivery_address": null,
+      "commodity_description": null,
+      "hs_code": null,
+      "incoterms": null,
+      "is_dangerous_goods": false,
+      "dg_class": null,
+      "is_reefer": false,
+      "reefer_temperature": null,
+      "special_requirements": null,
+      "cargo_weight_kg": null,
+      "cargo_volume_cbm": null
+    }
+  ]
+}
+
+STRICT OUTPUT RULES:
+- Raw JSON only (no markdown/backticks/explanations).
+- count MUST equal len(shipments).
+- multi = true iff len(shipments) > 1.
+- Use null for unknown values.
+- pod_hint must always be an array.
+- freight_mode must always be "air".
+- containers must always be an empty array [].
+- pieces must always be a non-empty array with at least one item.
+- pol/pod should be IATA airport codes or city names, UPPERCASE.
+- extraction_reasoning must be concise deterministic summary (max 2 short sentences).
+
+EXTRACTION LOGIC:
+1) Identify all distinct shipment route statements.
+2) Parse piece details: count, dimensions (L x W x H in cm), weight per piece (kg), packaging type.
+3) Convert dimensions to centimeters if given in inches (×2.54) or meters (×100).
+4) Convert weight to kg if given in lbs (÷2.205) or tonnes (×1000).
+5) Parse service_type (airport-to-airport, door-to-airport, airport-to-door, door-to-door).
+6) Parse dates using email_received_at anchor.
+7) Populate structured output.
+
+FIELD RULES:
+
+pol (origin):
+- Accept airport codes (PVG, CAN, SZX) or origin cities (SHANGHAI, GUANGZHOU, SHENZHEN).
+- Uppercase result.
+
+pod (destination):
+- Accept airport codes (DXB, SHJ, DOH, JED) or destination cities.
+- DUBAI -> DXB, SHARJAH -> SHJ, DOHA -> DOH, JEDDAH -> JED, RIYADH -> RUH.
+
+pieces:
+- Parse forms like "10 pallets 120x100x150cm 500kg each", "5 boxes 60x40x40cm 25kg".
+- packaging_type: pallet, box, skid, loose, crate, carton, drum, bag.
+- count must be integer or null.
+- If only total weight is given without per-piece breakdown, use one piece item with total weight.
+
+service_type:
+- Map "airport-to-airport" to "port-to-port".
+- Map "door-to-airport" to "door-to-port".
+- Map "airport-to-door" to "port-to-door".
+- "door-to-door" stays as-is.
+- Default: "port-to-port"."""
+
+# =====================================================================
+# LAND FREIGHT SYSTEM PROMPT (stub — expand with prompt engineering later)
+# =====================================================================
+AI_SYSTEM_PROMPT_LAND = """You are a Freight RFQ Intake Parser for LAND/TRUCKING shipments.
+
+You receive:
+1) EMAIL_METADATA
+- email_received_at (YYYY-MM-DD)
+- subject
+- from
+2) EMAIL_BODY (raw customer message)
+
+Return ONLY raw JSON matching:
+{
+  "extraction_reasoning": "concise deterministic summary",
+  "multi": false,
+  "count": 1,
+  "shipments": [
+    {
+      "freight_mode": "land",
+      "pol": null,
+      "pod": null,
+      "pod_hint": [],
+      "containers": [],
+      "pieces": [],
+      "date": null,
+      "delivery_deadline": null,
+      "service_type": "door-to-door",
+      "pickup_address": null,
+      "delivery_address": null,
+      "commodity_description": null,
+      "hs_code": null,
+      "incoterms": null,
+      "is_dangerous_goods": false,
+      "dg_class": null,
+      "is_reefer": false,
+      "reefer_temperature": null,
+      "special_requirements": null,
+      "cargo_weight_kg": null,
+      "cargo_volume_cbm": null
+    }
+  ]
+}
+
+STRICT OUTPUT RULES:
+- Raw JSON only (no markdown/backticks/explanations).
+- count MUST equal len(shipments).
+- multi = true iff len(shipments) > 1.
+- Use null for unknown values.
+- pod_hint must always be an array.
+- freight_mode must always be "land".
+- containers must always be an empty array [].
+- pieces must always be an empty array [].
+- pol/pod should be city names or locations, UPPERCASE.
+- extraction_reasoning must be concise deterministic summary (max 2 short sentences).
+- Default service_type to "door-to-door" for trucking.
+
+EXTRACTION LOGIC:
+1) Identify all distinct shipment route statements.
+2) Parse cargo weight and dimensions if provided.
+3) Identify truck type requirements (FTL, LTL, flatbed, dry van, reefer truck).
+4) Parse dates using email_received_at anchor.
+5) Populate structured output.
+
+FIELD RULES:
+
+pol (origin):
+- City name, industrial area, or full address. UPPERCASE.
+- "pickup from Jebel Ali Free Zone" -> pol = "JEBEL ALI FREE ZONE".
+
+pod (destination):
+- City name, industrial area, or full address. UPPERCASE.
+- "deliver to Riyadh Industrial City" -> pod = "RIYADH INDUSTRIAL CITY".
+
+cargo_weight_kg:
+- Extract total weight in kilograms.
+- Convert from tonnes (×1000), lbs (÷2.205), MT/metric tons (×1000).
+- Critical for trucking quotes — extract if mentioned.
+
+special_requirements:
+- Extract truck type: FTL, LTL, flatbed, dry van, curtain-side, low-bed, tanker.
+- Extract equipment needs: tail-lift, crane, forklift access.
+- Capture as comma-separated text. Set null if none."""
+
+
+def _get_system_prompt_for_mode(freight_mode: str) -> str:
+    """Return the appropriate system prompt for the given freight mode."""
+    if freight_mode == "air":
+        return AI_SYSTEM_PROMPT_AIR
+    elif freight_mode == "land":
+        return AI_SYSTEM_PROMPT_LAND
+    return AI_SYSTEM_PROMPT
+
 
 # =====================================================================
 # HELPERS
@@ -1612,7 +2054,13 @@ def _process_incoming_rfqs(pubsub_payload=None):
         rfq_id = existing['rfq_id'] if existing and existing['rfq_id'] else generate_rfq_id(thread_id)
         now_str = datetime.now(UAE_TZ).strftime('%Y-%m-%d %I:%M %p')
 
+        # 2b. DETECT FREIGHT MODE
+        freight_mode = detect_freight_mode(modal_llm_client, subject, body_preview,
+                                            fallback_llm_client=openai_client)
+        print(f"[{msg_id}] Freight mode: {freight_mode}")
+
         # 3. Ask OpenAI to extract structured data
+        system_prompt = _get_system_prompt_for_mode(freight_mode)
         prompt = build_phase1_extraction_prompt(
             subject=subject,
             sender=sender,
@@ -1624,7 +2072,7 @@ def _process_incoming_rfqs(pubsub_payload=None):
             response = openai_client.beta.chat.completions.parse(
                 model="gpt-4o",
                 messages=[
-                    {"role": "system", "content": AI_SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0,
@@ -1655,7 +2103,13 @@ def _process_incoming_rfqs(pubsub_payload=None):
                 continue
 
             # 4. Validate and normalize each shipment
-            shipments = [validate_shipment(s.model_dump(), i) for i, s in enumerate(extracted.shipments)]
+            # Inject detected freight_mode into each shipment before validation
+            raw_shipments = []
+            for s in extracted.shipments:
+                sd = s.model_dump()
+                sd['freight_mode'] = freight_mode  # override with detected mode
+                raw_shipments.append(sd)
+            shipments = [validate_shipment(sd, i) for i, sd in enumerate(raw_shipments)]
             is_multi = extracted.multi or len(shipments) > 1
             # count = number of route-level shipments (1 row per route in agent_outbound_log)
             count = len(shipments) or 1

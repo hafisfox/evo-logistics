@@ -9,7 +9,7 @@ import type {
   ServiceType,
 } from "@/types/rfq";
 
-const DEFAULT_OCEAN_FIELDS = {
+const DEFAULT_SHIPMENT_FIELDS = {
   commodity_description: null,
   hs_code: null,
   incoterms: null,
@@ -23,11 +23,23 @@ const DEFAULT_OCEAN_FIELDS = {
   freight_mode: "ocean" as FreightMode,
 } as const;
 
+function defaultFieldsForMode(mode: FreightMode) {
+  return { ...DEFAULT_SHIPMENT_FIELDS, freight_mode: mode };
+}
+
 const VALID_SERVICE_TYPES = new Set<ServiceType>([
   "port-to-port",
   "door-to-port",
   "port-to-door",
   "door-to-door",
+  // Air service types
+  "airport-to-airport",
+  "door-to-airport",
+  "airport-to-door",
+  // Land service types
+  "terminal-to-terminal",
+  "door-to-terminal",
+  "terminal-to-door",
 ]);
 
 export interface RFQShipmentRow {
@@ -41,6 +53,7 @@ export interface RFQShipmentRow {
   service_type: string | null;
   pickup_address: string | null;
   delivery_address: string | null;
+  freight_mode?: string | null;
 }
 
 export interface RFQShipmentContainerRow {
@@ -171,7 +184,7 @@ export function buildLegacyShipmentsFromRFQ(rfq: Partial<MasterRFQ>): RFQShipmen
         pickup_address: pickupAddress,
         delivery_address: deliveryAddress,
         containers: [],
-        ...DEFAULT_OCEAN_FIELDS,
+        ...defaultFieldsForMode((rfq.freight_mode as FreightMode) || "ocean"),
       };
       shipments.push(current);
       previousGroupKey = groupKey;
@@ -195,7 +208,7 @@ export function buildLegacyShipmentsFromRFQ(rfq: Partial<MasterRFQ>): RFQShipmen
       pickup_address: toNonEmptyOrNull(rfq.pickup_address),
       delivery_address: toNonEmptyOrNull(rfq.delivery_address),
       containers: [{ line_number: 1, container_type: "40HQ", qty: 1 }],
-      ...DEFAULT_OCEAN_FIELDS,
+      ...defaultFieldsForMode((rfq.freight_mode as FreightMode) || "ocean"),
     });
   }
 
@@ -256,7 +269,7 @@ export function buildShipmentsByRfq(
         containers.length > 0
           ? containers
           : [{ line_number: 1, container_type: "40HQ", qty: 1 }],
-      ...DEFAULT_OCEAN_FIELDS,
+      ...defaultFieldsForMode((row.freight_mode as FreightMode) || "ocean"),
     };
 
     const existing = byRfq.get(row.rfq_id) || [];

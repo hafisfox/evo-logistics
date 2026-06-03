@@ -18,7 +18,15 @@ export type ServiceType =
   | "port-to-port"
   | "door-to-port"
   | "port-to-door"
-  | "door-to-door";
+  | "door-to-door"
+  // Air service types
+  | "airport-to-airport"
+  | "door-to-airport"
+  | "airport-to-door"
+  // Land service types
+  | "terminal-to-terminal"
+  | "door-to-terminal"
+  | "terminal-to-door";
 
 export type FreightMode = "ocean" | "air" | "land";
 
@@ -33,6 +41,16 @@ export interface RFQShipmentContainer {
   qty: number;
 }
 
+export interface RFQShipmentPiece {
+  piece_number: number;
+  count: number | null;
+  length_cm: number | null;
+  width_cm: number | null;
+  height_cm: number | null;
+  weight_kg: number | null;
+  packaging_type: string | null;
+}
+
 export interface RFQShipment {
   shipment_number: number;
   pol: string;
@@ -43,6 +61,7 @@ export interface RFQShipment {
   pickup_address: string | null;
   delivery_address: string | null;
   containers: RFQShipmentContainer[];
+  pieces?: RFQShipmentPiece[];
   // Ocean freight fields
   commodity_description: string | null;
   hs_code: string | null;

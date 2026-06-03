@@ -6,14 +6,16 @@
 
 ## Quick Status
 
-| Phase | Status | Blocker |
-|-------|--------|---------|
-| Phase 1: Air Foundation | Not started | Automation `freight_mode` gap (P0) |
-| Phase 2: Air API Integration | Not started | Depends on Phase 1 |
-| Phase 3: Land Foundation | Not started | Depends on Phase 1 schema patterns |
-| Phase 4: Land API Integration | Not started | Depends on Phase 3 |
-| Phase 5: Multimodal/Intermodal | Not started | Depends on Phases 2 + 4 |
-| Phase 6: Intelligence/Optimization | Not started | Depends on Phase 5 |
+| Phase | Weeks | Status | Blocker |
+|-------|-------|--------|---------|
+| Phase 1: Air Foundation | 1–10 | **In progress** | P0 automation subtasks 1a-1i complete; Phase 2 mode-awareness complete; `rfq_shipment_pieces` table live; DIM weight calc done; dashboard mode selector done; remaining: `air_carrier_profiles`/`air_charge_rates` tables, air pricing engine, analytics mode breakdown |
+| Phase 2: Air API Integration | 11–18 | Not started | Depends on Phase 1; start enterprise sales in Phase 1 |
+| Phase 3: Land Foundation | 19–26 | Not started | Depends on Phase 1 schema patterns |
+| Phase 4: Land API Integration | 27–34 | Not started | Depends on Phase 3 |
+| Phase 5: Multimodal/Intermodal | 35–44 | Not started | Depends on Phases 2 + 4 |
+| Phase 6: Intelligence/Optimization | 45–58 | Not started | Depends on Phase 5 |
+
+> **Timeline note:** Original estimate was 44 weeks. Revised to ~58 weeks to account for prompt engineering complexity (2-3 weeks per mode), enterprise API sales cycles (4-8 weeks), and inter-phase buffers. Assumes 1-2 engineers; adjust if team grows.
 
 ---
 
@@ -36,20 +38,14 @@
 
 ## Current State — Ocean Freight Automation (Updated 2026-03-04)
 
-| Component | Status | Key Details |
-|-----------|--------|-------------|
-| Phase 1: RFQ Ingestion | Live | Gmail Pub/Sub → GPT-4o extraction → `rfq_shipments` + `rfq_shipment_containers`; extracts commodity, HS code, incoterms, DG/reefer, weight/volume |
-| Phase 2: Quote Analysis | Live | Agent email replies → LLM parsing → `agent_quotes` with dedup; extracts surcharges (BAF/CAF/THC/etc), free_time_details, validity_date, conditions |
-| Phase 3: Quote Selection | Live | Dashboard selection → surcharge-aware pricing → dynamic exchange rate → AED/USD pricing |
-| Scheduled Tasks | Live | Multi-step agent escalation (0→3hrs→6hrs→12hrs→auto-close); quote expiry checks; stale RFQ detection |
-| Carriers | 11 | COSCO, EVERGREEN, MSC, ONE, MAERSK, HAPAG-LLOYD, CMA CGM, YANG MING, HMM, PIL, ZIM |
-| Container types | 8 | 20FT, 40FT, 40HC, 40HQ, 20OT, 40OT, 45FT, 20RF/40RF (reefer) |
-| Service types | 4 | port-to-port, door-to-port, port-to-door, door-to-door |
-| Pricing tables | 4 | DO charges, destination charges, transportation charges, exchange rates |
-| Dashboard | Live | Next.js 16 + React 19 + Supabase + multi-tenant RLS; sortable/paginated RFQ table; CSV export; conversion funnel + revenue KPIs; exchange rate management; manual RFQ creation; notes + activity log |
-| Schema | `freight_mode` ready | `rfq_shipments.freight_mode` and `agent_quotes.freight_mode` columns live with `CHECK ('ocean','air','land')` default `'ocean'` (migration 017) |
-| TypeScript types | Done | `FreightMode`, `QuoteSurcharges`, `FreeTimeDetails`, `ExchangeRate`, `ActivityLog`, `RFQNote` in `dashboard/src/types/rfq.ts` |
-| Extra tables | Live | `exchange_rates` (USD→AED history), `activity_logs`, `rfq_notes` |
+> Full current implementation details in [ACTION_PLAN.md](ACTION_PLAN.md). Key multimodal-relevant facts below.
+
+| Item | Status | Multimodal Relevance |
+|------|--------|---------------------|
+| Schema: `freight_mode` column | Live (migration 017) | `CHECK ('ocean','air','land')` on `rfq_shipments` + `agent_quotes`, default `'ocean'` — **needs `'intermodal'` added** |
+| TypeScript: `FreightMode` type | Done | `"ocean" \| "air" \| "land"` in `dashboard/src/types/rfq.ts` — needs `"intermodal"` |
+| Container types | 9 validated | ~~Three-way mismatch~~ **FIXED** — all 3 locations now consistent: 20FT, 40FT, 40HC, 40HQ, 45FT, 20OT, 40OT, 20RF, 40RF |
+| Dual-write pattern | Active | `RFQ_NORMALIZED_DUAL_WRITE=true` — new modes should be normalized-only |
 
 **Key files for extension:**
 - `automations/phase_1_request_analysis.py` — RFQ parsing template (ocean-specific prompts; needs air/land variants)
@@ -58,21 +54,27 @@
 - `dashboard/supabase/migrations/` — Schema templates
 - `dashboard/src/types/rfq.ts` — `FreightMode`, `RFQShipment`, `AgentQuote` types (multimodal-ready)
 
-**Critical gap for multimodal:** Phase 1 automation (`ShipmentData` Pydantic model) has **no `freight_mode` field** — the column defaults to `'ocean'` silently. The GPT-4o extraction prompt and agent outreach email are 100% ocean-specific.
+~~**Critical gap for multimodal:** Phase 1 automation (`ShipmentData` Pydantic model) has **no `freight_mode` field`** — the column defaults to `'ocean'` silently.~~ **FIXED** — `freight_mode` field added to `ShipmentData`, mode detection wired into main flow, mode-specific prompts + agent outreach + validation all implemented.
 
 **Ocean hardcoding audit** — these locations must be updated for multimodal:
 | Location | What's Hardcoded |
 |----------|-----------------|
-| `automations/phase_1_request_analysis.py` | `ShipmentData` model missing `freight_mode`; GPT-4o prompt ocean-only; email says "Ocean Freight rates" |
-| `automations/phase_2_quote_analysis.py` | Quote parsing prompt ocean-only |
-| `dashboard/src/app/api/rfqs/route.ts` ~line 293 | `freight_mode: "ocean"` on manual RFQ creation |
-| `dashboard/src/lib/constants.ts` | `CARRIERS` = 11 ocean lines only; `CONTAINER_TYPES` = ocean only |
-| `dashboard/src/app/rfqs/new/page.tsx` | New RFQ form only shows ocean fields (containers, POL/POD) |
+| ~~`automations/phase_1_request_analysis.py`~~ | ~~`ShipmentData` model missing `freight_mode`; GPT-4o prompt ocean-only; email says "Ocean Freight rates"~~ **FIXED** |
+| ~~`automations/phase_2_quote_analysis.py`~~ | ~~Quote parsing prompt ocean-only~~ **FIXED** — mode-specific prompts, carrier normalization, surcharge fields, DB writes |
+| ~~`dashboard/src/app/api/rfqs/route.ts` ~line 293~~ | ~~`freight_mode: "ocean"` on manual RFQ creation~~ **FIXED** — reads `freight_mode` from request body; inserts pieces for air freight |
+| ~~`dashboard/src/lib/constants.ts`~~ | ~~`CARRIERS` = 11 ocean lines only; `CONTAINER_TYPES` = ocean only~~ **FIXED** — `CARRIERS_BY_MODE`, `EQUIPMENT_BY_MODE`, `SERVICE_TYPES_BY_MODE` added; feature flags added |
+| ~~`dashboard/src/app/rfqs/new/page.tsx`~~ | ~~New RFQ form only shows ocean fields (containers, POL/POD)~~ **FIXED** — freight mode selector, conditional ocean/air/land sections, pieces form for air |
 | `dashboard/src/lib/pricing-engine.ts` | Entirely ocean-specific (DO/dest/transport charges, container-based) |
-| `dashboard/src/lib/dashboard-summary.ts` | KPIs, revenue, pipeline counts don't segment by freight mode |
+| ~~`dashboard/src/lib/dashboard-summary.ts`~~ | ~~KPIs, revenue, pipeline counts don't segment by freight mode~~ **FIXED** — route labels use generic origin/destination |
 | `dashboard/src/types/analytics.ts` | No per-mode KPI breakdown |
-| Sidebar icon | Ship icon, no air/land nav |
-| `STATUS_CONFIG` | No air/land-specific statuses |
+| ~~`dashboard/src/lib/rfq-normalization.ts` ~line 12~~ | ~~`DEFAULT_OCEAN_FIELDS` hardcodes `freight_mode: "ocean"`~~ **FIXED** — renamed to `DEFAULT_SHIPMENT_FIELDS` + `defaultFieldsForMode()` helper; VALID_SERVICE_TYPES expanded |
+| ~~`automations/phase_1_request_analysis.py` ~line 56~~ | ~~`VALID_TYPES` = ocean container types only~~ **FIXED** — mode-aware `normalize_type()` bypasses for air/land |
+| ~~`automations/phase_1_request_analysis.py` ~lines 62-73~~ | ~~`PORT_FIELD_INFO` / `DOOR_FIELD_INFO` dicts — ocean-specific~~ **FIXED** — `AIRPORT_FIELD_INFO` + `TRUCK_FIELD_INFO` added |
+| ~~`automations/phase_1_request_analysis.py` ~line 158~~ | ~~`classify_email()` prompt misclassifies air/land~~ **FIXED** — air/land signal words added |
+| `automations/phase_3_select_and_quote.py` | `SelectAgentRequest` model has no `freight_mode`; entire pricing logic is ocean-only (DO charges, dest charges, transport) |
+| `dashboard/src/types/pricing.ts` | `ShipmentCost` has ocean-specific field names: `oceanFreightUSD`, `oceanFreightAED`, `doDocument`, `doPerContainer`, `doTotal`, `destTotal`, `transpPerContainer`, `transpTotal` |
+| Sidebar icon (`app-shell.tsx`) | Ship icon, no air/land nav |
+| `STATUS_CONFIG` in `constants.ts` | No air/land-specific statuses; ~~missing `Cancelled`, `On_Hold`, `Expired`~~ **FIXED** |
 
 ---
 
@@ -96,6 +98,7 @@
 | **CargoAi CargoCONNECT** | 680+ airlines (schedules), 110+ (rates) | REST via RapidAPI | Route/Schedule, Quote/Book, Track/Trace, Cargo2ZERO | Enterprise pricing |
 | **cargo.one** | 75+ airlines direct | Enterprise API | Search, compare, book, track; AI-powered quoting (Oct 2025) | Enterprise pricing |
 | **7LFreight** | Air + inland | API | Rate management, quoting, booking | Enterprise pricing |
+| **Flexport** | Air + ocean + trucking | REST (public API launched 2025) | Instant quoting, booking, tracking across modes | Enterprise pricing |
 
 ### Air-Specific Technical Requirements
 
@@ -132,12 +135,20 @@ Air Freight Rate (per kg, chargeable weight)
 
 ```sql
 -- New tables needed
-air_carrier_profiles        -- airline master data
+air_carrier_profiles        -- airline master data (iata_code, name, cargo_types, active)
 air_charge_profiles         -- per-airline charge structure
 air_charge_rates            -- weight-tier rates per lane per airline
 air_surcharge_types         -- FSC, SSC, TSA, handling, DG
-rfq_shipment_pieces         -- piece-level cargo (weight, dims, DG class)
 awb_documents               -- AWB/HAWB tracking
+
+-- rfq_shipment_pieces — piece-level cargo for air shipments
+--   rfq_id, shipment_number, piece_number, piece_count,
+--   length_cm, width_cm, height_cm, gross_weight_kg,
+--   volume_weight_kg (computed: L×W×H/6000 × count),
+--   chargeable_weight_kg (computed: max of gross, volume),
+--   packaging_type ('pallet'|'box'|'skid'|'loose'),
+--   stackable (boolean), dg_class, un_number
+rfq_shipment_pieces
 ```
 
 ---
@@ -214,14 +225,22 @@ LTL: Base Rate (freight class × weight × distance)
 
 ```sql
 -- New tables needed
-truck_carrier_profiles      -- carrier master data, equipment types
+truck_carrier_profiles      -- carrier master data (MC#, DOT#, equipment types, active)
 truck_lane_rates            -- origin-dest ZIP pair rates
 truck_accessorial_types     -- detention, liftgate, residential, etc.
 ltl_freight_classes         -- NMFC classification table
 ltl_rate_tariffs            -- class-based rate tables
 rail_intermodal_rates       -- rail lane rates
 drayage_rates               -- port drayage by terminal/distance
-rfq_shipment_truck_details  -- weight, class, equipment, commodity
+
+-- rfq_shipment_truck_details — truck-specific shipment data
+--   rfq_id, shipment_number,
+--   equipment_type ('dry_van'|'flatbed'|'reefer'|'tanker'|'step_deck'|'lowboy'),
+--   load_type ('FTL'|'LTL'|'PTL'),
+--   weight_lbs, nmfc_class (for LTL), commodity_description,
+--   hazmat (boolean), accessorials (jsonb array),
+--   origin_zip, destination_zip
+rfq_shipment_truck_details
 ```
 
 ---
@@ -240,12 +259,16 @@ master_rfqs (existing)
               - leg_number, freight_mode, origin, destination, carrier, price, transit_time
 
 agent_quotes (existing — `freight_mode` column LIVE)
-  ├── Ocean-specific: carrier (shipping line), container type, transit days
-  ├── Air-specific: airline, chargeable weight, flight number
-  └── Land-specific: truck carrier, equipment type, per-mile rate
+  ├── Ocean-specific: carrier (shipping line), container type, transit days (existing columns)
+  ├── Air-specific (nullable columns to add): airline_iata, chargeable_weight_kg, flight_number
+  └── Land-specific (nullable columns to add): equipment_type, per_mile_rate, load_type
 ```
 
-**Air surcharge strategy:** Air-specific surcharges (FSC, SSC, TSA, handling, DG surcharge, AWB fee) use the `[key: string]` catch-all on the existing `QuoteSurcharges` interface — no schema change needed.
+**Service type expansion:** Current `service_type` values (`port-to-port`, `door-to-port`, `port-to-door`, `door-to-door`) are ocean-centric. Expand the enum to include: `airport-to-airport`, `door-to-airport`, `airport-to-door` (air) and `pickup`, `delivery`, `cross-dock` (land). Keep as a single column with all values — mode-specific validation in application code.
+
+**Air surcharge strategy:** Add named optional fields for common air/land surcharges (`FSC`, `SSC`, `TSA`, `handling`, `dg_surcharge`, `awb_fee`) to the `QuoteSurcharges` interface for compile-time safety, alongside the existing `[key: string]` catch-all for uncommon surcharges.
+
+**Intermodal `freight_mode`:** Add `'intermodal'` to the CHECK constraint. Parent `rfq_shipments.freight_mode = 'intermodal'` when shipment has multiple legs; per-leg modes tracked in `rfq_shipment_legs`.
 
 ### Carrier Connectivity Layer
 
@@ -295,23 +318,39 @@ agent_quotes (existing — `freight_mode` column LIVE)
 
 ## Phased Roadmap
 
-### Phase 1: Air Freight Foundation (Weeks 1–6)
+### Phase 1: Air Freight Foundation (Weeks 1–10)
 
 | Task | Details | Priority |
 |------|---------|----------|
 | ~~Add `freight_mode` to `rfq_shipments` + `agent_quotes`~~ | ~~DONE — migration 017, columns live~~ | ~~P0~~ |
 | ~~`FreightMode` TypeScript type~~ | ~~DONE — `dashboard/src/types/rfq.ts`~~ | ~~P0~~ |
-| Add `freight_mode` to Phase 1 automation | Add to `ShipmentData` Pydantic model; update GPT-4o prompt to detect mode from email; update `_dual_write_normalized_rfq()` to write mode; update agent outreach email template | **P0** |
-| Add `freight_mode` to Phase 2 automation | Update quote parsing prompt for mode-aware extraction | **P0** |
-| Create air DB tables | `air_carrier_profiles`, `air_charge_rates`, `rfq_shipment_pieces` | P0 |
-| Extend Phase 1 prompt for air | New GPT-4o system prompt for air RFQ extraction (airline, weight, dims, airport codes) | P0 |
-| Extend Phase 2 prompt for air | Air quote parsing (per-kg rates, FSC, SSC, chargeable weight) | P0 |
-| DIM weight calculator | `max(actual, L×W×H/6000)` utility in both Python + TypeScript | P1 |
-| Dashboard mode selector | Toggle ocean/air on RFQ creation + display; update constants (carriers, container types) | P1 |
+| ~~**1a.** Add `freight_mode` to `ShipmentData` Pydantic model~~ | ~~DONE — `Literal["ocean","air","land"]` with default "ocean"~~ | ~~P0~~ |
+| ~~**1b.** Update `classify_email()` prompt~~ | ~~DONE — air/land signal words added~~ | ~~P0~~ |
+| ~~**1c.** Create mode-specific field info dicts~~ | ~~DONE — `AIRPORT_FIELD_INFO` + `TRUCK_FIELD_INFO`~~ | ~~P0~~ |
+| ~~**1d.** Make `VALID_TYPES` mode-aware~~ | ~~DONE — bypasses validation for air/land~~ | ~~P0~~ |
+| ~~**1e.** Mode-branching in GPT-4o prompt~~ | ~~DONE — two-pass: `detect_freight_mode()` → `_get_system_prompt_for_mode()`~~ | ~~P0~~ |
+| ~~**1f.** Add `freight_mode` to `ExtractedRFQs` wrapper model~~ | ~~DONE — `freight_mode` on `ShipmentData`, injected after detection~~ | ~~P0~~ |
+| ~~**1g.** Update `_dual_write_normalized_rfq()`~~ | ~~DONE — writes `freight_mode` to `rfq_shipments`~~ | ~~P0~~ |
+| ~~**1h.** Mode-conditional agent outreach email~~ | ~~DONE — per-kg (air), per-load (land), per-container (ocean)~~ | ~~P0~~ |
+| ~~**1i.** Add `PieceItem` Pydantic model for air~~ | ~~DONE — with string-to-int coercion, validated through pipeline~~ | ~~P0~~ |
+| ~~Add `freight_mode` to Phase 2 automation~~ | ~~DONE — `QuoteData` has `freight_mode`, mode-specific prompts, mode-aware carrier normalization, `SurchargeData` extended with air/land fields, DB writes with `freight_mode`, manager notification mode-aware~~ | ~~P0~~ |
+| ~~Create `rfq_shipment_pieces` table~~ | ~~DONE — migration 018, RLS policies, pieces persistence in Phase 1 automation~~ | ~~P0~~ |
+| Create `air_carrier_profiles`, `air_charge_rates` tables | Air carrier master data and weight-tier rates — needed for Phase 2 API integration | P0 |
+| ~~Extend Phase 1 prompt for air~~ | ~~DONE — air-specific GPT-4o system prompt with airline, weight, dims, airport codes~~ | ~~P0~~ |
+| ~~Extend Phase 2 prompt for air~~ | ~~DONE — air quote parsing with per-kg rates, FSC, SSC, chargeable weight~~ | ~~P0~~ |
+| ~~DIM weight calculator~~ | ~~DONE — `max(actual, L×W×H/6000)` in `automations/dim_weight.py` + `dashboard/src/lib/dim-weight.ts`~~ | ~~P1~~ |
+| ~~Dashboard mode selector~~ | ~~DONE — freight mode selector on RFQ form, mode-keyed constants (CARRIERS_BY_MODE, EQUIPMENT_BY_MODE, SERVICE_TYPES_BY_MODE), feature flags~~ | ~~P1~~ |
 | Air pricing engine | Weight-tier based pricing with surcharge stacking | P1 |
 | Analytics mode breakdown | Extend `DashboardKPIs` and `buildDashboardSummary()` to support per-mode filtering | P2 |
 
-### Phase 2: Air Freight API Integration (Weeks 7–12)
+**Phase 1 acceptance criteria:**
+- Mode detection correctly classifies 90%+ of 50 synthetic air RFQ email fixtures
+- Ocean extraction accuracy does not regress (benchmark against existing test set)
+- Manual RFQ creation supports ocean/air toggle with mode-appropriate fields
+- Air shipment pieces (with DIM weight calc) persist correctly to `rfq_shipment_pieces`
+- Feature flag `FEATURE_AIR_FREIGHT_ENABLED=false` fully hides air mode from UI
+
+### Phase 2: Air Freight API Integration (Weeks 11–18)
 
 | Task | Details | Priority |
 |------|---------|----------|
@@ -321,7 +360,7 @@ agent_quotes (existing — `freight_mode` column LIVE)
 | Air carrier normalization | Master list of 50+ airlines with IATA codes | P1 |
 | IATA ONE Record compliance | Design data model around virtual shipment record standard | P2 |
 
-### Phase 3: Land Freight Foundation (Weeks 13–18)
+### Phase 3: Land Freight Foundation (Weeks 19–26)
 
 | Task | Details | Priority |
 |------|---------|----------|
@@ -332,7 +371,7 @@ agent_quotes (existing — `freight_mode` column LIVE)
 | LTL pricing engine | Class-based rating with NMFC lookup | P1 |
 | Dashboard land mode | FTL/LTL toggle, truck type selector, weight/class inputs | P1 |
 
-### Phase 4: Land Freight API Integration (Weeks 19–24)
+### Phase 4: Land Freight API Integration (Weeks 27–34)
 
 | Task | Details | Priority |
 |------|---------|----------|
@@ -342,7 +381,7 @@ agent_quotes (existing — `freight_mode` column LIVE)
 | Detention/demurrage tracking | Automated D&D fee calculation and alerts | P2 |
 | Cross-border module | VUCEM integration for Mexico, USMCA doc generation | P2 |
 
-### Phase 5: Multimodal & Intermodal (Weeks 25–32)
+### Phase 5: Multimodal & Intermodal (Weeks 35–44)
 
 | Task | Details | Priority |
 |------|---------|----------|
@@ -352,7 +391,7 @@ agent_quotes (existing — `freight_mode` column LIVE)
 | Rail API integration | BNSF + Union Pacific for intermodal routing | P1 |
 | Multimodal RFQ parsing | Single email → auto-detect mode or parse multi-leg requests | P1 |
 
-### Phase 6: Intelligence & Optimization (Weeks 33–44)
+### Phase 6: Intelligence & Optimization (Weeks 45–58)
 
 | Task | Details | Priority |
 |------|---------|----------|
@@ -364,16 +403,120 @@ agent_quotes (existing — `freight_mode` column LIVE)
 
 ---
 
+## Operational Requirements
+
+### Feature Flags (implement in Phase 1)
+
+```
+FEATURE_AIR_FREIGHT_ENABLED=false    # per-workspace toggle
+FEATURE_LAND_FREIGHT_ENABLED=false   # per-workspace toggle
+```
+
+Gradual rollout + instant killswitch per workspace. Gate mode selector UI + prompt branching behind these flags.
+
+### Testing Strategy (per phase)
+
+| Phase | Tests Required |
+|-------|---------------|
+| Phase 1 | Unit tests for DIM weight calc; synthetic air RFQ email fixtures (50+) for prompt regression; ocean extraction regression suite to ensure mode detection doesn't degrade accuracy; E2E test for mode selector on new RFQ form |
+| Phase 2 | Integration tests for API response normalization; rate accuracy benchmarks vs manual quotes |
+| Phase 3 | Unit tests for FTL per-mile + LTL class-based pricing; synthetic land RFQ fixtures (50+) |
+| Phase 4 | API integration tests with sandbox endpoints; load tests for rate aggregator |
+| Phase 5 | Multi-leg journey E2E tests; intermodal pricing accuracy tests |
+
+### Rollback Plan
+
+- Mode detection causes ocean regression → disable via feature flag, revert to hardcoded `freight_mode="ocean"`
+- DB columns are additive (nullable) — no destructive migration risk
+- Prompt versions tracked (e.g., `ocean_v1`, `air_v1`) with logging for A/B comparison and rollback
+
+### Monitoring (Phase 2+)
+
+- Mode-specific parse success rate (% of emails correctly classified per mode)
+- Mode misclassification rate (air classified as ocean, etc.)
+- Air/land quote extraction accuracy (% of fields correctly extracted)
+- Per-mode conversion funnel KPIs
+
+### Prompt Versioning
+
+- Version all prompts: `ocean_extraction_v1`, `air_extraction_v1`, `mode_detection_v1`
+- Log prompt version + model version + input/output for every extraction
+- Reference ACTION_PLAN.md's planned "prompt-eval benchmark" expansion for regression testing
+
+---
+
+## Architectural Decisions
+
+### 1. Design Rate Aggregator interface in Phase 1 (not Phase 5)
+
+Define a normalized response schema now, even if only ocean populates it initially:
+```typescript
+interface NormalizedRate {
+  carrier: string;
+  origin: string;
+  destination: string;
+  price: number;
+  currency: string;
+  transit_time_days: number;
+  valid_until: string;
+  freight_mode: FreightMode;
+  surcharges: { type: string; amount: number }[];
+  source: 'agent_email' | 'api';
+}
+```
+Retrofitting onto 3-4 different integrations later is 3-5x harder than designing upfront.
+
+### 2. Dual-write strategy for new modes
+
+New modes (air/land) should be **normalized-only from the start** — no legacy table writes. The dual-write pattern exists only for ocean backward compatibility during migration.
+
+### 3. `ShipmentCost` interface refactoring
+
+Rename ocean-specific fields in `dashboard/src/types/pricing.ts` to mode-generic names:
+- `oceanFreightUSD` → `baseFreightUSD`
+- `oceanFreightAED` → `baseFreightAED`
+- `doDocument`/`doPerContainer`/`doTotal` → keep for ocean, add mode-specific cost line items via discriminated union or nullable fields
+
+---
+
+## Dashboard UX Gaps
+
+These UI changes are missing from the phased roadmap and should be added:
+
+| Missing Item | Phase | Priority | Details |
+|-------------|-------|----------|---------|
+| RFQ detail page mode-awareness | 1 | P1 | `/rfqs/[rfqId]` shows ocean cargo details; needs air (pieces/dims/airports) and land (ZIP/equipment/class) conditional sections |
+| Pipeline filter by freight mode | 1 | P1 | Add mode filter chips (Ocean/Air/Land) to RFQ list page — more impactful than analytics breakdown |
+| Mode-specific icons on RFQ rows | 1 | P1 | Ship/Plane/Truck icons per RFQ in pipeline list for visual differentiation |
+| Pricing tables page update | 3 | P1 | `/pricing` only has ocean tables (DO, dest, transport); air needs weight-tier tables, land needs lane/accessorial tables |
+| Agents page mode tagging | 1 | P2 | Tag agents by mode specialization; filter agents by mode on the agents page |
+| Cross-mode quote comparison UI | 6 | P2 | Phase 6 mentions "Mode comparison engine" but provides no UI spec — add comparison table/chart design |
+
+---
+
+## Risk Register
+
+| Risk | Impact | Likelihood | Mitigation |
+|------|--------|------------|------------|
+| LLM prompt accuracy degrades for ocean when adding mode detection | High | Medium | Ocean regression test suite (50+ fixtures); feature flags for instant rollback |
+| Enterprise API sales cycles delay Phase 2/4 | Medium | High | Start sales conversations in Phase 1; use free-tier APIs first |
+| Schema migration breaks existing queries | High | Low | Additive-only columns (nullable); no destructive changes; test with production data copy |
+| Air/land prompt quality insufficient for production | High | Medium | Start with manual review of all air/land extractions; graduate to auto-processing at 90%+ accuracy |
+| Intermodal complexity exceeds timeline | Medium | Medium | Phase 5 has 2-week buffer; intermodal is P1 not P0 — can defer |
+
+---
+
 ## API Integration Priority
 
-| Priority | API | Mode | Why This Order | Effort |
-|----------|-----|------|----------------|--------|
-| 1 | Freightos Rate Estimator | Air+Ocean | Free tier, REST, covers 2 modes at once | Low |
-| 2 | FedEx Freight LTL | Land (LTL) | Free developer portal, standard LTL API | Low |
-| 3 | DAT | Land (FTL) | Largest NA trucking marketplace, spot market | Medium ($50–300/mo) |
-| 4 | CargoAi CargoCONNECT | Air | 680+ airline schedules, requires IATA/CASS | High (enterprise) |
-| 5 | SMC3 | Land (LTL) | Industry-standard LTL rating | High (enterprise) |
-| 6 | project44 | All modes | Visibility layer, do last after rate APIs | High (enterprise) |
+| Priority | API | Mode | Why This Order | Effort | Note |
+|----------|-----|------|----------------|--------|------|
+| 1 | Freightos Rate Estimator | Air+Ocean | Free tier, REST, covers 2 modes at once | Low | Provides **estimates** only, not bookable rates — useful for benchmarking, not direct quoting |
+| 2 | DAT | Land (FTL) | Largest NA trucking marketplace, multi-carrier spot market access | Medium ($50–300/mo) | Swapped from #3 — higher impact than single-carrier FedEx |
+| 3 | FedEx Freight LTL | Land (LTL) | Free developer portal, standard LTL API | Low | Single carrier — good for validation, limited for production coverage |
+| 4 | Flexport | Air+Ocean+Truck | Public API (launched 2025), instant quoting across modes | Medium | **NEW** — notable omission from original plan |
+| 5 | CargoAi CargoCONNECT | Air | 680+ airline schedules, requires IATA/CASS | High (enterprise) | **Start sales conversation in Phase 1** — 4-8 week contract cycle |
+| 6 | SMC3 | Land (LTL) | Industry-standard LTL rating | High (enterprise) | **Start sales conversation in Phase 1** |
+| 7 | project44 | All modes | Visibility layer, do last after rate APIs | High (enterprise) | — |
 
 ---
 

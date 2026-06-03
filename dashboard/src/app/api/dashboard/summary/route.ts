@@ -22,7 +22,11 @@ export async function GET() {
       supabase,
     });
 
-    return NextResponse.json(summary);
+    return NextResponse.json(summary, {
+      headers: {
+        "Cache-Control": "private, s-maxage=10, stale-while-revalidate=20",
+      },
+    });
   } catch (error) {
     console.error("Failed to fetch dashboard summary:", error);
     return NextResponse.json({ error: "Failed to fetch dashboard summary" }, { status: 500 });

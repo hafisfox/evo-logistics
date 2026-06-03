@@ -5,7 +5,7 @@ import base64
 import hashlib
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 UAE_TZ = timezone(timedelta(hours=4))
 
@@ -71,10 +71,21 @@ class SurchargeData(BaseModel):
     ORC: Optional[float] = Field(None, description="Origin Receiving Charge")
     war_risk: Optional[float] = Field(None, description="War Risk Surcharge")
     congestion: Optional[float] = Field(None, description="Port Congestion Surcharge")
+    # Air surcharges
+    FSC: Optional[float] = Field(None, description="Fuel Surcharge (air)")
+    SSC: Optional[float] = Field(None, description="Security Surcharge (air)")
+    TSA: Optional[float] = Field(None, description="TSA/Regulated Agent Fee")
+    handling: Optional[float] = Field(None, description="Handling charge (air)")
+    dg_surcharge: Optional[float] = Field(None, description="Dangerous goods surcharge")
+    # Land surcharges
+    fuel_surcharge: Optional[float] = Field(None, description="Fuel surcharge (land)")
+    detention: Optional[float] = Field(None, description="Detention charge (land)")
+    accessorials: Optional[float] = Field(None, description="Accessorial charges (land)")
 
 class QuoteData(BaseModel):
+    freight_mode: Literal["ocean", "air", "land"] = Field("ocean", description="Freight mode from RFQ")
     shipment_number: int = Field(1, description="Shipment block number from original request")
-    price: Optional[float] = Field(None, description="Total ocean freight amount quoted")
+    price: Optional[float] = Field(None, description="Total freight amount quoted")
     currency: str = Field("USD", description="Currency code")
     carrier: str = Field("N/A", description="Carrier Name (e.g. COSCO, MAERSK)")
     validity: Optional[str] = Field(None, description="Expiry date YYYY-MM-DD")
@@ -113,11 +124,16 @@ class ExtractedQuotes(BaseModel):
 # =====================================================================
 # CARRIER NORMALIZATION (ported from n8n Parse AI Output)
 # =====================================================================
-def normalize_carrier(carrier: str) -> str:
+def normalize_carrier(carrier: str, freight_mode: str = "ocean") -> str:
     """Normalize carrier name to standard format."""
     if not carrier or not isinstance(carrier, str):
         return 'N/A'
     c = carrier.strip().upper()
+    if not c:
+        return 'N/A'
+    # Air and land: return cleaned name as-is (no ocean alias matching)
+    if freight_mode in ("air", "land"):
+        return c
     if 'COSCO' in c:
         return 'COSCO'
     if 'EVERGREEN' in c:
@@ -213,8 +229,35 @@ def _normalize_container_type(container_type: str) -> str:
     return cleaned or "UNKNOWN"
 
 
+def _resolve_freight_mode(supabase, workspace_id: str, rfq_row: dict) -> str:
+    """Read freight_mode from rfq_shipments for this RFQ. Default: ocean."""
+    rfq_id = rfq_row.get("rfq_id")
+    if not rfq_id:
+        return "ocean"
+    try:
+        rows = (
+            supabase.table("rfq_shipments")
+            .select("freight_mode")
+            .eq("workspace_id", workspace_id)
+            .eq("rfq_id", rfq_id)
+            .order("shipment_number")
+            .limit(1)
+            .execute()
+            .data or []
+        )
+        if rows:
+            mode = (rows[0].get("freight_mode") or "ocean").strip().lower()
+            return mode if mode in ("ocean", "air", "land") else "ocean"
+    except Exception:
+        pass
+    return "ocean"
+
+
 def build_shipment_context(rfq: dict) -> dict:
     """Build shipment-level context from master RFQ row."""
+    freight_mode = rfq.get("freight_mode", "ocean")
+    if freight_mode not in ("ocean", "air", "land"):
+        freight_mode = "ocean"
     pols = parse_multi_value(rfq.get("pol"))
     pods = parse_multi_value(rfq.get("pod"))
     container_types = parse_multi_value(rfq.get("container_type"))
@@ -258,6 +301,7 @@ def build_shipment_context(rfq: dict) -> dict:
     return {
         "shipment_count": len(route_groups),
         "shipments": route_groups,
+        "freight_mode": freight_mode,
     }
 
 
@@ -401,21 +445,14 @@ def sanitize_extracted_quotes(
                 combined_days=min(ftd.combined_days, 90) if ftd.combined_days and ftd.combined_days > 0 else None,
             )
 
-        # Sanitize surcharges — must be non-negative
+        # Sanitize surcharges — must be non-negative (dynamic for all modes)
         surcharges = None
         if quote.surcharges:
             raw_sc = quote.surcharges
-            surcharges = SurchargeData(
-                BAF=raw_sc.BAF if raw_sc.BAF and raw_sc.BAF >= 0 else None,
-                CAF=raw_sc.CAF if raw_sc.CAF and raw_sc.CAF >= 0 else None,
-                THC=raw_sc.THC if raw_sc.THC and raw_sc.THC >= 0 else None,
-                PSS=raw_sc.PSS if raw_sc.PSS and raw_sc.PSS >= 0 else None,
-                GRI=raw_sc.GRI if raw_sc.GRI and raw_sc.GRI >= 0 else None,
-                ISPS=raw_sc.ISPS if raw_sc.ISPS and raw_sc.ISPS >= 0 else None,
-                ORC=raw_sc.ORC if raw_sc.ORC and raw_sc.ORC >= 0 else None,
-                war_risk=raw_sc.war_risk if raw_sc.war_risk and raw_sc.war_risk >= 0 else None,
-                congestion=raw_sc.congestion if raw_sc.congestion and raw_sc.congestion >= 0 else None,
-            )
+            sanitized_fields = {}
+            for field_name, field_value in raw_sc.model_dump().items():
+                sanitized_fields[field_name] = field_value if field_value is not None and field_value >= 0 else None
+            surcharges = SurchargeData(**sanitized_fields)
 
         # Cap free_time at 90 days
         free_time = quote.free_time
@@ -538,7 +575,7 @@ def _parse_nullable_price(value: Optional[str]) -> Optional[float]:
         return None
 
 
-def _ensure_quote_shipment_row(supabase, workspace_id: str, rfq_row: dict, shipment_number: int):
+def _ensure_quote_shipment_row(supabase, workspace_id: str, rfq_row: dict, shipment_number: int, freight_mode: str = "ocean"):
     existing = (
         supabase.table("rfq_shipments")
         .select("shipment_number")
@@ -559,12 +596,14 @@ def _ensure_quote_shipment_row(supabase, workspace_id: str, rfq_row: dict, shipm
         None,
     )
     if shipment is None:
+        # Only add default container for ocean freight
+        default_containers = [{"qty": 1, "type": "40HQ"}] if freight_mode == "ocean" else []
         shipment = {
             "shipment_number": shipment_number,
             "pol": parse_multi_value(rfq_row.get("pol"))[0] if parse_multi_value(rfq_row.get("pol")) else "TBD",
             "pod": parse_multi_value(rfq_row.get("pod"))[0] if parse_multi_value(rfq_row.get("pod")) else "TBD",
             "service_type": (rfq_row.get("service_type") or "port-to-port").lower().strip(),
-            "containers": [{"qty": 1, "type": "40HQ"}],
+            "containers": default_containers,
         }
 
     scoped_upsert(
@@ -574,6 +613,7 @@ def _ensure_quote_shipment_row(supabase, workspace_id: str, rfq_row: dict, shipm
         {
             "rfq_id": rfq_row.get("rfq_id"),
             "shipment_number": shipment_number,
+            "freight_mode": freight_mode,
             "pol": shipment.get("pol") or "TBD",
             "pod": shipment.get("pod") or "TBD",
             "ready_date": _normalize_iso_date(str(rfq_row.get("ready_date") or "")),
@@ -585,7 +625,10 @@ def _ensure_quote_shipment_row(supabase, workspace_id: str, rfq_row: dict, shipm
         },
     )
 
-    containers = shipment.get("containers") or [{"qty": 1, "type": "40HQ"}]
+    containers = shipment.get("containers") or []
+    # Only add default container fallback for ocean
+    if freight_mode == "ocean" and not containers:
+        containers = [{"qty": 1, "type": "40HQ"}]
     for idx, container in enumerate(containers):
         scoped_upsert(
             supabase,
@@ -613,12 +656,14 @@ def _dual_write_agent_quote(
         return
     try:
         shipment_number = _parse_positive_int(log_data.get("shipment_number"), 1)
-        _ensure_quote_shipment_row(supabase, workspace_id, rfq_row, shipment_number)
+        freight_mode = log_data.get("freight_mode", "ocean")
+        _ensure_quote_shipment_row(supabase, workspace_id, rfq_row, shipment_number, freight_mode=freight_mode)
 
         payload = {
             "workspace_id": workspace_id,
             "rfq_id": rfq_row.get("rfq_id"),
             "shipment_number": shipment_number,
+            "freight_mode": freight_mode,
             "match": log_data.get("match"),
             "agent_name": log_data.get("agent_name") or "Unknown",
             "agent_email": log_data.get("agent_email") or "unknown@example.com",
@@ -812,6 +857,134 @@ CRITICAL:
 - Return only raw JSON, no markdown/backticks/text."""
 
 # =====================================================================
+# AIR QUOTE EXTRACTION PROMPT (stub — expand with prompt engineering later)
+# =====================================================================
+AI_SYSTEM_PROMPT_AIR_QUOTE = """You are an Air Cargo Rate Parser.
+
+Your input includes authoritative RFQ context and one trimmed agent reply.
+Return air freight quotes only, with conservative extraction rules.
+
+CONSERVATIVE RULES:
+1) Extract only explicit air-freight quotes (air rate, per-kg rate, all-in rate, AWB).
+2) If no explicit air-freight amount is present, return quotes: [].
+3) If multiple shipments exist and mapping to shipment_number is ambiguous, return quotes: [].
+4) A single price quoted for a shipment is the rate per kilogram of chargeable weight unless explicitly stated as a total/lump sum.
+5) If one message contains multiple valid options for the same shipment/airline (different flight/price), return all as separate quote objects.
+
+EXCLUDE THESE FROM PRICE (never add into air-freight total):
+handling fee, customs clearance, documentation, trucking, warehousing, local charges.
+Instead, extract them into the surcharges object when explicitly listed with amounts.
+
+DATE RULES:
+1) Normalize dates as YYYY-MM-DD.
+2) If year is omitted, infer from email_received_at.
+3) ETD range: choose earlier date.
+4) If validity is a concrete date or "valid for X days", compute validity_date as YYYY-MM-DD.
+5) If validity is contextual ("valid to this flight"), set validity to null.
+
+OUTPUT SCHEMA (RAW JSON ONLY):
+{
+  "extraction_reasoning": "brief deterministic reasoning",
+  "quotes": [
+    {
+      "shipment_number": 1,
+      "price": 3.50,
+      "currency": "USD",
+      "carrier": "EMIRATES SKYCARGO",
+      "validity": null,
+      "validity_date": null,
+      "transit_time": 3,
+      "free_time": null,
+      "free_time_details": null,
+      "etd": "2026-01-20",
+      "surcharges": {"FSC": null, "SSC": null, "TSA": null, "handling": null, "dg_surcharge": null},
+      "conditions": null
+    }
+  ]
+}
+
+SURCHARGE RULES (AIR):
+- FSC = Fuel Surcharge.
+- SSC = Security Surcharge.
+- TSA = TSA/Regulated Agent Fee.
+- handling = Handling charge.
+- dg_surcharge = Dangerous goods surcharge.
+- Set null for surcharges not mentioned. Never include surcharges in the price field.
+
+CRITICAL:
+- Use RFQ_CONTEXT shipment numbering.
+- currency must be USD.
+- Return only raw JSON, no markdown/backticks/text."""
+
+# =====================================================================
+# LAND QUOTE EXTRACTION PROMPT (stub — expand with prompt engineering later)
+# =====================================================================
+AI_SYSTEM_PROMPT_LAND_QUOTE = """You are a Land/Trucking Rate Parser.
+
+Your input includes authoritative RFQ context and one trimmed agent reply.
+Return land freight/trucking quotes only, with conservative extraction rules.
+
+CONSERVATIVE RULES:
+1) Extract only explicit trucking/land-freight quotes (trucking rate, per-load, per-mile, FTL, LTL).
+2) If no explicit trucking/land-freight amount is present, return quotes: [].
+3) If multiple shipments exist and mapping to shipment_number is ambiguous, return quotes: [].
+4) Price is typically per-load or per-trip unless explicitly stated as per-mile.
+5) If one message contains multiple valid options for the same shipment/trucker (different equipment/price), return all as separate quote objects.
+
+EXCLUDE THESE FROM PRICE (never add into trucking total):
+customs clearance, documentation, loading/unloading labor, warehousing.
+Instead, extract them into the surcharges object when explicitly listed with amounts.
+
+DATE RULES:
+1) Normalize dates as YYYY-MM-DD.
+2) If year is omitted, infer from email_received_at.
+3) ETD range: choose earlier date.
+4) If validity is a concrete date or "valid for X days", compute validity_date as YYYY-MM-DD.
+5) If validity is contextual, set validity to null.
+
+OUTPUT SCHEMA (RAW JSON ONLY):
+{
+  "extraction_reasoning": "brief deterministic reasoning",
+  "quotes": [
+    {
+      "shipment_number": 1,
+      "price": 1500,
+      "currency": "USD",
+      "carrier": "AL FUTTAIM LOGISTICS",
+      "validity": null,
+      "validity_date": null,
+      "transit_time": 2,
+      "free_time": null,
+      "free_time_details": null,
+      "etd": "2026-01-20",
+      "surcharges": {"fuel_surcharge": null, "detention": null, "accessorials": null},
+      "conditions": null
+    }
+  ]
+}
+
+SURCHARGE RULES (LAND):
+- fuel_surcharge = Fuel surcharge.
+- detention = Detention charge.
+- accessorials = Accessorial charges (tail-lift, waiting time, etc).
+- Set null for surcharges not mentioned. Never include surcharges in the price field.
+
+CRITICAL:
+- Use RFQ_CONTEXT shipment numbering.
+- currency must be USD.
+- Return only raw JSON, no markdown/backticks/text."""
+
+
+def _get_quote_system_prompt_for_mode(freight_mode: str) -> str:
+    """Return the appropriate quote extraction system prompt for the given freight mode."""
+    if freight_mode == "air":
+        return AI_SYSTEM_PROMPT_AIR_QUOTE
+    elif freight_mode == "land":
+        return AI_SYSTEM_PROMPT_LAND_QUOTE
+    return AI_SYSTEM_PROMPT
+
+
+# =====================================================================
 # QUOTE COUNTING & SUMMARY BUILDER
 # =====================================================================
 def parse_multi_value(value):
@@ -821,10 +994,15 @@ def parse_multi_value(value):
         return [v.strip() for v in value.split('\n')]
     return [str(value)]
 
-def build_quote_summary(rfq, all_quote_rows: list) -> dict:
+def build_quote_summary(rfq, all_quote_rows: list, freight_mode: str = "ocean") -> dict:
     """Build shipment-based quote summary with counts, rankings, and HTML."""
     # Parse multi-shipment fields from Master_RFQs
     service_type = (rfq.get('service_type') or 'port-to-port').lower().strip()
+    # Mode-specific labels
+    mode_labels = {"ocean": "Ocean Freight", "air": "Air Cargo", "land": "Land/Trucking"}
+    mode_label = mode_labels.get(freight_mode, "Ocean Freight")
+    carrier_label = {"ocean": "Carrier", "air": "Airline", "land": "Trucker"}.get(freight_mode, "Carrier")
+    price_label = {"ocean": "Price (USD)", "air": "Rate/kg (USD)", "land": "Price (USD)"}.get(freight_mode, "Price (USD)")
     pols = parse_multi_value(rfq.get('pol'))
     pods = parse_multi_value(rfq.get('pod'))
     container_types = parse_multi_value(rfq.get('container_type'))
@@ -955,8 +1133,8 @@ def build_quote_summary(rfq, all_quote_rows: list) -> dict:
     <thead>
       <tr style="background: #fafafa; border-bottom: 1px solid #e0e0e0;">
         <th style="padding: 10px; text-align: left; font-size: 12px; color: #666;">Agent</th>
-        <th style="padding: 10px; text-align: left; font-size: 12px; color: #666;">Carrier</th>
-        <th style="padding: 10px; text-align: right; font-size: 12px; color: #666;">Price (USD)</th>
+        <th style="padding: 10px; text-align: left; font-size: 12px; color: #666;">{carrier_label}</th>
+        <th style="padding: 10px; text-align: right; font-size: 12px; color: #666;">{price_label}</th>
         <th style="padding: 10px; text-align: center; font-size: 12px; color: #666;">Transit</th>
         <th style="padding: 10px; text-align: center; font-size: 12px; color: #666;">ETD</th>
         <th style="padding: 10px; text-align: center; font-size: 12px; color: #666;">Free Time</th>
@@ -976,6 +1154,8 @@ def build_quote_summary(rfq, all_quote_rows: list) -> dict:
         'best_shipment': best_shipment,
         'rfq_ref': rfq.get('rfq_id'),
         'service_type': service_type,
+        'freight_mode': freight_mode,
+        'mode_label': mode_label,
         'total_responses': len(all_quote_rows),
         'summary_html': '\n'.join(html_parts),
         'shipment_quotes': shipment_quotes,
@@ -992,6 +1172,8 @@ def send_manager_notification(gmail_service, to_address: str, summary: dict):
     best_agent = summary['best_agent']
     best_carrier = summary['best_carrier']
     best_shipment = summary['best_shipment']
+    mode_label = summary.get('mode_label', 'Ocean Freight')
+    carrier_label = {"ocean": "Carrier", "air": "Airline", "land": "Trucker"}.get(summary.get('freight_mode', 'ocean'), "Carrier")
 
     body_html = f"""
 <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; color: #333;">
@@ -999,7 +1181,7 @@ def send_manager_notification(gmail_service, to_address: str, summary: dict):
   <!-- Header -->
   <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 8px 8px 0 0;">
     <h2 style="margin: 0; font-size: 24px;">📊 Quote Review Required</h2>
-    <p style="margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;">Pricing Automation System</p>
+    <p style="margin: 8px 0 0 0; opacity: 0.9; font-size: 14px;">{mode_label} — Pricing Automation System</p>
   </div>
 
   <!-- RFQ Info -->
@@ -1022,7 +1204,7 @@ def send_manager_notification(gmail_service, to_address: str, summary: dict):
         <td style="padding: 8px 0; font-weight: bold; font-size: 14px; text-align: right;">{best_agent}</td>
       </tr>
       <tr>
-        <td style="padding: 8px 0; color: #666; font-size: 14px;">Carrier</td>
+        <td style="padding: 8px 0; color: #666; font-size: 14px;">{carrier_label}</td>
         <td style="padding: 8px 0; font-weight: bold; font-size: 14px; text-align: right;">{best_carrier}</td>
       </tr>
       <tr style="border-top: 2px solid #4caf50;">
@@ -1294,6 +1476,9 @@ def _process_agent_quotes(pubsub_payload=None):
             print(f"No master RFQ row found for {canonical_ref_id}, skipping message.")
             continue
         rfq_row = master_rows[0]
+        freight_mode = _resolve_freight_mode(supabase, workspace_id, rfq_row)
+        print(f"[{msg_id}] Freight mode: {freight_mode}")
+        rfq_row["freight_mode"] = freight_mode  # pass through to build_shipment_context
         shipment_context = build_shipment_context(rfq_row)
         shipment_context_text = format_shipment_context_for_prompt(shipment_context)
 
@@ -1331,7 +1516,7 @@ def _process_agent_quotes(pubsub_payload=None):
             response = openai_client.beta.chat.completions.parse(
                 model="gpt-4o",
                 messages=[
-                    {"role": "system", "content": AI_SYSTEM_PROMPT},
+                    {"role": "system", "content": _get_quote_system_prompt_for_mode(freight_mode)},
                     {"role": "user", "content": prompt}
                 ],
                 response_format=ExtractedQuotes
@@ -1353,6 +1538,7 @@ def _process_agent_quotes(pubsub_payload=None):
                     'rfq_id': canonical_ref_id,
                     'match': match_key,
                     'status': 'Invalid_Quote',
+                    'freight_mode': freight_mode,
                     'agent_name': agent_name,
                     'agent_email': agent_email,
                     'carrier': 'N/A',
@@ -1377,7 +1563,7 @@ def _process_agent_quotes(pubsub_payload=None):
 
             # Process each quote
             for quote in sanitized_quotes:
-                carrier = normalize_carrier(quote.carrier)
+                carrier = normalize_carrier(quote.carrier, freight_mode=freight_mode)
                 price = quote.price
                 is_valid = (
                     price is not None and
@@ -1405,6 +1591,7 @@ def _process_agent_quotes(pubsub_payload=None):
                     'rfq_id': canonical_ref_id,
                     'match': match_key,
                     'status': 'Received' if is_valid else 'Invalid_Quote',
+                    'freight_mode': freight_mode,
                     'agent_name': agent_name,
                     'agent_email': agent_email,
                     'shipment_number': str(quote.shipment_number),
@@ -1439,6 +1626,7 @@ def _process_agent_quotes(pubsub_payload=None):
                 canonical_ref_id,
                 workspace_id,
                 own_mailbox_email,
+                freight_mode=freight_mode,
             )
 
         except Exception as e:
@@ -1482,6 +1670,7 @@ def _check_threshold_and_notify(
     ref_id: str,
     workspace_id: str,
     notification_email: str,
+    freight_mode: str = "ocean",
 ):
     """Check if enough valid quotes received and notify manager.
 
@@ -1507,7 +1696,7 @@ def _check_threshold_and_notify(
     all_quote_rows = _get_rows_by_filter(supabase, "agent_outbound_log", "rfq_id", ref_id, workspace_id)
 
     # Build summary
-    summary = build_quote_summary(rfq, all_quote_rows)
+    summary = build_quote_summary(rfq, all_quote_rows, freight_mode=freight_mode)
 
     if summary['threshold_met'] and summary['quote_count'] == QUOTE_THRESHOLD:
         # Only notify at the exact threshold crossing (not on every subsequent quote)

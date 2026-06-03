@@ -9,6 +9,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
   variable: "--font-sans",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -27,9 +28,6 @@ export default function RootLayout({
         className="font-sans antialiased relative min-h-screen bg-slate-50/50 dark:bg-black overflow-x-hidden"
         suppressHydrationWarning
       >
-        {/* Keep atmosphere while reducing first-paint blur cost */}
-        <div className="fixed top-0 left-0 right-0 h-[360px] w-[120%] -ml-[10%] bg-gradient-to-br from-primary/5 via-primary/2 to-transparent dark:from-primary/8 dark:via-primary/4 blur-2xl rounded-[100%] pointer-events-none -translate-y-1/2 opacity-45 z-[-1]" />
-
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>

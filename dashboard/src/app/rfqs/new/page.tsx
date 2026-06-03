@@ -6,14 +6,31 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Trash2, Loader2, Ship } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Loader2, Ship, Plane, Truck } from "lucide-react";
+import type { FreightMode } from "@/types/rfq";
+import {
+  EQUIPMENT_BY_MODE,
+  SERVICE_TYPES_BY_MODE,
+  FEATURE_AIR_FREIGHT_ENABLED,
+  FEATURE_LAND_FREIGHT_ENABLED,
+} from "@/lib/constants";
 
 interface ContainerEntry {
   container_type: string;
   qty: number;
 }
 
+interface PieceEntry {
+  count: string;
+  length_cm: string;
+  width_cm: string;
+  height_cm: string;
+  weight_kg: string;
+  packaging_type: string;
+}
+
 interface ShipmentEntry {
+  freight_mode: FreightMode;
   pol: string;
   pod: string;
   service_type: string;
@@ -22,6 +39,7 @@ interface ShipmentEntry {
   pickup_address: string;
   delivery_address: string;
   containers: ContainerEntry[];
+  pieces: PieceEntry[];
   commodity_description: string;
   hs_code: string;
   incoterms: string;
@@ -32,16 +50,22 @@ interface ShipmentEntry {
   cargo_volume_cbm: string;
 }
 
-function emptyShipment(): ShipmentEntry {
+function emptyPiece(): PieceEntry {
+  return { count: "1", length_cm: "", width_cm: "", height_cm: "", weight_kg: "", packaging_type: "PALLET" };
+}
+
+function emptyShipment(mode: FreightMode = "ocean"): ShipmentEntry {
   return {
+    freight_mode: mode,
     pol: "",
     pod: "",
-    service_type: "port-to-port",
+    service_type: SERVICE_TYPES_BY_MODE[mode][0],
     ready_date: "",
     delivery_deadline: "",
     pickup_address: "",
     delivery_address: "",
-    containers: [{ container_type: "40HQ", qty: 1 }],
+    containers: mode === "ocean" ? [{ container_type: "40HQ", qty: 1 }] : [],
+    pieces: mode === "air" ? [emptyPiece()] : [],
     commodity_description: "",
     hs_code: "",
     incoterms: "",
@@ -53,8 +77,6 @@ function emptyShipment(): ShipmentEntry {
   };
 }
 
-const CONTAINER_TYPES = ["20FT", "40FT", "40HQ", "45FT", "20OT", "40OT", "20RF", "40RF"];
-const SERVICE_TYPES = ["port-to-port", "door-to-port", "port-to-door", "door-to-door"];
 const INCOTERMS = ["", "EXW", "FCA", "FAS", "FOB", "CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP"];
 
 const inputClass =
@@ -62,6 +84,14 @@ const inputClass =
 
 const selectClass =
   "w-full rounded-xl border border-white/20 dark:border-white/10 bg-white/40 dark:bg-black/20 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+const MODE_LABELS: Record<FreightMode, { origin: string; destination: string; originPlaceholder: string; destPlaceholder: string }> = {
+  ocean: { origin: "Port of Loading *", destination: "Port of Discharge *", originPlaceholder: "e.g. Jebel Ali", destPlaceholder: "e.g. Shanghai" },
+  air: { origin: "Origin Airport *", destination: "Destination Airport *", originPlaceholder: "e.g. DXB", destPlaceholder: "e.g. LHR" },
+  land: { origin: "Origin City / ZIP *", destination: "Destination City / ZIP *", originPlaceholder: "e.g. Dubai", destPlaceholder: "e.g. Riyadh" },
+};
+
+const MODE_ICON: Record<FreightMode, typeof Ship> = { ocean: Ship, air: Plane, land: Truck };
 
 export default function NewRFQPage() {
   const router = useRouter();
@@ -114,6 +144,54 @@ export default function NewRFQPage() {
     );
   };
 
+  const addPiece = (shipmentIndex: number) => {
+    setShipments((prev) =>
+      prev.map((s, i) =>
+        i === shipmentIndex
+          ? { ...s, pieces: [...s.pieces, emptyPiece()] }
+          : s
+      )
+    );
+  };
+
+  const removePiece = (shipmentIndex: number, pieceIndex: number) => {
+    setShipments((prev) =>
+      prev.map((s, i) =>
+        i === shipmentIndex
+          ? { ...s, pieces: s.pieces.filter((_, pi) => pi !== pieceIndex) }
+          : s
+      )
+    );
+  };
+
+  const updatePiece = (
+    shipmentIndex: number,
+    pieceIndex: number,
+    updates: Partial<PieceEntry>
+  ) => {
+    setShipments((prev) =>
+      prev.map((s, i) =>
+        i === shipmentIndex
+          ? {
+              ...s,
+              pieces: s.pieces.map((p, pi) =>
+                pi === pieceIndex ? { ...p, ...updates } : p
+              ),
+            }
+          : s
+      )
+    );
+  };
+
+  const handleModeChange = (shipmentIndex: number, newMode: FreightMode) => {
+    updateShipment(shipmentIndex, {
+      freight_mode: newMode,
+      service_type: SERVICE_TYPES_BY_MODE[newMode][0],
+      containers: newMode === "ocean" ? [{ container_type: "40HQ", qty: 1 }] : [],
+      pieces: newMode === "air" ? [emptyPiece()] : [],
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -122,6 +200,7 @@ export default function NewRFQPage() {
       const payload = {
         customer_email: customerEmail,
         shipments: shipments.map((s) => ({
+          freight_mode: s.freight_mode,
           pol: s.pol,
           pod: s.pod,
           service_type: s.service_type,
@@ -129,7 +208,18 @@ export default function NewRFQPage() {
           delivery_deadline: s.delivery_deadline || null,
           pickup_address: s.pickup_address || null,
           delivery_address: s.delivery_address || null,
-          containers: s.containers,
+          containers: s.freight_mode === "ocean" ? s.containers : [],
+          pieces:
+            s.freight_mode === "air"
+              ? s.pieces.map((p) => ({
+                  count: p.count ? parseInt(p.count, 10) : null,
+                  length_cm: p.length_cm ? parseFloat(p.length_cm) : null,
+                  width_cm: p.width_cm ? parseFloat(p.width_cm) : null,
+                  height_cm: p.height_cm ? parseFloat(p.height_cm) : null,
+                  weight_kg: p.weight_kg ? parseFloat(p.weight_kg) : null,
+                  packaging_type: p.packaging_type || null,
+                }))
+              : [],
           commodity_description: s.commodity_description || null,
           hs_code: s.hs_code || null,
           incoterms: s.incoterms || null,
@@ -202,352 +292,553 @@ export default function NewRFQPage() {
           </CardContent>
         </Card>
 
-        {shipments.map((shipment, si) => (
-          <Card
-            key={si}
-            className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] overflow-hidden"
-          >
-            <CardHeader className="pb-3 px-6 pt-6">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-bold">
-                  Shipment {si + 1}
-                </CardTitle>
-                {shipments.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      setShipments((prev) => prev.filter((_, i) => i !== si))
-                    }
-                    className="h-8 text-red-500 hover:text-red-600"
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />
-                    Remove
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="px-6 pb-6 space-y-4">
-              {/* Route */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                    Port of Loading *
-                  </label>
-                  <input
-                    required
-                    value={shipment.pol}
-                    onChange={(e) => updateShipment(si, { pol: e.target.value })}
-                    placeholder="e.g. Jebel Ali"
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                    Port of Discharge *
-                  </label>
-                  <input
-                    required
-                    value={shipment.pod}
-                    onChange={(e) => updateShipment(si, { pod: e.target.value })}
-                    placeholder="e.g. Shanghai"
-                    className={inputClass}
-                  />
-                </div>
-              </div>
+        {shipments.map((shipment, si) => {
+          const mode = shipment.freight_mode;
+          const labels = MODE_LABELS[mode];
+          const ModeIcon = MODE_ICON[mode];
+          const serviceTypes = SERVICE_TYPES_BY_MODE[mode];
+          const equipmentTypes = EQUIPMENT_BY_MODE[mode];
 
-              {/* Service type + dates */}
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                    Service Type
-                  </label>
-                  <select
-                    value={shipment.service_type}
-                    onChange={(e) =>
-                      updateShipment(si, { service_type: e.target.value })
-                    }
-                    className={selectClass}
-                  >
-                    {SERVICE_TYPES.map((st) => (
-                      <option key={st} value={st}>
-                        {st}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                    Ready Date
-                  </label>
-                  <input
-                    type="date"
-                    value={shipment.ready_date}
-                    onChange={(e) =>
-                      updateShipment(si, { ready_date: e.target.value })
-                    }
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                    Delivery Deadline
-                  </label>
-                  <input
-                    type="date"
-                    value={shipment.delivery_deadline}
-                    onChange={(e) =>
-                      updateShipment(si, { delivery_deadline: e.target.value })
-                    }
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-
-              {/* Addresses (conditional) */}
-              {needsDoor(shipment.service_type) && (
-                <div className="grid grid-cols-2 gap-4">
-                  {(shipment.service_type === "door-to-port" ||
-                    shipment.service_type === "door-to-door") && (
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                        Pickup Address
-                      </label>
-                      <input
-                        value={shipment.pickup_address}
-                        onChange={(e) =>
-                          updateShipment(si, { pickup_address: e.target.value })
-                        }
-                        placeholder="Full pickup address"
-                        className={inputClass}
-                      />
-                    </div>
-                  )}
-                  {(shipment.service_type === "port-to-door" ||
-                    shipment.service_type === "door-to-door") && (
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                        Delivery Address
-                      </label>
-                      <input
-                        value={shipment.delivery_address}
-                        onChange={(e) =>
-                          updateShipment(si, {
-                            delivery_address: e.target.value,
-                          })
-                        }
-                        placeholder="Full delivery address"
-                        className={inputClass}
-                      />
-                    </div>
+          return (
+            <Card
+              key={si}
+              className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] overflow-hidden"
+            >
+              <CardHeader className="pb-3 px-6 pt-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ModeIcon className="h-4 w-4 text-muted-foreground" />
+                    <CardTitle className="text-base font-bold">
+                      Shipment {si + 1}
+                    </CardTitle>
+                  </div>
+                  {shipments.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setShipments((prev) => prev.filter((_, i) => i !== si))
+                      }
+                      className="h-8 text-red-500 hover:text-red-600"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      Remove
+                    </Button>
                   )}
                 </div>
-              )}
-
-              {/* Containers */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-2 block">
-                  Containers *
-                </label>
-                <div className="space-y-2">
-                  {shipment.containers.map((c, ci) => (
-                    <div key={ci} className="flex items-center gap-2">
-                      <select
-                        value={c.container_type}
-                        onChange={(e) =>
-                          updateContainer(si, ci, {
-                            container_type: e.target.value,
-                          })
-                        }
-                        className={selectClass + " flex-1"}
-                      >
-                        {CONTAINER_TYPES.map((ct) => (
-                          <option key={ct} value={ct}>
-                            {ct}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="number"
-                        min={1}
-                        value={c.qty}
-                        onChange={(e) =>
-                          updateContainer(si, ci, {
-                            qty: parseInt(e.target.value, 10) || 1,
-                          })
-                        }
-                        className={inputClass + " w-20"}
-                      />
-                      {shipment.containers.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeContainer(si, ci)}
-                          className="h-8 w-8 p-0 text-red-500"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => addContainer(si)}
-                    className="h-8 text-xs"
-                  >
-                    <Plus className="h-3 w-3 mr-1" />
-                    Add Container
-                  </Button>
-                </div>
-              </div>
-
-              {/* Cargo details */}
-              <div className="border-t pt-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
-                  Cargo Details (Optional)
-                </p>
-                <div className="grid grid-cols-2 gap-4">
+              </CardHeader>
+              <CardContent className="px-6 pb-6 space-y-4">
+                {/* Freight Mode Selector */}
+                {(FEATURE_AIR_FREIGHT_ENABLED || FEATURE_LAND_FREIGHT_ENABLED) && (
                   <div>
                     <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                      Commodity
-                    </label>
-                    <input
-                      value={shipment.commodity_description}
-                      onChange={(e) =>
-                        updateShipment(si, {
-                          commodity_description: e.target.value,
-                        })
-                      }
-                      placeholder="e.g. Electronic components"
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                      HS Code
-                    </label>
-                    <input
-                      value={shipment.hs_code}
-                      onChange={(e) =>
-                        updateShipment(si, { hs_code: e.target.value })
-                      }
-                      placeholder="e.g. 8542.31"
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                      Incoterms
+                      Freight Mode
                     </label>
                     <select
-                      value={shipment.incoterms}
+                      value={mode}
+                      onChange={(e) => handleModeChange(si, e.target.value as FreightMode)}
+                      className={selectClass}
+                    >
+                      <option value="ocean">Ocean</option>
+                      {FEATURE_AIR_FREIGHT_ENABLED && <option value="air">Air</option>}
+                      {FEATURE_LAND_FREIGHT_ENABLED && <option value="land">Land</option>}
+                    </select>
+                  </div>
+                )}
+
+                {/* Route */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                      {labels.origin}
+                    </label>
+                    <input
+                      required
+                      value={shipment.pol}
+                      onChange={(e) => updateShipment(si, { pol: e.target.value })}
+                      placeholder={labels.originPlaceholder}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                      {labels.destination}
+                    </label>
+                    <input
+                      required
+                      value={shipment.pod}
+                      onChange={(e) => updateShipment(si, { pod: e.target.value })}
+                      placeholder={labels.destPlaceholder}
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+
+                {/* Service type + dates */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                      Service Type
+                    </label>
+                    <select
+                      value={shipment.service_type}
                       onChange={(e) =>
-                        updateShipment(si, { incoterms: e.target.value })
+                        updateShipment(si, { service_type: e.target.value })
                       }
                       className={selectClass}
                     >
-                      {INCOTERMS.map((ic) => (
-                        <option key={ic} value={ic}>
-                          {ic || "— None —"}
+                      {serviceTypes.map((st) => (
+                        <option key={st} value={st}>
+                          {st}
                         </option>
                       ))}
                     </select>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                        Weight (kg)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={shipment.cargo_weight_kg}
-                        onChange={(e) =>
-                          updateShipment(si, {
-                            cargo_weight_kg: e.target.value,
-                          })
-                        }
-                        placeholder="0"
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                        Volume (CBM)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={shipment.cargo_volume_cbm}
-                        onChange={(e) =>
-                          updateShipment(si, {
-                            cargo_volume_cbm: e.target.value,
-                          })
-                        }
-                        placeholder="0"
-                        className={inputClass}
-                      />
-                    </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                      Ready Date
+                    </label>
+                    <input
+                      type="date"
+                      value={shipment.ready_date}
+                      onChange={(e) =>
+                        updateShipment(si, { ready_date: e.target.value })
+                      }
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                      Delivery Deadline
+                    </label>
+                    <input
+                      type="date"
+                      value={shipment.delivery_deadline}
+                      onChange={(e) =>
+                        updateShipment(si, { delivery_deadline: e.target.value })
+                      }
+                      className={inputClass}
+                    />
                   </div>
                 </div>
 
-                <div className="flex items-center gap-6 mt-3">
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={shipment.is_dangerous_goods}
+                {/* Addresses (conditional) */}
+                {needsDoor(shipment.service_type) && (
+                  <div className="grid grid-cols-2 gap-4">
+                    {(shipment.service_type.startsWith("door-to") ||
+                      shipment.service_type === "door-to-door") && (
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                          Pickup Address
+                        </label>
+                        <input
+                          value={shipment.pickup_address}
+                          onChange={(e) =>
+                            updateShipment(si, { pickup_address: e.target.value })
+                          }
+                          placeholder="Full pickup address"
+                          className={inputClass}
+                        />
+                      </div>
+                    )}
+                    {(shipment.service_type.endsWith("-to-door") ||
+                      shipment.service_type === "door-to-door") && (
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                          Delivery Address
+                        </label>
+                        <input
+                          value={shipment.delivery_address}
+                          onChange={(e) =>
+                            updateShipment(si, {
+                              delivery_address: e.target.value,
+                            })
+                          }
+                          placeholder="Full delivery address"
+                          className={inputClass}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Ocean: Containers */}
+                {mode === "ocean" && (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-2 block">
+                      Containers *
+                    </label>
+                    <div className="space-y-2">
+                      {shipment.containers.map((c, ci) => (
+                        <div key={ci} className="flex items-center gap-2">
+                          <select
+                            value={c.container_type}
+                            onChange={(e) =>
+                              updateContainer(si, ci, {
+                                container_type: e.target.value,
+                              })
+                            }
+                            className={selectClass + " flex-1"}
+                          >
+                            {equipmentTypes.map((ct) => (
+                              <option key={ct} value={ct}>
+                                {ct}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            min={1}
+                            value={c.qty}
+                            onChange={(e) =>
+                              updateContainer(si, ci, {
+                                qty: parseInt(e.target.value, 10) || 1,
+                              })
+                            }
+                            className={inputClass + " w-20"}
+                          />
+                          {shipment.containers.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeContainer(si, ci)}
+                              className="h-8 w-8 p-0 text-red-500"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => addContainer(si)}
+                        className="h-8 text-xs"
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Add Container
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Air: Pieces */}
+                {mode === "air" && (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-2 block">
+                      Cargo Pieces *
+                    </label>
+                    <div className="space-y-3">
+                      {shipment.pieces.map((p, pi) => (
+                        <div
+                          key={pi}
+                          className="rounded-xl border border-white/10 p-3 space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              Piece {pi + 1}
+                            </span>
+                            {shipment.pieces.length > 1 && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removePiece(si, pi)}
+                                className="h-6 w-6 p-0 text-red-500"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-6 gap-2">
+                            <div>
+                              <label className="text-[10px] text-muted-foreground">
+                                Count
+                              </label>
+                              <input
+                                type="number"
+                                min={1}
+                                value={p.count}
+                                onChange={(e) =>
+                                  updatePiece(si, pi, { count: e.target.value })
+                                }
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-muted-foreground">
+                                L (cm)
+                              </label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                value={p.length_cm}
+                                onChange={(e) =>
+                                  updatePiece(si, pi, { length_cm: e.target.value })
+                                }
+                                placeholder="0"
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-muted-foreground">
+                                W (cm)
+                              </label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                value={p.width_cm}
+                                onChange={(e) =>
+                                  updatePiece(si, pi, { width_cm: e.target.value })
+                                }
+                                placeholder="0"
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-muted-foreground">
+                                H (cm)
+                              </label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                value={p.height_cm}
+                                onChange={(e) =>
+                                  updatePiece(si, pi, { height_cm: e.target.value })
+                                }
+                                placeholder="0"
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-muted-foreground">
+                                Weight (kg)
+                              </label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                value={p.weight_kg}
+                                onChange={(e) =>
+                                  updatePiece(si, pi, { weight_kg: e.target.value })
+                                }
+                                placeholder="0"
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-muted-foreground">
+                                Packaging
+                              </label>
+                              <select
+                                value={p.packaging_type}
+                                onChange={(e) =>
+                                  updatePiece(si, pi, {
+                                    packaging_type: e.target.value,
+                                  })
+                                }
+                                className={selectClass}
+                              >
+                                {EQUIPMENT_BY_MODE.air.map((pt) => (
+                                  <option key={pt} value={pt}>
+                                    {pt}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => addPiece(si)}
+                        className="h-8 text-xs"
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Add Piece
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Land: Equipment Type */}
+                {mode === "land" && (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                      Equipment Type
+                    </label>
+                    <select
+                      value={shipment.containers[0]?.container_type || "DRY VAN"}
                       onChange={(e) =>
                         updateShipment(si, {
-                          is_dangerous_goods: e.target.checked,
+                          containers: [{ container_type: e.target.value, qty: 1 }],
                         })
                       }
-                      className="rounded"
-                    />
-                    Dangerous Goods
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={shipment.is_reefer}
-                      onChange={(e) =>
-                        updateShipment(si, { is_reefer: e.target.checked })
-                      }
-                      className="rounded"
-                    />
-                    Reefer
-                  </label>
-                </div>
+                      className={selectClass}
+                    >
+                      {EQUIPMENT_BY_MODE.land.map((eq) => (
+                        <option key={eq} value={eq}>
+                          {eq}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
-                <div className="mt-3">
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                    Special Requirements
-                  </label>
-                  <textarea
-                    value={shipment.special_requirements}
-                    onChange={(e) =>
-                      updateShipment(si, {
-                        special_requirements: e.target.value,
-                      })
-                    }
-                    rows={2}
-                    placeholder="Any special handling requirements..."
-                    className={inputClass + " resize-none"}
-                  />
+                {/* Cargo details */}
+                <div className="border-t pt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+                    Cargo Details (Optional)
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                        Commodity
+                      </label>
+                      <input
+                        value={shipment.commodity_description}
+                        onChange={(e) =>
+                          updateShipment(si, {
+                            commodity_description: e.target.value,
+                          })
+                        }
+                        placeholder="e.g. Electronic components"
+                        className={inputClass}
+                      />
+                    </div>
+                    {mode === "ocean" && (
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                          HS Code
+                        </label>
+                        <input
+                          value={shipment.hs_code}
+                          onChange={(e) =>
+                            updateShipment(si, { hs_code: e.target.value })
+                          }
+                          placeholder="e.g. 8542.31"
+                          className={inputClass}
+                        />
+                      </div>
+                    )}
+                    {mode === "ocean" && (
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                          Incoterms
+                        </label>
+                        <select
+                          value={shipment.incoterms}
+                          onChange={(e) =>
+                            updateShipment(si, { incoterms: e.target.value })
+                          }
+                          className={selectClass}
+                        >
+                          {INCOTERMS.map((ic) => (
+                            <option key={ic} value={ic}>
+                              {ic || "— None —"}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                          Weight (kg)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={shipment.cargo_weight_kg}
+                          onChange={(e) =>
+                            updateShipment(si, {
+                              cargo_weight_kg: e.target.value,
+                            })
+                          }
+                          placeholder="0"
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                          Volume (CBM)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={shipment.cargo_volume_cbm}
+                          onChange={(e) =>
+                            updateShipment(si, {
+                              cargo_volume_cbm: e.target.value,
+                            })
+                          }
+                          placeholder="0"
+                          className={inputClass}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-6 mt-3">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={shipment.is_dangerous_goods}
+                        onChange={(e) =>
+                          updateShipment(si, {
+                            is_dangerous_goods: e.target.checked,
+                          })
+                        }
+                        className="rounded"
+                      />
+                      Dangerous Goods
+                    </label>
+                    {mode === "ocean" && (
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={shipment.is_reefer}
+                          onChange={(e) =>
+                            updateShipment(si, { is_reefer: e.target.checked })
+                          }
+                          className="rounded"
+                        />
+                        Reefer
+                      </label>
+                    )}
+                  </div>
+
+                  <div className="mt-3">
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                      Special Requirements
+                    </label>
+                    <textarea
+                      value={shipment.special_requirements}
+                      onChange={(e) =>
+                        updateShipment(si, {
+                          special_requirements: e.target.value,
+                        })
+                      }
+                      rows={2}
+                      placeholder="Any special handling requirements..."
+                      className={inputClass + " resize-none"}
+                    />
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
 
         <div className="flex items-center justify-between">
           <Button
             type="button"
             variant="outline"
-            onClick={() => setShipments((prev) => [...prev, emptyShipment()])}
+            onClick={() => setShipments((prev) => [...prev, emptyShipment(prev[prev.length - 1]?.freight_mode)])}
             className="rounded-xl"
           >
             <Plus className="h-4 w-4 mr-1" />

@@ -63,12 +63,12 @@ function buildRouteSummary(rfq: {
   shipments?: Array<{ pol: string; pod: string }>;
 }) {
   const firstShipment = rfq.shipments?.[0];
-  const pol = firstShipment?.pol || rfq.pol || "TBD";
-  const pod = firstShipment?.pod || rfq.pod || "TBD";
+  const origin = firstShipment?.pol || rfq.pol || "TBD";
+  const destination = firstShipment?.pod || rfq.pod || "TBD";
   const shipmentCount = rfq.shipment_count || rfq.shipments?.length || 1;
   const extra = Math.max(shipmentCount - 1, 0);
-  if (extra <= 0) return `${pol} → ${pod}`;
-  return `${pol} → ${pod} (+${extra} shipments)`;
+  if (extra <= 0) return `${origin} → ${destination}`;
+  return `${origin} → ${destination} (+${extra} shipments)`;
 }
 
 function normalizeReceivedQuoteRows(rows: ReceivedQuoteRow[]) {
