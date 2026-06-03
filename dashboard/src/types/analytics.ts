@@ -1,3 +1,11 @@
+import type { FreightMode } from "@/types/rfq";
+
+export interface ModeKpi {
+  total: number;
+  quoted: number;
+  selected: number;
+}
+
 export interface DashboardKPIs {
   activeRFQs: number;
   awaitingQuotes: number;
@@ -10,6 +18,7 @@ export interface DashboardKPIs {
   conversionRate: number;
   totalRevenueAED: number;
   totalRevenueUSD: number;
+  modeBreakdown: Record<FreightMode, ModeKpi>;
 }
 
 export interface PipelineCount {

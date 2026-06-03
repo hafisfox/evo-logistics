@@ -32,6 +32,11 @@ const summaryFixture = {
     conversionRate: 0,
     totalRevenueAED: 0,
     totalRevenueUSD: 0,
+    modeBreakdown: {
+      ocean: { total: 5, quoted: 2, selected: 0 },
+      air: { total: 0, quoted: 0, selected: 0 },
+      land: { total: 0, quoted: 0, selected: 0 },
+    },
   },
   pipeline: [
     { status: "Processing", count: 3 },

@@ -5,6 +5,8 @@ import type {
   DOCharge,
   DestinationCharge,
   TransportCharge,
+  AirCarrierProfile,
+  AirChargeRate,
 } from "@/types/pricing";
 
 export function useDOCharges() {
@@ -243,6 +245,145 @@ export function useDeleteTransportCharge() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["pricing", "transport"] });
+    },
+  });
+}
+
+// --- Air freight: carrier profiles + weight-tier rates ---
+
+type AirCarrierCreatePayload = Omit<AirCarrierProfile, "id">;
+type AirCarrierUpdatePayload = { id: number } & Partial<Omit<AirCarrierProfile, "id">>;
+type AirRateCreatePayload = Omit<AirChargeRate, "id">;
+type AirRateUpdatePayload = { id: number } & Partial<Omit<AirChargeRate, "id">>;
+
+export function useAirCarriers() {
+  return useQuery<AirCarrierProfile[]>({
+    queryKey: ["pricing", "air-carriers"],
+    queryFn: async () => {
+      const res = await fetch("/api/pricing/air-carriers");
+      if (!res.ok) throw new Error("Failed to fetch air carriers");
+      return res.json();
+    },
+    refetchInterval: 600_000,
+  });
+}
+
+export function useCreateAirCarrier() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: AirCarrierCreatePayload) => {
+      const res = await fetch("/api/pricing/air-carriers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await parseError(res, "Failed to create air carrier"));
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pricing", "air-carriers"] });
+    },
+  });
+}
+
+export function useUpdateAirCarrier() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: AirCarrierUpdatePayload) => {
+      const res = await fetch("/api/pricing/air-carriers", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await parseError(res, "Failed to update air carrier"));
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pricing", "air-carriers"] });
+    },
+  });
+}
+
+export function useDeleteAirCarrier() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: IdPayload) => {
+      const res = await fetch("/api/pricing/air-carriers", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await parseError(res, "Failed to delete air carrier"));
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pricing", "air-carriers"] });
+    },
+  });
+}
+
+export function useAirRates() {
+  return useQuery<AirChargeRate[]>({
+    queryKey: ["pricing", "air-rates"],
+    queryFn: async () => {
+      const res = await fetch("/api/pricing/air-rates");
+      if (!res.ok) throw new Error("Failed to fetch air rates");
+      return res.json();
+    },
+    refetchInterval: 600_000,
+  });
+}
+
+export function useCreateAirRate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: AirRateCreatePayload) => {
+      const res = await fetch("/api/pricing/air-rates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await parseError(res, "Failed to create air rate"));
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pricing", "air-rates"] });
+    },
+  });
+}
+
+export function useUpdateAirRate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: AirRateUpdatePayload) => {
+      const res = await fetch("/api/pricing/air-rates", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await parseError(res, "Failed to update air rate"));
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pricing", "air-rates"] });
+    },
+  });
+}
+
+export function useDeleteAirRate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: IdPayload) => {
+      const res = await fetch("/api/pricing/air-rates", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await parseError(res, "Failed to delete air rate"));
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pricing", "air-rates"] });
     },
   });
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  calculateAirPrice,
   calculateFullPricing,
   calculatePortPrice,
   DEFAULT_EXCHANGE_RATE,
@@ -109,5 +110,48 @@ describe("pricing-engine", () => {
     expect(shipment?.destTotal).toBe(500); // fixed 300 + (100 * qty 2)
     expect(shipment?.doTotal).toBe(520); // document 120 + (200 * qty 2)
     expect(shipment?.transpTotal).toBe(500); // 250 * qty 2
+  });
+});
+
+describe("calculateAirPrice", () => {
+  const settings = { margin: 0.13, quoteThreshold: 2 };
+
+  it("prices by chargeable weight × per-kg rate, then margin + 10 AED rounding", () => {
+    const ratePerKgUSD = 4;
+    const chargeableWeightKg = 250;
+    const result = calculateAirPrice({ ratePerKgUSD, chargeableWeightKg, settings });
+
+    const airFreightAED = ratePerKgUSD * chargeableWeightKg * EXCHANGE_RATE;
+    const expectedAED = Math.ceil((airFreightAED * 1.13) / 10) * 10;
+    const expectedUSD = Math.ceil(expectedAED / EXCHANGE_RATE);
+
+    expect(result.airFreightUSD).toBe(1000);
+    expect(result.finalPriceAED).toBe(expectedAED);
+    expect(result.finalPriceUSD).toBe(expectedUSD);
+    expect(result.chargeableWeightKg).toBe(250);
+  });
+
+  it("adds surcharges to the base before applying margin", () => {
+    const base = calculateAirPrice({ ratePerKgUSD: 3, chargeableWeightKg: 100, settings });
+    const withSurcharges = calculateAirPrice({
+      ratePerKgUSD: 3,
+      chargeableWeightKg: 100,
+      settings,
+      surchargesUSD: 200,
+    });
+
+    expect(withSurcharges.finalPriceAED).toBeGreaterThan(base.finalPriceAED);
+    expect(withSurcharges.surchargesUSD).toBe(200);
+  });
+
+  it("respects a custom exchange rate", () => {
+    const result = calculateAirPrice({
+      ratePerKgUSD: 5,
+      chargeableWeightKg: 100,
+      settings: { ...settings, exchangeRate: 3.7 },
+    });
+
+    expect(result.exchangeRate).toBe(3.7);
+    expect(result.airFreightAED).toBe(Math.round(5 * 100 * 3.7 * 100) / 100);
   });
 });

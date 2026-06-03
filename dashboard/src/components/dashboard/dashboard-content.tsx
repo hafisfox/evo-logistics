@@ -10,6 +10,9 @@ import { CircularProgress } from "@/components/dashboard/circular-progress";
 import { PipelineChart } from "@/components/dashboard/pipeline-chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AnimatedNumber } from "@/components/ui/animated-number";
+import { ModeIcon, modeMeta } from "@/components/rfqs/mode-icon";
+import { FEATURE_AIR_FREIGHT_ENABLED, FEATURE_LAND_FREIGHT_ENABLED } from "@/lib/constants";
+import type { FreightMode } from "@/types/rfq";
 
 function InlineSkeleton({ className }: { className: string }) {
   return <span aria-hidden className={`inline-block rounded-md bg-accent animate-pulse ${className}`} />;
@@ -72,6 +75,14 @@ export function DashboardContent() {
   const quotedCount =
     pipeline?.find((item) => item.status === "Quoted" || item.status === "Selected")?.count ?? 0;
   const quotedPercent = pipelineTotal > 0 ? Math.round((quotedCount / pipelineTotal) * 100) : 0;
+
+  // Per-mode breakdown is only surfaced when a non-ocean mode is enabled.
+  const showModeBreakdown = FEATURE_AIR_FREIGHT_ENABLED || FEATURE_LAND_FREIGHT_ENABLED;
+  const modeCards: FreightMode[] = [
+    "ocean",
+    ...(FEATURE_AIR_FREIGHT_ENABLED ? (["air"] as FreightMode[]) : []),
+    ...(FEATURE_LAND_FREIGHT_ENABLED ? (["land"] as FreightMode[]) : []),
+  ];
 
   return (
     <>
@@ -319,6 +330,52 @@ export function DashboardContent() {
           </div>
         </div>
       </div>
+
+      {showModeBreakdown && (
+        <div className="rounded-3xl bg-card border border-black/5 dark:border-white/5 p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-foreground tracking-tight">RFQs by Freight Mode</h3>
+            <Link
+              href="/rfqs"
+              className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
+            >
+              View all <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {modeCards.map((mode) => {
+              const bucket = kpis?.modeBreakdown?.[mode] ?? { total: 0, quoted: 0, selected: 0 };
+              return (
+                <div
+                  key={mode}
+                  className="rounded-2xl border border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] p-4"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <ModeIcon mode={mode} className="h-4 w-4" />
+                    <span className="text-sm font-semibold text-foreground">{modeMeta(mode).label}</span>
+                  </div>
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <p className="text-2xl font-bold tabular-nums text-foreground">
+                        {isLoading ? <InlineSkeleton className="h-6 w-8" /> : <AnimatedNumber value={bucket.total} />}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground font-medium">Total RFQs</p>
+                    </div>
+                    <div className="text-right text-xs text-muted-foreground space-y-0.5">
+                      <p>
+                        <span className="font-semibold text-foreground">{bucket.quoted}</span> quoted
+                      </p>
+                      <p>
+                        <span className="font-semibold text-foreground">{bucket.selected}</span> selected
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col">

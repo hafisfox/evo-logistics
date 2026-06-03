@@ -214,6 +214,53 @@ export function calculatePortPrice(
   };
 }
 
+/**
+ * Air freight pricing: base = (USD/kg rate) × chargeable weight, then add surcharges
+ * and apply margin. Mirrors `calculate_air_price` in automations/phase_3_select_and_quote.py
+ * exactly so the dashboard preview matches the authoritative Modal calculation.
+ */
+export function calculateAirPrice(params: {
+  ratePerKgUSD: number;
+  chargeableWeightKg: number;
+  settings: PricingSettings;
+  surchargesUSD?: number;
+}): {
+  finalPriceAED: number;
+  finalPriceUSD: number;
+  marginAmount: number;
+  marginPercent: number;
+  airFreightUSD: number;
+  airFreightAED: number;
+  ratePerKgUSD: number;
+  chargeableWeightKg: number;
+  surchargesUSD: number;
+  surchargesAED: number;
+  exchangeRate: number;
+} {
+  const { ratePerKgUSD, chargeableWeightKg, settings, surchargesUSD = 0 } = params;
+  const fx = settings.exchangeRate ?? DEFAULT_EXCHANGE_RATE;
+  const airFreightUSD = ratePerKgUSD * chargeableWeightKg;
+  const airFreightAED = airFreightUSD * fx;
+  const surchargesAED = surchargesUSD * fx;
+  const subtotalAED = airFreightAED + surchargesAED;
+  const withMargin = subtotalAED * (1 + settings.margin);
+  const finalPriceAED = Math.ceil(withMargin / 10) * 10;
+  const finalPriceUSD = Math.ceil(finalPriceAED / fx);
+  return {
+    finalPriceAED,
+    finalPriceUSD,
+    marginAmount: Math.round((withMargin - subtotalAED) * 100) / 100,
+    marginPercent: settings.margin,
+    airFreightUSD: Math.round(airFreightUSD * 100) / 100,
+    airFreightAED: Math.round(airFreightAED * 100) / 100,
+    ratePerKgUSD: Math.round(ratePerKgUSD * 10000) / 10000,
+    chargeableWeightKg: Math.round(chargeableWeightKg * 100) / 100,
+    surchargesUSD: Math.round(surchargesUSD * 100) / 100,
+    surchargesAED: Math.round(surchargesAED * 100) / 100,
+    exchangeRate: fx,
+  };
+}
+
 export function calculateDoorPrice(params: {
   oceanFreightUSD: number;
   qty: number;

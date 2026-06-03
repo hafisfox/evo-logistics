@@ -216,6 +216,11 @@ describe("/api/dashboard/summary route", () => {
       conversionRate: 0,
       totalRevenueAED: 0,
       totalRevenueUSD: 0,
+      modeBreakdown: {
+        ocean: { total: 0, quoted: 0, selected: 0 },
+        air: { total: 0, quoted: 0, selected: 0 },
+        land: { total: 0, quoted: 0, selected: 0 },
+      },
     });
     expect(payload.pipeline).toEqual([]);
     expect(payload.activity).toEqual([]);

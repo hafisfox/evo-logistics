@@ -103,6 +103,40 @@ def get_exchange_rate(supabase, workspace_id: str, from_currency: str = "USD", t
     return DEFAULT_EXCHANGE_RATE
 
 
+def get_air_rate_per_kg(supabase, workspace_id, carrier, origin, destination, chargeable_weight_kg):
+    """Look up the applicable weight-tier air rate from air_charge_rates.
+
+    Returns (rate_per_kg_usd, min_charge_usd) for the highest weight break at or below the
+    chargeable weight on the (carrier, origin, destination) lane, or None if the table/lane
+    is not configured. Used as a fallback so air pricing still resolves when an agent quote
+    does not carry a usable per-kg rate. The primary path keeps using the quoted rate.
+    """
+    carrier_u = (carrier or "").upper().strip()
+    origin_u = (origin or "").upper().strip()
+    dest_u = (destination or "").upper().strip()
+    if not carrier_u or not origin_u or not dest_u or chargeable_weight_kg <= 0:
+        return None
+    try:
+        result = (
+            supabase.table("air_charge_rates")
+            .select("rate_per_kg_usd, min_charge_usd, min_weight_kg")
+            .eq("workspace_id", workspace_id)
+            .eq("carrier", carrier_u)
+            .eq("origin", origin_u)
+            .eq("destination", dest_u)
+            .lte("min_weight_kg", chargeable_weight_kg)
+            .order("min_weight_kg", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if result.data:
+            row = result.data[0]
+            return float(row["rate_per_kg_usd"]), float(row.get("min_charge_usd") or 0.0)
+    except Exception as e:
+        print(f"Warning: air rate lookup failed for {carrier_u} {origin_u}->{dest_u}: {e}")
+    return None
+
+
 def sum_surcharges(surcharges: dict) -> float:
     """Sum all non-null surcharge values from a JSONB dict."""
     if not surcharges or not isinstance(surcharges, dict):
@@ -982,6 +1016,32 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
     # 5. Fetch exchange rate
     fx = get_exchange_rate(supabase, workspace_id)
     print(f"Using exchange rate: {fx}")
+
+    # 5b. Air rate fallback: if the selected quote lacks a usable per-kg rate, fall back to
+    # the workspace air rate book (weight-tier lookup) so air pricing still resolves. The
+    # min charge is folded into the effective rate so rate x weight >= min_charge.
+    if freight_mode == "air" and chargeable_weight_kg > 0:
+        try:
+            quoted_rate = float(parse_multi_value(quote_data.get("price"))[0])
+        except (TypeError, ValueError, IndexError):
+            quoted_rate = 0.0
+        if quoted_rate <= 0:
+            origin = (rfq_for_pricing.get("pol") or "").split("\n")[0].strip()
+            destination = (rfq_for_pricing.get("pod") or "").split("\n")[0].strip()
+            tier = get_air_rate_per_kg(
+                supabase, workspace_id, quote_data.get("carrier"),
+                origin, destination, chargeable_weight_kg,
+            )
+            if tier:
+                rate_per_kg, min_charge = tier
+                effective_rate = rate_per_kg
+                if min_charge > 0:
+                    effective_rate = max(rate_per_kg, min_charge / chargeable_weight_kg)
+                quote_data = {**quote_data, "price": str(effective_rate)}
+                print(
+                    f"Air rate fallback: {effective_rate:.4f} USD/kg from air_charge_rates "
+                    f"(tier {rate_per_kg}/kg, min charge {min_charge})"
+                )
 
     # 6. Calculate pricing (surcharges auto-extracted from quote_data)
     pricing = calculate_full_pricing(

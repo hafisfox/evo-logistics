@@ -215,12 +215,15 @@ Migration: `dashboard/supabase/migrations/20260304_017_ocean_freight_fields.sql`
 - Phase 1: extracts commodity, HS code, incoterms, DG/reefer flags, weight/volume from customer emails; writes to new DB columns; includes in agent outreach emails
 - Phase 2: extracts surcharges (BAF, CAF, THC, PSS, GRI, ISPS, ORC, war_risk, congestion) as JSONB; structured free_time_details (demurrage/detention/combined); validity_date; conditions
 - Phase 3: dynamic exchange rate from `exchange_rates` table (fallback 3.685); surcharge-aware pricing; enhanced quotation email with surcharge/free_time breakdown; enhanced sales notification with margin %
-  - Air freight pricing: when shipment `freight_mode = air`, base freight = quote price (interpreted as USD/chargeable-kg) × chargeable weight; chargeable weight = `total_chargeable_weight(rfq_shipment_pieces)` (DIM factor 6000) via `automations/dim_weight.py`; surcharges + margin applied like port-to-port (`calculate_air_price`). Ocean/land flow unchanged. Airline master-data rate tables remain deferred — see FUTURE_PLAN.md
+  - Air freight pricing: when shipment `freight_mode = air`, base freight = quote price (interpreted as USD/chargeable-kg) × chargeable weight; chargeable weight = `total_chargeable_weight(rfq_shipment_pieces)` (DIM factor 6000) via `automations/dim_weight.py`; surcharges + margin applied like port-to-port (`calculate_air_price`). Ocean/land flow unchanged.
+  - Air rate fallback: if the selected quote lacks a usable per-kg rate, `get_air_rate_per_kg` looks up the workspace weight-tier rate book (`air_charge_rates`, highest break ≤ chargeable weight) and folds `min_charge_usd` into the effective rate. Default path still uses the quoted rate, so live pricing is unchanged.
+  - Air rate book (migration 019, RLS workspace-scoped): `air_carrier_profiles` (IATA airlines) + `air_charge_rates` (USD/kg weight-tier rates per lane); managed via the `/pricing` Airlines + Air Rates tabs (gated by `NEXT_PUBLIC_FEATURE_AIR_FREIGHT`)
 - Scheduled tasks: multi-step escalation (reminder_count 0→3hrs, 1→6hrs, 2→12hrs, 3→auto-close); quote expiry check (marks expired by validity_date); stale RFQ detection (no quotes after 48hrs → activity_logs)
 
 **Dashboard changes:**
 - Types: `QuoteSurcharges`, `FreeTimeDetails`, `SurchargeBreakdown`, `RFQNote`, `ActivityLog`, `ExchangeRate`, `FreightMode`, `Incoterms` added; `RFQShipment` and `AgentQuote` extended
-- Pricing engine: surcharge-aware calculations, dynamic exchange rate, margin % in results
+- Pricing engine: surcharge-aware calculations, dynamic exchange rate, margin % in results; `calculateAirPrice` mirrors the Python air engine
+- Freight-mode UI (air, gated by `NEXT_PUBLIC_FEATURE_AIR_FREIGHT`): mode filter chips + Ship/Plane/Truck row/kanban icons (`ModeIcon`) on the RFQ list; mode-aware RFQ detail (air Pieces & Dimensions + chargeable weight, ocean-only blocks hidden); per-mode KPI `modeBreakdown` + "RFQs by Freight Mode" dashboard widget
 - RFQ detail page: cargo details section (commodity, HS code, incoterms, DG, reefer, weight, volume); notes section with add/view; activity log timeline
 - Quote table: surcharges column with tooltip breakdown; structured free time display; validity_date
 - Quote selection cards: surcharge breakdown panel; conditions display; free time details

@@ -106,6 +106,40 @@ export interface TransportChargeUpdateBody {
   price?: number;
 }
 
+export interface AirCarrierCreateBody {
+  iata_code: string;
+  name: string;
+  cargo_types: string;
+  active: boolean;
+}
+
+export interface AirCarrierUpdateBody {
+  id: number;
+  iata_code?: string;
+  name?: string;
+  cargo_types?: string;
+  active?: boolean;
+}
+
+export interface AirRateCreateBody {
+  carrier: string;
+  origin: string;
+  destination: string;
+  min_weight_kg: number;
+  rate_per_kg_usd: number;
+  min_charge_usd: number;
+}
+
+export interface AirRateUpdateBody {
+  id: number;
+  carrier?: string;
+  origin?: string;
+  destination?: string;
+  min_weight_kg?: number;
+  rate_per_kg_usd?: number;
+  min_charge_usd?: number;
+}
+
 export interface IdDeleteBody {
   id: number;
 }
@@ -922,6 +956,263 @@ export function validateTransportChargeUpdateBody(
       ...updates,
     },
   };
+}
+
+export function validateAirCarrierCreateBody(
+  body: unknown
+): ValidationResult<AirCarrierCreateBody> {
+  if (!isRecord(body)) {
+    return {
+      success: false,
+      error: "Invalid air carrier payload",
+      details: ["Body must be a JSON object."],
+    };
+  }
+
+  const details: string[] = [];
+  const iataRaw = asStringOrNull(body.iata_code);
+  const iata_code = iataRaw ? iataRaw.toUpperCase() : null;
+  if (!iata_code) {
+    details.push("iata_code is required.");
+  }
+
+  const name = asStringOrNull(body.name);
+  if (!name) {
+    details.push("name is required.");
+  }
+
+  const cargo_types = asStringOrNull(body.cargo_types) ?? "";
+
+  let active: boolean | null = true;
+  if ("active" in body && body.active != null) {
+    if (typeof body.active !== "boolean") {
+      details.push("active must be a boolean when provided.");
+      active = null;
+    } else {
+      active = body.active;
+    }
+  }
+
+  if (details.length > 0 || !iata_code || !name || active === null) {
+    return { success: false, error: "Invalid air carrier payload", details };
+  }
+
+  return { success: true, data: { iata_code, name, cargo_types, active } };
+}
+
+export function validateAirCarrierUpdateBody(
+  body: unknown
+): ValidationResult<AirCarrierUpdateBody> {
+  if (!isRecord(body)) {
+    return {
+      success: false,
+      error: "Invalid air carrier payload",
+      details: ["Body must be a JSON object."],
+    };
+  }
+
+  const details: string[] = [];
+  const id = parseRequiredId(body.id, "Air carrier", details);
+  const updates: Omit<AirCarrierUpdateBody, "id"> = {};
+
+  if ("iata_code" in body) {
+    const value = asStringOrNull(body.iata_code);
+    if (!value) {
+      details.push("iata_code must be a non-empty string when provided.");
+    } else {
+      updates.iata_code = value.toUpperCase();
+    }
+  }
+
+  if ("name" in body) {
+    const value = asStringOrNull(body.name);
+    if (!value) {
+      details.push("name must be a non-empty string when provided.");
+    } else {
+      updates.name = value;
+    }
+  }
+
+  if ("cargo_types" in body) {
+    updates.cargo_types = asStringOrNull(body.cargo_types) ?? "";
+  }
+
+  if ("active" in body) {
+    if (typeof body.active !== "boolean") {
+      details.push("active must be a boolean when provided.");
+    } else {
+      updates.active = body.active;
+    }
+  }
+
+  if (Object.keys(updates).length === 0) {
+    details.push("At least one updatable field is required.");
+  }
+
+  if (details.length > 0 || id == null) {
+    return { success: false, error: "Invalid air carrier payload", details };
+  }
+
+  return { success: true, data: { id, ...updates } };
+}
+
+export function validateAirRateCreateBody(
+  body: unknown
+): ValidationResult<AirRateCreateBody> {
+  if (!isRecord(body)) {
+    return {
+      success: false,
+      error: "Invalid air rate payload",
+      details: ["Body must be a JSON object."],
+    };
+  }
+
+  const details: string[] = [];
+  const carrierRaw = asStringOrNull(body.carrier);
+  const carrier = carrierRaw ? carrierRaw.toUpperCase() : null;
+  if (!carrier) {
+    details.push("carrier is required.");
+  }
+
+  const originRaw = asStringOrNull(body.origin);
+  const origin = originRaw ? originRaw.toUpperCase() : null;
+  if (!origin) {
+    details.push("origin is required.");
+  }
+
+  const destinationRaw = asStringOrNull(body.destination);
+  const destination = destinationRaw ? destinationRaw.toUpperCase() : null;
+  if (!destination) {
+    details.push("destination is required.");
+  }
+
+  const minWeight = parseRequiredNumber(body.min_weight_kg, "min_weight_kg", details);
+  if (minWeight != null && minWeight < 0) {
+    details.push("min_weight_kg must be greater than or equal to 0.");
+  }
+
+  const ratePerKg = parseRequiredNumber(body.rate_per_kg_usd, "rate_per_kg_usd", details);
+  if (ratePerKg != null && ratePerKg <= 0) {
+    details.push("rate_per_kg_usd must be greater than 0.");
+  }
+
+  const minCharge = parseRequiredNumber(body.min_charge_usd, "min_charge_usd", details);
+  if (minCharge != null && minCharge < 0) {
+    details.push("min_charge_usd must be greater than or equal to 0.");
+  }
+
+  if (
+    details.length > 0 ||
+    !carrier ||
+    !origin ||
+    !destination ||
+    minWeight == null ||
+    minWeight < 0 ||
+    ratePerKg == null ||
+    ratePerKg <= 0 ||
+    minCharge == null ||
+    minCharge < 0
+  ) {
+    return { success: false, error: "Invalid air rate payload", details };
+  }
+
+  return {
+    success: true,
+    data: {
+      carrier,
+      origin,
+      destination,
+      min_weight_kg: minWeight,
+      rate_per_kg_usd: ratePerKg,
+      min_charge_usd: minCharge,
+    },
+  };
+}
+
+export function validateAirRateUpdateBody(
+  body: unknown
+): ValidationResult<AirRateUpdateBody> {
+  if (!isRecord(body)) {
+    return {
+      success: false,
+      error: "Invalid air rate payload",
+      details: ["Body must be a JSON object."],
+    };
+  }
+
+  const details: string[] = [];
+  const id = parseRequiredId(body.id, "Air rate", details);
+  const updates: Omit<AirRateUpdateBody, "id"> = {};
+
+  if ("carrier" in body) {
+    const value = asStringOrNull(body.carrier);
+    if (!value) {
+      details.push("carrier must be a non-empty string when provided.");
+    } else {
+      updates.carrier = value.toUpperCase();
+    }
+  }
+
+  if ("origin" in body) {
+    const value = asStringOrNull(body.origin);
+    if (!value) {
+      details.push("origin must be a non-empty string when provided.");
+    } else {
+      updates.origin = value.toUpperCase();
+    }
+  }
+
+  if ("destination" in body) {
+    const value = asStringOrNull(body.destination);
+    if (!value) {
+      details.push("destination must be a non-empty string when provided.");
+    } else {
+      updates.destination = value.toUpperCase();
+    }
+  }
+
+  if ("min_weight_kg" in body) {
+    const value = parseOptionalNumber(body.min_weight_kg, "min_weight_kg", details);
+    if (value != null) {
+      if (value < 0) {
+        details.push("min_weight_kg must be greater than or equal to 0.");
+      } else {
+        updates.min_weight_kg = value;
+      }
+    }
+  }
+
+  if ("rate_per_kg_usd" in body) {
+    const value = parseOptionalNumber(body.rate_per_kg_usd, "rate_per_kg_usd", details);
+    if (value != null) {
+      if (value <= 0) {
+        details.push("rate_per_kg_usd must be greater than 0.");
+      } else {
+        updates.rate_per_kg_usd = value;
+      }
+    }
+  }
+
+  if ("min_charge_usd" in body) {
+    const value = parseOptionalNumber(body.min_charge_usd, "min_charge_usd", details);
+    if (value != null) {
+      if (value < 0) {
+        details.push("min_charge_usd must be greater than or equal to 0.");
+      } else {
+        updates.min_charge_usd = value;
+      }
+    }
+  }
+
+  if (Object.keys(updates).length === 0) {
+    details.push("At least one updatable field is required.");
+  }
+
+  if (details.length > 0 || id == null) {
+    return { success: false, error: "Invalid air rate payload", details };
+  }
+
+  return { success: true, data: { id, ...updates } };
 }
 
 export function validateIdDeleteBody(

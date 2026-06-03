@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DashboardSummary } from "@/types/dashboard-summary";
 import type { Database } from "@/types/supabase";
 import type { DashboardKPIs, PipelineCount, ActivityItem } from "@/types/analytics";
-import type { MasterRFQ, RFQShipment } from "@/types/rfq";
+import type { FreightMode, MasterRFQ, RFQShipment } from "@/types/rfq";
 import {
   buildRFQWithShipments,
   buildShipmentsByRfq,
@@ -110,7 +110,7 @@ export async function buildDashboardSummary({
 }: BuildDashboardSummaryOptions): Promise<DashboardSummary> {
   const effectiveRecentLimit = Math.max(recentRfqLimit, activityLimit);
 
-  const [metricsRes, recentRfqsRes] = await Promise.all([
+  const [metricsRes, recentRfqsRes, shipmentModesRes] = await Promise.all([
     supabase
       .from("master_rfqs")
       .select("rfq_id, status, quoted_at, received_at, selected_agent, final_price_usd, final_price_aed")
@@ -125,10 +125,39 @@ export async function buildDashboardSummary({
       .is("deleted_at", null)
       .order("received_at", { ascending: false })
       .limit(effectiveRecentLimit),
+    // Freight mode lives on rfq_shipments (not master_rfqs); fetched here for per-mode KPIs.
+    // `freight_mode` is newer than the generated Database types, so cast like the rest of the repo.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- column not yet in generated types
+    (supabase.from as any)("rfq_shipments")
+      .select("rfq_id, freight_mode, shipment_number")
+      .eq("workspace_id", workspaceId),
   ]);
 
   if (metricsRes.error) throw metricsRes.error;
   if (recentRfqsRes.error) throw recentRfqsRes.error;
+
+  // Map each RFQ to its freight mode (using the lowest shipment_number as canonical).
+  // Resilient: a missing table/column simply leaves everything defaulting to ocean.
+  const modeByRfq = new Map<string, FreightMode>();
+  if (!shipmentModesRes.error) {
+    const bestShipmentNum = new Map<string, number>();
+    const modeRows = (shipmentModesRes.data || []) as Array<{
+      rfq_id: string | null;
+      freight_mode: string | null;
+      shipment_number: number | null;
+    }>;
+    for (const row of modeRows) {
+      if (!row.rfq_id) continue;
+      const sn = typeof row.shipment_number === "number" ? row.shipment_number : 1;
+      const prev = bestShipmentNum.get(row.rfq_id);
+      if (prev === undefined || sn < prev) {
+        bestShipmentNum.set(row.rfq_id, sn);
+        modeByRfq.set(row.rfq_id, (row.freight_mode as FreightMode) || "ocean");
+      }
+    }
+  } else if (!isMissingRelationError(shipmentModesRes.error)) {
+    throw shipmentModesRes.error;
+  }
 
   const metricRows = ((metricsRes.data || []) as DashboardMetricRow[]).filter(
     (row) => typeof row.rfq_id === "string" && row.rfq_id.length > 0
@@ -225,6 +254,21 @@ export async function buildDashboardSummary({
     0
   );
 
+  const modeBreakdown: Record<FreightMode, { total: number; quoted: number; selected: number }> = {
+    ocean: { total: 0, quoted: 0, selected: 0 },
+    air: { total: 0, quoted: 0, selected: 0 },
+    land: { total: 0, quoted: 0, selected: 0 },
+  };
+  for (const row of metricRows) {
+    const mode = modeByRfq.get(row.rfq_id as string) ?? "ocean";
+    const bucket = modeBreakdown[mode] ?? modeBreakdown.ocean;
+    bucket.total += 1;
+    if (QUOTED_STATUSES.has(String(row.status || ""))) bucket.quoted += 1;
+    if (row.status === "Selected" || (row.selected_agent && row.selected_agent.length > 0)) {
+      bucket.selected += 1;
+    }
+  }
+
   const kpis: DashboardKPIs = {
     activeRFQs,
     awaitingQuotes,
@@ -237,6 +281,7 @@ export async function buildDashboardSummary({
     conversionRate,
     totalRevenueAED,
     totalRevenueUSD,
+    modeBreakdown,
   };
 
   const baseRecentRfqs = toMasterRFQRows((recentRfqsRes.data || []) as DashboardRecentRFQRow[]);

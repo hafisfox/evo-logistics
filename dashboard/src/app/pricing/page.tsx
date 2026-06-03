@@ -34,6 +34,9 @@ import { toast } from "sonner";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import type { DestinationCharge, DOCharge, TransportCharge } from "@/types/pricing";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
+import { FEATURE_AIR_FREIGHT_ENABLED } from "@/lib/constants";
+import { AirCarriersTab } from "@/components/pricing/air-carriers-tab";
+import { AirRatesTab } from "@/components/pricing/air-rates-tab";
 
 function toNumber(value: string | number) {
   if (typeof value === "number") return value;
@@ -279,6 +282,12 @@ export default function PricingPage() {
           <TabsTrigger value="do" className="shrink-0 font-medium tracking-tight rounded-2xl data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-md transition-all px-6 py-2">DO Charges</TabsTrigger>
           <TabsTrigger value="dest" className="shrink-0 font-medium tracking-tight rounded-2xl data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-md transition-all px-6 py-2">Destination Charges</TabsTrigger>
           <TabsTrigger value="transport" className="shrink-0 font-medium tracking-tight rounded-2xl data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-md transition-all px-6 py-2">Transportation</TabsTrigger>
+          {FEATURE_AIR_FREIGHT_ENABLED && (
+            <>
+              <TabsTrigger value="air-carriers" className="shrink-0 font-medium tracking-tight rounded-2xl data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-md transition-all px-6 py-2">Airlines</TabsTrigger>
+              <TabsTrigger value="air-rates" className="shrink-0 font-medium tracking-tight rounded-2xl data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-md transition-all px-6 py-2">Air Rates</TabsTrigger>
+            </>
+          )}
         </TabsList>
 
         <TabsContent value="do" className="mt-2 focus-visible:outline-none focus-visible:ring-0">
@@ -809,6 +818,17 @@ export default function PricingPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {FEATURE_AIR_FREIGHT_ENABLED && (
+          <>
+            <TabsContent value="air-carriers" className="mt-2 focus-visible:outline-none focus-visible:ring-0">
+              <AirCarriersTab />
+            </TabsContent>
+            <TabsContent value="air-rates" className="mt-2 focus-visible:outline-none focus-visible:ring-0">
+              <AirRatesTab />
+            </TabsContent>
+          </>
+        )}
       </Tabs>
       <ConfirmDeleteDialog
         open={deleteTarget !== null}

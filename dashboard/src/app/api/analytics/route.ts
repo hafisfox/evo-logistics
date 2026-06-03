@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { DashboardKPIs, PipelineCount, ActivityItem } from "@/types/analytics";
+import type { FreightMode } from "@/types/rfq";
 import type { AgentQuote, RFQShipment } from "@/types/rfq";
 import { requireWorkspaceApiContext } from "@/lib/workspace-context";
 import {
@@ -178,6 +179,23 @@ export async function GET() {
       0
     );
 
+    const modeBreakdown: Record<FreightMode, { total: number; quoted: number; selected: number }> = {
+      ocean: { total: 0, quoted: 0, selected: 0 },
+      air: { total: 0, quoted: 0, selected: 0 },
+      land: { total: 0, quoted: 0, selected: 0 },
+    };
+    for (const r of rfqs) {
+      const mode = (r.freight_mode ?? "ocean") as FreightMode;
+      const bucket = modeBreakdown[mode] ?? modeBreakdown.ocean;
+      bucket.total += 1;
+      if (["Quoted", "Followed_Up", "Customer_Replied", "Selected"].includes(r.status as string)) {
+        bucket.quoted += 1;
+      }
+      if (r.status === "Selected" || (r.selected_agent && r.selected_agent.length > 0)) {
+        bucket.selected += 1;
+      }
+    }
+
     const kpis: DashboardKPIs = {
       activeRFQs,
       awaitingQuotes,
@@ -190,6 +208,7 @@ export async function GET() {
       conversionRate,
       totalRevenueAED,
       totalRevenueUSD,
+      modeBreakdown,
     };
 
     // Pipeline counts

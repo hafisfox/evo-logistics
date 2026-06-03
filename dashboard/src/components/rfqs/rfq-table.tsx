@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "./status-badge";
+import { ModeIcon } from "./mode-icon";
 import { RouteDisplay } from "@/components/ui/route-display";
 import { ContainerBadge } from "@/components/ui/container-badge";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
@@ -223,12 +224,15 @@ export function RFQTable({ rfqs }: RFQTableProps) {
                 className="group border-b border-black/5 dark:border-white/5 hover:bg-accent/40 transition-colors cursor-pointer"
               >
                 <TableCell className="font-mono text-sm py-4">
-                  <Link
-                    href={`/rfqs/${rfq.rfq_id}`}
-                    className="text-primary font-medium hover:underline transition-all"
-                  >
-                    {rfq.rfq_id}
-                  </Link>
+                  <span className="flex items-center gap-2">
+                    <ModeIcon mode={rfq.freight_mode} className="h-4 w-4 shrink-0" />
+                    <Link
+                      href={`/rfqs/${rfq.rfq_id}`}
+                      className="text-primary font-medium hover:underline transition-all"
+                    >
+                      {rfq.rfq_id}
+                    </Link>
+                  </span>
                 </TableCell>
                 <TableCell className="text-sm max-w-[180px] truncate font-medium text-foreground py-4">
                   {rfq.customer_email}

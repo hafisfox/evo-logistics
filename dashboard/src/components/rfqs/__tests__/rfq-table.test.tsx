@@ -56,4 +56,10 @@ describe("RFQTable", () => {
       })
     ).toBeInTheDocument();
   });
+
+  it("renders a freight-mode icon with an accessible label per row", () => {
+    render(<RFQTable rfqs={[{ ...rfqs[0], rfq_id: "RFQ-AIR-1", freight_mode: "air" }]} />);
+
+    expect(screen.getByRole("img", { name: /air freight/i })).toBeInTheDocument();
+  });
 });

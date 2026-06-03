@@ -6,6 +6,8 @@ import { ContainerBadge } from "@/components/ui/container-badge";
 import { StatusBadge } from "@/components/rfqs/status-badge";
 import { formatDate } from "@/lib/utils";
 import { buildLegacyShipmentsFromRFQ } from "@/lib/rfq-normalization";
+import { ModeIcon, modeMeta } from "@/components/rfqs/mode-icon";
+import { calculateChargeableWeight, totalChargeableWeight } from "@/lib/dim-weight";
 import type { MasterRFQ } from "@/types/rfq";
 import {
   MapPin, Calendar, Truck, Package, AlertTriangle, Thermometer, Scale, FileText,
@@ -31,14 +33,21 @@ export function ShipmentCard({ rfq }: ShipmentCardProps) {
       </CardHeader>
       <CardContent className="space-y-4 px-6 pb-6">
         <div className="space-y-3">
-          {shipments.map((shipment) => (
+          {shipments.map((shipment) => {
+            const mode = shipment.freight_mode ?? "ocean";
+            const pieces = shipment.pieces ?? [];
+            const chargeableWeight =
+              mode === "air" && pieces.length > 0 ? totalChargeableWeight(pieces) : 0;
+            return (
             <div
               key={shipment.shipment_number}
               className="rounded-2xl border border-white/20 dark:border-white/10 bg-white/40 dark:bg-black/20 px-4 py-4"
             >
               <div className="mb-3 flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <ModeIcon mode={mode} className="h-3.5 w-3.5" />
                   Shipment {shipment.shipment_number}
+                  <span className="text-muted-foreground/70">· {modeMeta(mode).label}</span>
                 </p>
                 <span className="text-xs font-medium text-muted-foreground">
                   {shipment.service_type}
@@ -51,8 +60,16 @@ export function ShipmentCard({ rfq }: ShipmentCardProps) {
                   <RouteDisplay shipments={[shipment]} showShipmentCount={false} />
                 </div>
                 <div>
-                  <p className="mb-1 text-xs text-muted-foreground">Containers</p>
-                  <ContainerBadge shipments={[shipment]} maxChips={6} />
+                  <p className="mb-1 text-xs text-muted-foreground">
+                    {mode === "air" ? "Chargeable Wt" : "Containers"}
+                  </p>
+                  {mode === "air" ? (
+                    <p className="text-sm font-medium">
+                      {chargeableWeight > 0 ? `${chargeableWeight.toLocaleString()} kg` : "—"}
+                    </p>
+                  ) : (
+                    <ContainerBadge shipments={[shipment]} maxChips={6} />
+                  )}
                 </div>
                 <div>
                   <p className="mb-1 text-xs text-muted-foreground">Ready Date</p>
@@ -118,7 +135,7 @@ export function ShipmentCard({ rfq }: ShipmentCardProps) {
                         </div>
                       </div>
                     ) : null}
-                    {shipment.incoterms ? (
+                    {mode !== "air" && shipment.incoterms ? (
                       <div>
                         <p className="text-xs text-muted-foreground">Incoterms</p>
                         <span className="inline-block mt-0.5 rounded-md bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 text-xs font-bold text-blue-700 dark:text-blue-300">
@@ -137,7 +154,7 @@ export function ShipmentCard({ rfq }: ShipmentCardProps) {
                         </div>
                       </div>
                     ) : null}
-                    {shipment.is_reefer ? (
+                    {mode !== "air" && shipment.is_reefer ? (
                       <div className="flex items-start gap-1.5">
                         <Thermometer className="mt-0.5 h-3.5 w-3.5 text-cyan-500" />
                         <div>
@@ -172,8 +189,59 @@ export function ShipmentCard({ rfq }: ShipmentCardProps) {
                   ) : null}
                 </div>
               ) : null}
+
+              {mode === "air" && pieces.length > 0 ? (
+                <div className="mt-4 border-t pt-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Pieces &amp; Dimensions
+                  </p>
+                  <div className="space-y-1.5">
+                    {pieces.map((piece) => {
+                      const cw =
+                        piece.length_cm && piece.width_cm && piece.height_cm
+                          ? calculateChargeableWeight(
+                              piece.weight_kg ?? 0,
+                              piece.length_cm,
+                              piece.width_cm,
+                              piece.height_cm
+                            )
+                          : piece.weight_kg ?? 0;
+                      return (
+                        <div
+                          key={piece.piece_number}
+                          className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm"
+                        >
+                          <span className="flex items-center gap-1 font-medium">
+                            <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                            {piece.count ?? 1}×
+                          </span>
+                          {piece.packaging_type ? (
+                            <span className="text-muted-foreground">{piece.packaging_type}</span>
+                          ) : null}
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {piece.length_cm ?? "?"}×{piece.width_cm ?? "?"}×{piece.height_cm ?? "?"} cm
+                          </span>
+                          {piece.weight_kg != null ? (
+                            <span className="text-xs text-muted-foreground">{piece.weight_kg} kg actual</span>
+                          ) : null}
+                          <span className="text-xs font-medium text-sky-600 dark:text-sky-400">
+                            {(Math.round(cw * 100) / 100).toLocaleString()} kg ch.
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Total chargeable weight:{" "}
+                    <span className="font-semibold text-foreground">
+                      {chargeableWeight.toLocaleString()} kg
+                    </span>
+                  </p>
+                </div>
+              ) : null}
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="flex items-center gap-4 pt-2 border-t text-sm">

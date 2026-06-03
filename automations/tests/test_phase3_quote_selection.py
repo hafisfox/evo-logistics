@@ -196,3 +196,69 @@ def test_process_agent_selection_uses_workspace_mailbox_for_notifications(monkey
 
     assert result["success"] is True
     assert notified["email"] == "ws-1@mailbox.test"
+
+
+class _AirRateQuery:
+    def __init__(self, rows, recorder):
+        self._rows = rows
+        self._rec = recorder
+
+    def select(self, *_a, **_k):
+        return self
+
+    def eq(self, column, value):
+        self._rec.setdefault("eq", []).append((column, value))
+        return self
+
+    def lte(self, column, value):
+        self._rec["lte"] = (column, value)
+        return self
+
+    def order(self, column, desc=False):
+        self._rec["order"] = (column, desc)
+        return self
+
+    def limit(self, n):
+        self._rec["limit"] = n
+        return self
+
+    def execute(self):
+        return SimpleNamespace(data=self._rows)
+
+
+class _AirRateSupabase:
+    def __init__(self, rows):
+        self._rows = rows
+        self.recorder = {}
+
+    def table(self, name):
+        self.recorder["table"] = name
+        return _AirRateQuery(self._rows, self.recorder)
+
+
+def test_get_air_rate_per_kg_returns_tier_rate_and_min_charge():
+    supabase = _AirRateSupabase(
+        [{"rate_per_kg_usd": 4.5, "min_charge_usd": 75, "min_weight_kg": 100}]
+    )
+    result = p3.get_air_rate_per_kg(supabase, "ws-1", "ek", "dxb", "lhr", 250.0)
+    assert result == (4.5, 75.0)
+    # Lane filters are uppercased and the tier is bounded by the chargeable weight,
+    # ordered by descending break so the highest applicable tier wins.
+    assert ("carrier", "EK") in supabase.recorder["eq"]
+    assert ("origin", "DXB") in supabase.recorder["eq"]
+    assert ("destination", "LHR") in supabase.recorder["eq"]
+    assert supabase.recorder["lte"] == ("min_weight_kg", 250.0)
+    assert supabase.recorder["order"] == ("min_weight_kg", True)
+
+
+def test_get_air_rate_per_kg_returns_none_when_lane_unconfigured():
+    supabase = _AirRateSupabase([])
+    assert p3.get_air_rate_per_kg(supabase, "ws-1", "EK", "DXB", "LHR", 250.0) is None
+
+
+def test_get_air_rate_per_kg_skips_lookup_on_missing_fields_or_weight():
+    supabase = _AirRateSupabase(
+        [{"rate_per_kg_usd": 4.5, "min_charge_usd": 0, "min_weight_kg": 0}]
+    )
+    assert p3.get_air_rate_per_kg(supabase, "ws-1", "", "DXB", "LHR", 250.0) is None
+    assert p3.get_air_rate_per_kg(supabase, "ws-1", "EK", "DXB", "LHR", 0.0) is None

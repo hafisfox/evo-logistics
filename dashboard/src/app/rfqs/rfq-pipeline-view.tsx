@@ -18,6 +18,7 @@ export function RFQPipelineView() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
+  const [modeFilter, setModeFilter] = useState("all");
 
   const filtered = useMemo(() => {
     if (!rfqs) return [];
@@ -42,9 +43,12 @@ export function RFQPipelineView() {
       // Service filter
       if (serviceFilter !== "all" && r.service_type !== serviceFilter)
         return false;
+      // Freight mode filter (defaults to ocean when unset)
+      if (modeFilter !== "all" && (r.freight_mode ?? "ocean") !== modeFilter)
+        return false;
       return true;
     });
-  }, [rfqs, search, statusFilter, serviceFilter]);
+  }, [rfqs, search, statusFilter, serviceFilter, modeFilter]);
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 space-y-4 md:space-y-6 animate-in fade-in zoom-in-95 duration-700 ease-out fill-mode-both">
@@ -56,6 +60,8 @@ export function RFQPipelineView() {
           onStatusFilterChange={setStatusFilter}
           serviceFilter={serviceFilter}
           onServiceFilterChange={setServiceFilter}
+          modeFilter={modeFilter}
+          onModeFilterChange={setModeFilter}
         />
         <div className="flex items-center gap-2">
           <Button asChild size="sm" className="h-9 rounded-xl font-semibold shadow-sm">

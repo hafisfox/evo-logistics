@@ -8,7 +8,7 @@
 
 | Phase | Weeks | Status | Blocker |
 |-------|-------|--------|---------|
-| Phase 1: Air Foundation | 1–10 | **In progress** | P0 automation subtasks 1a-1i complete; Phase 2 mode-awareness complete; `rfq_shipment_pieces` table live; DIM weight calc done; dashboard mode selector done; remaining: `air_carrier_profiles`/`air_charge_rates` tables, air pricing engine, analytics mode breakdown |
+| Phase 1: Air Foundation | 1–10 | **In progress** | P0 automation subtasks 1a-1i complete; Phase 2 mode-awareness complete; `rfq_shipment_pieces` table live; DIM weight calc done; dashboard mode selector done; air rate tables (mig 019) + air pricing engine + analytics mode breakdown + dashboard mode UI (filter chips, row icons, mode-aware RFQ detail, air pricing tabs) done; remaining: 50+ synthetic air RFQ fixtures + extraction/classification eval |
 | Phase 2: Air API Integration | 11–18 | Not started | Depends on Phase 1; start enterprise sales in Phase 1 |
 | Phase 3: Land Foundation | 19–26 | Not started | Depends on Phase 1 schema patterns |
 | Phase 4: Land API Integration | 27–34 | Not started | Depends on Phase 3 |
@@ -335,13 +335,13 @@ agent_quotes (existing — `freight_mode` column LIVE)
 | ~~**1i.** Add `PieceItem` Pydantic model for air~~ | ~~DONE — with string-to-int coercion, validated through pipeline~~ | ~~P0~~ |
 | ~~Add `freight_mode` to Phase 2 automation~~ | ~~DONE — `QuoteData` has `freight_mode`, mode-specific prompts, mode-aware carrier normalization, `SurchargeData` extended with air/land fields, DB writes with `freight_mode`, manager notification mode-aware~~ | ~~P0~~ |
 | ~~Create `rfq_shipment_pieces` table~~ | ~~DONE — migration 018, RLS policies, pieces persistence in Phase 1 automation~~ | ~~P0~~ |
-| Create `air_carrier_profiles`, `air_charge_rates` tables | Air carrier master data and weight-tier rates — needed for Phase 2 API integration | P0 |
+| ~~Create `air_carrier_profiles`, `air_charge_rates` tables~~ | ~~DONE — migration 019 (RLS, weight-tier rate book in USD/kg); CRUD API + hooks + `/pricing` Airlines/Air Rates tabs (flag-gated)~~ | ~~P0~~ |
 | ~~Extend Phase 1 prompt for air~~ | ~~DONE — air-specific GPT-4o system prompt with airline, weight, dims, airport codes~~ | ~~P0~~ |
 | ~~Extend Phase 2 prompt for air~~ | ~~DONE — air quote parsing with per-kg rates, FSC, SSC, chargeable weight~~ | ~~P0~~ |
 | ~~DIM weight calculator~~ | ~~DONE — `max(actual, L×W×H/6000)` in `automations/dim_weight.py` + `dashboard/src/lib/dim-weight.ts`~~ | ~~P1~~ |
 | ~~Dashboard mode selector~~ | ~~DONE — freight mode selector on RFQ form, mode-keyed constants (CARRIERS_BY_MODE, EQUIPMENT_BY_MODE, SERVICE_TYPES_BY_MODE), feature flags~~ | ~~P1~~ |
-| Air pricing engine | Weight-tier based pricing with surcharge stacking | P1 |
-| Analytics mode breakdown | Extend `DashboardKPIs` and `buildDashboardSummary()` to support per-mode filtering | P2 |
+| ~~Air pricing engine~~ | ~~DONE — `calculate_air_price` (per-kg × chargeable wt + surcharges + margin) wired in phase_3; `get_air_rate_per_kg` weight-tier fallback from `air_charge_rates`; `calculateAirPrice` parity in `pricing-engine.ts`~~ | ~~P1~~ |
+| ~~Analytics mode breakdown~~ | ~~DONE — `modeBreakdown` on `DashboardKPIs`, computed in `buildDashboardSummary()`; "RFQs by Freight Mode" dashboard widget (flag-gated)~~ | ~~P2~~ |
 
 **Phase 1 acceptance criteria:**
 - Mode detection correctly classifies 90%+ of 50 synthetic air RFQ email fixtures
@@ -485,10 +485,10 @@ These UI changes are missing from the phased roadmap and should be added:
 
 | Missing Item | Phase | Priority | Details |
 |-------------|-------|----------|---------|
-| RFQ detail page mode-awareness | 1 | P1 | `/rfqs/[rfqId]` shows ocean cargo details; needs air (pieces/dims/airports) and land (ZIP/equipment/class) conditional sections |
-| Pipeline filter by freight mode | 1 | P1 | Add mode filter chips (Ocean/Air/Land) to RFQ list page — more impactful than analytics breakdown |
-| Mode-specific icons on RFQ rows | 1 | P1 | Ship/Plane/Truck icons per RFQ in pipeline list for visual differentiation |
-| Pricing tables page update | 3 | P1 | `/pricing` only has ocean tables (DO, dest, transport); air needs weight-tier tables, land needs lane/accessorial tables |
+| ~~RFQ detail page mode-awareness~~ | 1 | P1 | ~~DONE (air)~~ — `shipment-card` renders air Pieces & Dimensions + chargeable weight and hides ocean-only blocks; land (ZIP/equipment/class) sections still pending |
+| ~~Pipeline filter by freight mode~~ | 1 | P1 | ~~DONE~~ — mode filter chips (Ocean/Air/Land, flag-gated) on the RFQ list |
+| ~~Mode-specific icons on RFQ rows~~ | 1 | P1 | ~~DONE~~ — Ship/Plane/Truck `ModeIcon` on table rows + kanban cards |
+| Pricing tables page update | 3 | P1 | ~~DONE (air)~~ — `/pricing` now has Airlines + Air Rates tabs (flag-gated); land lane/accessorial tables still pending |
 | Agents page mode tagging | 1 | P2 | Tag agents by mode specialization; filter agents by mode on the agents page |
 | Cross-mode quote comparison UI | 6 | P2 | Phase 6 mentions "Mode comparison engine" but provides no UI spec — add comparison table/chart design |
 

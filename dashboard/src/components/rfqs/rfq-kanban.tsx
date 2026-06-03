@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "./status-badge";
+import { ModeIcon } from "./mode-icon";
 import { RouteDisplay } from "@/components/ui/route-display";
 import { ContainerBadge } from "@/components/ui/container-badge";
 import { KANBAN_COLUMNS, STATUS_CONFIG } from "@/lib/constants";
@@ -44,7 +45,8 @@ export function RFQKanban({ rfqs }: RFQKanbanProps) {
                     <Card className="rounded-2xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer overflow-hidden">
                       <CardContent className="p-3 space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="font-mono text-xs text-primary">
+                          <span className="flex items-center gap-1.5 font-mono text-xs text-primary">
+                            <ModeIcon mode={rfq.freight_mode} className="h-3.5 w-3.5 shrink-0" />
                             {rfq.rfq_id}
                           </span>
                           <StatusBadge status={rfq.status} className="text-[10px]" />

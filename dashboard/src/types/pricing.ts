@@ -21,6 +21,24 @@ export interface TransportCharge {
   Price: number;
 }
 
+export interface AirCarrierProfile {
+  id?: number;
+  iata_code: string;
+  name: string;
+  cargo_types: string;
+  active: boolean;
+}
+
+export interface AirChargeRate {
+  id?: number;
+  carrier: string;
+  origin: string;
+  destination: string;
+  min_weight_kg: number;
+  rate_per_kg_usd: number;
+  min_charge_usd: number;
+}
+
 export interface SurchargeBreakdown {
   BAF: number;
   CAF: number;
@@ -62,6 +80,11 @@ export interface ShipmentCost {
   finalPriceUSD: number;
   pricePerContainerUSD: number;
   exchangeRate: number;
+  // Air freight fields (present when freightMode === "air")
+  ratePerKgUSD?: number;
+  chargeableWeightKg?: number;
+  airFreightUSD?: number;
+  airFreightAED?: number;
 }
 
 export interface PricingResult {
