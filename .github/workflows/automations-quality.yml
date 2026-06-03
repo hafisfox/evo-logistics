@@ -1,0 +1,37 @@
+name: Automations Quality
+
+on:
+  pull_request:
+    paths:
+      - "automations/**"
+      - ".github/workflows/automations-quality.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "automations/**"
+      - ".github/workflows/automations-quality.yml"
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: automations/requirements-dev.txt
+
+      - name: Install dependencies
+        working-directory: automations
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run tests
+        working-directory: automations
+        run: python -m pytest

@@ -6,7 +6,8 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Trash2, Loader2, Ship, Plane, Truck } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Loader2, Ship, Plane, Truck, AlertCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { FreightMode } from "@/types/rfq";
 import {
   EQUIPMENT_BY_MODE,
@@ -98,6 +99,9 @@ export default function NewRFQPage() {
   const [customerEmail, setCustomerEmail] = useState("");
   const [shipments, setShipments] = useState<ShipmentEntry[]>([emptyShipment()]);
   const [submitting, setSubmitting] = useState(false);
+  const [formErrors, setFormErrors] = useState<string[]>([]);
+
+  const hasEmailError = formErrors.some((d) => d.toLowerCase().includes("customer_email"));
 
   const updateShipment = (index: number, updates: Partial<ShipmentEntry>) => {
     setShipments((prev) =>
@@ -195,6 +199,7 @@ export default function NewRFQPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    setFormErrors([]);
 
     try {
       const payload = {
@@ -239,14 +244,23 @@ export default function NewRFQPage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to create RFQ");
+        const details: string[] = Array.isArray(data.details) && data.details.length > 0
+          ? data.details
+          : [data.error || "Failed to create RFQ"];
+        setFormErrors(details);
+        toast.error(data.error || "Please fix the highlighted issues");
+        // Surface the summary panel at the top of the form.
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
       }
 
       const result = await res.json();
       toast.success("RFQ created successfully");
       router.push(`/rfqs/${result.rfq_id}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create RFQ");
+      const message = error instanceof Error ? error.message : "Failed to create RFQ";
+      setFormErrors([message]);
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }
@@ -266,6 +280,24 @@ export default function NewRFQPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {formErrors.length > 0 && (
+          <div
+            role="alert"
+            className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 flex items-start gap-3"
+          >
+            <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-destructive">
+                Please fix the following before submitting:
+              </p>
+              <ul className="list-disc list-inside space-y-0.5 text-sm text-destructive/90">
+                {formErrors.map((err, i) => (
+                  <li key={i}>{err}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
         <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] overflow-hidden">
           <CardHeader className="pb-4 px-6 pt-6">
             <div className="flex items-center gap-2">
@@ -283,10 +315,11 @@ export default function NewRFQPage() {
               <input
                 type="email"
                 required
+                aria-invalid={hasEmailError}
                 value={customerEmail}
                 onChange={(e) => setCustomerEmail(e.target.value)}
                 placeholder="customer@example.com"
-                className={inputClass}
+                className={cn(inputClass, hasEmailError && "border-destructive ring-2 ring-destructive/40")}
               />
             </div>
           </CardContent>

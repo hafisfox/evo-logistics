@@ -1,0 +1,6 @@
+# Local / CI test dependencies. Installs production deps plus test-only tooling.
+# `modal` is provided by the Modal runtime in production, but is needed locally
+# because the phase_* modules import it at module top level.
+-r requirements.txt
+pytest==9.0.3
+modal==1.4.3

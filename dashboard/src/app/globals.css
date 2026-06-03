@@ -143,3 +143,38 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Skeleton shimmer: a gradient sweep that reads more "premium" than a plain
+   opacity pulse. Falls back to a static block when reduced motion is requested. */
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@layer components {
+  .skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .skeleton-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklch, var(--foreground) 10%, transparent),
+      transparent
+    );
+    animation: skeleton-shimmer 1.6s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton-shimmer::after {
+      animation: none;
+    }
+  }
+}

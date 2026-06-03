@@ -24,10 +24,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-xl focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground focus:shadow-lg"
+      >
+        Skip to content
+      </a>
       <Sidebar />
       <main className="flex-1 flex flex-col overflow-hidden w-full min-w-0">
         <Header title={getTitle()} />
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 relative bg-black/[0.01] dark:bg-white/[0.01]">
+        <div id="main-content" className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 relative bg-black/[0.01] dark:bg-white/[0.01]">
           <div className="animate-in fade-in slide-in-from-bottom-1 duration-300 ease-out fill-mode-both h-full w-full">
             {children}
           </div>

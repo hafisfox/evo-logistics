@@ -13,6 +13,7 @@ from gmail_workspace_auth import (
     get_gmail_service_for_workspace,
 )
 from tenant_context import scoped_select, scoped_eq_filter
+from dim_weight import total_chargeable_weight
 
 # =====================================================================
 # MODAL APP DEFINITION
@@ -33,6 +34,9 @@ image = modal.Image.debian_slim(python_version="3.11").pip_install(
 ).add_local_file(
     os.path.join(os.path.dirname(__file__), "gmail_workspace_auth.py"),
     "/root/gmail_workspace_auth.py"
+).add_local_file(
+    os.path.join(os.path.dirname(__file__), "dim_weight.py"),
+    "/root/dim_weight.py"
 )
 
 # =====================================================================
@@ -205,6 +209,34 @@ def calculate_port_price(ocean_freight_usd, qty, margin, exchange_rate=None, sur
     }
 
 
+def calculate_air_price(rate_per_kg_usd, chargeable_weight_kg, margin,
+                        exchange_rate=None, surcharges_usd=0):
+    """Air freight pricing: base = (USD/kg rate) x chargeable weight, then add
+    surcharges and apply margin. Mirrors calculate_port_price rounding so the
+    downstream email/template handling is identical to ocean port-to-port."""
+    fx = exchange_rate or DEFAULT_EXCHANGE_RATE
+    air_freight_usd = rate_per_kg_usd * chargeable_weight_kg
+    air_freight_aed = air_freight_usd * fx
+    surcharges_aed = surcharges_usd * fx
+    subtotal_aed = air_freight_aed + surcharges_aed
+    with_margin = subtotal_aed * (1 + margin)
+    final_price_aed = math.ceil(with_margin / 10) * 10
+    final_price_usd = math.ceil(final_price_aed / fx)
+    return {
+        "final_price_aed": final_price_aed,
+        "final_price_usd": final_price_usd,
+        "margin_amount": round(with_margin - subtotal_aed, 2),
+        "margin_percent": margin,
+        "air_freight_usd": round(air_freight_usd, 2),
+        "air_freight_aed": round(air_freight_aed, 2),
+        "rate_per_kg_usd": round(rate_per_kg_usd, 4),
+        "chargeable_weight_kg": round(chargeable_weight_kg, 2),
+        "surcharges_usd": round(surcharges_usd, 2),
+        "surcharges_aed": round(surcharges_aed, 2),
+        "exchange_rate": fx,
+    }
+
+
 def calculate_door_price(ocean_freight_usd, qty, container_type, carrier,
                          delivery_address, do_charges, dest_charges, transp_charges, margin,
                          exchange_rate=None, surcharges_usd=0):
@@ -347,11 +379,16 @@ def calculate_door_price_multi(ocean_freight_usd, container_types, quantities, c
 
 
 def calculate_full_pricing(rfq, quote, do_charges, dest_charges, transp_charges, margin,
-                           exchange_rate=None):
+                           exchange_rate=None, freight_mode="ocean", chargeable_weight_kg=0.0):
     """Master pricing function. Handles single and multi-shipment RFQs.
 
     Key: shipment_count = len(prices), i.e. 1 price per route.
     Container types within a route are display metadata grouped by _group_containers_by_route.
+
+    For air freight (freight_mode == "air") the quote price is interpreted as a
+    USD-per-chargeable-kg rate; the base freight is rate x chargeable_weight_kg
+    (computed from rfq_shipment_pieces via dim_weight) plus parsed surcharges and
+    margin. Ocean/land flow is unchanged.
     """
     fx = exchange_rate or DEFAULT_EXCHANGE_RATE
     all_cts = parse_multi_value(rfq.get("container_type"))
@@ -364,6 +401,35 @@ def calculate_full_pricing(rfq, quote, do_charges, dest_charges, transp_charges,
     # Get surcharges total from quote
     surcharges_data = quote.get("surcharges") or {}
     surcharges_usd = sum_surcharges(surcharges_data)
+
+    if (freight_mode or "ocean").lower() == "air":
+        try:
+            rate_per_kg_usd = float(prices[0]) if prices else 0.0
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"Invalid air rate '{prices[0] if prices else None}': {e}")
+        if rate_per_kg_usd <= 0:
+            raise ValueError(f"Air rate per kg must be positive, got {rate_per_kg_usd}")
+        if chargeable_weight_kg <= 0:
+            raise ValueError("Air pricing requires a positive chargeable weight (check rfq_shipment_pieces)")
+
+        result = calculate_air_price(rate_per_kg_usd, chargeable_weight_kg, margin,
+                                     exchange_rate=fx, surcharges_usd=surcharges_usd)
+        result["shipment_number"] = 1
+        result["service_type"] = (rfq.get("service_type") or "airport-to-airport").lower().strip()
+        result["freight_mode"] = "air"
+        result["pol"] = pols[0] if pols else (rfq.get("pol") or "N/A")
+        result["pod"] = pods[0] if pods else (rfq.get("pod") or "N/A")
+        result["container_display"] = f"{result['chargeable_weight_kg']} kg chargeable"
+        result["carrier"] = carrier
+        result["surcharge_breakdown"] = surcharges_data if surcharges_usd > 0 else None
+        return {
+            "shipments": [result],
+            "grand_total_aed": result["final_price_aed"],
+            "grand_total_usd": round(result["final_price_usd"], 2),
+            "exchange_rate": fx,
+            "margin_percent": margin,
+            "freight_mode": "air",
+        }
 
     service_type = (rfq.get("service_type") or "port-to-port").lower().strip()
     is_port_only = service_type == "port-to-port"
@@ -502,6 +568,19 @@ def _load_normalized_shipments(supabase, workspace_id: str, rfq_id: str) -> list
         s["containers"] = containers_by_shipment.get(key, [])
 
     return shipments
+
+
+def _load_pieces(supabase, workspace_id: str, rfq_id: str) -> list:
+    """Load air-freight piece dimensions for chargeable-weight calculation."""
+    return (
+        supabase.table("rfq_shipment_pieces")
+        .select("*")
+        .eq("workspace_id", workspace_id)
+        .eq("rfq_id", rfq_id)
+        .execute()
+        .data
+        or []
+    )
 
 
 def _build_legacy_rfq_projection(rfq_data: dict, shipments: list) -> dict:
@@ -871,6 +950,16 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
     normalized_shipments = _load_normalized_shipments(supabase, workspace_id, request.rfq_id) if USE_NORMALIZED_READ else []
     rfq_for_pricing = _build_legacy_rfq_projection(rfq_data, normalized_shipments)
 
+    # Determine freight mode (air pricing uses chargeable weight from pieces).
+    freight_mode = "ocean"
+    if normalized_shipments:
+        freight_mode = (normalized_shipments[0].get("freight_mode") or "ocean").lower()
+    chargeable_weight_kg = 0.0
+    if freight_mode == "air":
+        pieces = _load_pieces(supabase, workspace_id, request.rfq_id)
+        chargeable_weight_kg = total_chargeable_weight(pieces)
+        print(f"Air freight: chargeable weight = {chargeable_weight_kg} kg from {len(pieces)} piece line(s)")
+
     print(f"Found RFQ {request.rfq_id}")
 
     # 2. Update status to "Selected" and set selected_agent
@@ -902,7 +991,9 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
         dest_charges,
         transp_charges,
         request.margin,
-        exchange_rate=fx
+        exchange_rate=fx,
+        freight_mode=freight_mode,
+        chargeable_weight_kg=chargeable_weight_kg,
     )
     print(f"Pricing calculated: AED {pricing['grand_total_aed']:,.0f} / USD {pricing['grand_total_usd']:,.2f}")
 

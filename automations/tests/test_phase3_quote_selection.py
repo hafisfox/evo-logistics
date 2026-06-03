@@ -24,6 +24,44 @@ def _request(**overrides):
     return p3.SelectAgentRequest(**base)
 
 
+def test_air_price_uses_chargeable_weight_times_rate_plus_surcharges():
+    # rate 3.0 USD/kg x 100 kg = 300 USD freight; +50 USD surcharges; 13% margin; fx 3.67
+    result = p3.calculate_air_price(
+        rate_per_kg_usd=3.0,
+        chargeable_weight_kg=100.0,
+        margin=0.13,
+        exchange_rate=3.67,
+        surcharges_usd=50.0,
+    )
+    # subtotal_aed = (300+50)*3.67 = 1284.5; *1.13 = 1451.485; ceil to nearest 10 = 1460
+    assert result["final_price_aed"] == 1460
+    assert result["air_freight_usd"] == 300.0
+    assert result["chargeable_weight_kg"] == 100.0
+    assert result["surcharges_usd"] == 50.0
+
+
+def test_full_pricing_air_mode_produces_single_chargeable_weight_shipment():
+    rfq = {"pol": "DXB", "pod": "LHR", "service_type": "airport-to-airport"}
+    quote = {"price": "3.0", "carrier": "EK", "surcharges": {"fsc": 50}}
+    pricing = p3.calculate_full_pricing(
+        rfq, quote, [], [], [], 0.13,
+        exchange_rate=3.67, freight_mode="air", chargeable_weight_kg=100.0,
+    )
+    assert pricing["freight_mode"] == "air"
+    assert pricing["grand_total_aed"] == 1460
+    assert len(pricing["shipments"]) == 1
+    assert pricing["shipments"][0]["chargeable_weight_kg"] == 100.0
+    assert pricing["shipments"][0]["carrier"] == "EK"
+
+
+def test_total_chargeable_weight_takes_volumetric_when_larger():
+    # 100x100x60 / 6000 = 100 kg volumetric vs 10 kg actual -> 100 kg, x2 pieces = 200
+    pieces = [
+        {"count": 2, "weight_kg": 10, "length_cm": 100, "width_cm": 100, "height_cm": 60},
+    ]
+    assert p3.total_chargeable_weight(pieces) == 200.0
+
+
 def test_find_selected_quote_prefers_exact_match():
     all_quotes = [
         {

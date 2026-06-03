@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { STATUS_CONFIG } from "@/lib/constants";
@@ -11,6 +12,13 @@ interface PipelineChartProps {
 
 export function PipelineChart({ data }: PipelineChartProps) {
   const total = data.reduce((sum, d) => sum + d.count, 0);
+
+  // Animate the stacked bar in from zero width on mount.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   return (
     <Card className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] transition-all duration-500 overflow-hidden flex flex-col h-full">
@@ -25,20 +33,29 @@ export function PipelineChart({ data }: PipelineChartProps) {
         ) : (
           <div className="space-y-3">
             {/* Stacked bar */}
-            <div className="flex h-12 rounded-2xl overflow-hidden border border-white/10 dark:border-white/5 shadow-inner">
+            <div
+              className="flex h-12 rounded-2xl overflow-hidden border border-white/10 dark:border-white/5 shadow-inner"
+              role="img"
+              aria-label={`Pipeline breakdown: ${data
+                .map((d) => `${STATUS_CONFIG[d.status]?.label || d.status} ${d.count}`)
+                .join(", ")}`}
+            >
               {data.map((d, i) => {
                 const config = STATUS_CONFIG[d.status];
                 const pct = (d.count / total) * 100;
+                const baseColor = config?.color || "#94a3b8";
                 return (
                   <div
                     key={d.status}
                     className={cn(
-                      "transition-all duration-500 hover:opacity-90 hover:brightness-110 cursor-pointer relative",
+                      "transition-[width,opacity] duration-700 ease-out motion-reduce:transition-none hover:opacity-90 hover:brightness-110 cursor-pointer relative",
                       i < data.length - 1 && "border-r-[3px] border-card/40"
                     )}
                     style={{
-                      width: `${pct}%`,
-                      backgroundColor: config?.color || "#94a3b8",
+                      width: mounted ? `${pct}%` : "0%",
+                      backgroundColor: baseColor,
+                      backgroundImage:
+                        "linear-gradient(180deg, rgba(255,255,255,0.18), rgba(0,0,0,0.08))",
                     }}
                     title={`${config?.label || d.status}: ${d.count}`}
                   />

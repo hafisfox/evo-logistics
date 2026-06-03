@@ -80,24 +80,48 @@ export async function updateSession(request: NextRequest) {
     }
 
     if (user && !apiRequest && !publicPath) {
-        const { count, error } = await supabase
-            .from("workspace_members")
-            .select("workspace_id", { count: "exact", head: true })
-            .eq("user_id", user.id)
-            .eq("status", "active");
+        // The onboarding gate runs on every page navigation. To avoid a DB
+        // round-trip each time, cache the positive ("is a member") result in a
+        // short-lived HTTP-only cookie. Only the positive case is cached so a
+        // user who just completed onboarding is recognized immediately. This
+        // cookie is non-authoritative — it only gates the onboarding redirect;
+        // all data access remains protected by RLS + requireWorkspaceApiContext.
+        let isMember = request.cookies.get('ws_member')?.value === '1'
 
-        if (!error) {
-            if ((count ?? 0) === 0 && !isOnboardingPath(pathname)) {
-                const onboardingUrl = request.nextUrl.clone();
-                onboardingUrl.pathname = "/onboarding";
-                return NextResponse.redirect(onboardingUrl);
+        if (!isMember) {
+            const { count, error } = await supabase
+                .from("workspace_members")
+                .select("workspace_id", { count: "exact", head: true })
+                .eq("user_id", user.id)
+                .eq("status", "active");
+
+            if (error) {
+                // Preserve prior behavior: on query error, skip the redirect logic.
+                return supabaseResponse;
             }
 
-            if ((count ?? 0) > 0 && isOnboardingPath(pathname)) {
-                const appUrl = request.nextUrl.clone();
-                appUrl.pathname = "/";
-                return NextResponse.redirect(appUrl);
+            isMember = (count ?? 0) > 0;
+            if (isMember) {
+                supabaseResponse.cookies.set('ws_member', '1', {
+                    httpOnly: true,
+                    sameSite: 'lax',
+                    secure: process.env.NODE_ENV === 'production',
+                    maxAge: 60,
+                    path: '/',
+                })
             }
+        }
+
+        if (!isMember && !isOnboardingPath(pathname)) {
+            const onboardingUrl = request.nextUrl.clone();
+            onboardingUrl.pathname = "/onboarding";
+            return NextResponse.redirect(onboardingUrl);
+        }
+
+        if (isMember && isOnboardingPath(pathname)) {
+            const appUrl = request.nextUrl.clone();
+            appUrl.pathname = "/";
+            return NextResponse.redirect(appUrl);
         }
     }
 

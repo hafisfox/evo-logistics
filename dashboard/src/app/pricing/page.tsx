@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState } from "react";
 import {
   Table,
   TableBody,
@@ -263,14 +263,14 @@ export default function PricingPage() {
     }
   };
 
-  const handleConfirmDelete = useCallback(async () => {
+  const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     const { type, id } = deleteTarget;
     if (type === "do") await handleDeleteDo(id);
     else if (type === "dest") await handleDeleteDest(id);
     else if (type === "transport") await handleDeleteTransport(id);
     setDeleteTarget(null);
-  }, [deleteTarget]);
+  };
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 animate-in fade-in zoom-in-95 duration-700">

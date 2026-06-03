@@ -12,3 +12,10 @@ token.json
 # Local AI skill packs (keep local, do not commit)
 .agents/skills/
 .claude/skills/
+
+# Python (local venv + caches)
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/

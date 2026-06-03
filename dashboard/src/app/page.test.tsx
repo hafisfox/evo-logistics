@@ -17,7 +17,7 @@ vi.mock("next/dynamic", () => ({
   },
 }));
 
-import DashboardPage from "@/app/page";
+import { DashboardHome as DashboardPage } from "@/components/dashboard/dashboard-home";
 
 const summaryFixture = {
   kpis: {

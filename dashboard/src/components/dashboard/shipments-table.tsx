@@ -47,10 +47,10 @@ export function ShipmentsTable({ initialRFQs, disableLiveFetch = false }: Shipme
                 <div className="flex items-center gap-4">
                     <span className="text-sm font-medium text-muted-foreground">{rfqs ? `${rfqs.length} total` : ""}</span>
                     <div className="flex items-center gap-1.5">
-                        <button className="p-1.5 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-foreground cursor-pointer">
+                        <button type="button" aria-label="Previous page" className="p-1.5 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-foreground cursor-pointer">
                             <ChevronLeft className="h-4 w-4" />
                         </button>
-                        <button className="p-1.5 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-foreground cursor-pointer">
+                        <button type="button" aria-label="Next page" className="p-1.5 rounded-full bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-foreground cursor-pointer">
                             <ChevronRight className="h-4 w-4" />
                         </button>
                     </div>
@@ -63,10 +63,10 @@ export function ShipmentsTable({ initialRFQs, disableLiveFetch = false }: Shipme
                 </div>
             </div>
 
-            <div className="overflow-x-auto scrollbar-hide">
+            <div className="overflow-auto scrollbar-hide max-h-[60vh]">
                 <table className="w-full text-left text-sm whitespace-nowrap">
-                    <thead>
-                        <tr className="border-b border-black/5 dark:border-white/10 text-muted-foreground/80 text-xs uppercase tracking-wider">
+                    <thead className="sticky top-0 z-10 bg-card/85 backdrop-blur-xl">
+                        <tr className="border-b border-black/5 dark:border-white/10 text-muted-foreground text-xs uppercase tracking-wider">
                             <th className="font-bold py-4 px-4">RFQ ID</th>
                             <th className="font-bold py-4 px-4">Customer</th>
                             <th className="font-bold py-4 px-4">Received</th>
@@ -91,7 +91,7 @@ export function ShipmentsTable({ initialRFQs, disableLiveFetch = false }: Shipme
                             rfqs.slice(0, 8).map((rfq) => {
                                 const statusInfo = STATUS_DISPLAY[rfq.status] ?? { label: rfq.status, color: "text-gray-600 border-gray-200 bg-gray-50" };
                                 return (
-                                    <tr key={rfq.rfq_id} className="group border-b border-black/5 dark:border-white/5 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors cursor-default">
+                                    <tr key={rfq.rfq_id} className="group border-b border-black/5 dark:border-white/5 hover:bg-accent/40 transition-colors cursor-default">
                                         <td className="py-4 px-4">
                                             <Link href={`/rfqs/${rfq.rfq_id}`} className="font-mono text-xs font-semibold text-foreground group-hover:text-primary transition-colors">
                                                 {rfq.rfq_id.substring(0, 12)}…

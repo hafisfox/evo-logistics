@@ -13,6 +13,7 @@ export async function POST() {
 
   const response = NextResponse.json({ success: true });
   response.cookies.delete("workspace_id");
+  response.cookies.delete("ws_member");
   return response;
 }
 

@@ -9,6 +9,7 @@ import { useDashboardSummary } from "@/hooks/use-dashboard-summary";
 import { CircularProgress } from "@/components/dashboard/circular-progress";
 import { PipelineChart } from "@/components/dashboard/pipeline-chart";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AnimatedNumber } from "@/components/ui/animated-number";
 
 function InlineSkeleton({ className }: { className: string }) {
   return <span aria-hidden className={`inline-block rounded-md bg-accent animate-pulse ${className}`} />;
@@ -52,7 +53,7 @@ function FunnelRow({ label, count, percent, color }: { label: string; count: num
           {percent >= 15 && <span className="text-[10px] font-bold text-white">{percent}%</span>}
         </div>
       </div>
-      <span className="text-sm font-bold text-foreground w-8 text-right">{count}</span>
+      <AnimatedNumber value={count} className="text-sm font-bold text-foreground w-8 text-right" />
     </div>
   );
 }
@@ -94,10 +95,12 @@ export function DashboardContent() {
                 <CircularProgress
                   percentage={activePercent}
                   total={pipelineTotal}
+                  count={activeCount}
                   label="Processing"
                   size={140}
                   strokeWidth={12}
                   primaryColor="oklch(0.55 0.15 230)"
+                  gradientTo="oklch(0.72 0.15 255)"
                   secondaryColor="oklch(0.55 0.15 230 / 0.1)"
                 />
               )}
@@ -106,7 +109,7 @@ export function DashboardContent() {
                   <span className="h-2 w-2 rounded-full bg-primary" />
                   <span className="text-muted-foreground capitalize">Processing</span>
                   <span className="ml-auto font-semibold text-foreground">
-                    {isLoading ? <InlineSkeleton className="h-4 w-6" /> : kpis?.activeRFQs ?? 0}
+                    {isLoading ? <InlineSkeleton className="h-4 w-6" /> : <AnimatedNumber value={kpis?.activeRFQs ?? 0} />}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm border-t border-dashed border-black/5 dark:border-white/10 pt-2">
@@ -116,7 +119,7 @@ export function DashboardContent() {
                     {isLoading ? (
                       <InlineSkeleton className="h-4 w-6" />
                     ) : (
-                      kpis?.awaitingQuotes ?? 0
+                      <AnimatedNumber value={kpis?.awaitingQuotes ?? 0} />
                     )}
                   </span>
                 </div>
@@ -127,7 +130,7 @@ export function DashboardContent() {
                     {isLoading ? (
                       <InlineSkeleton className="h-4 w-6" />
                     ) : (
-                      kpis?.pendingSelection ?? 0
+                      <AnimatedNumber value={kpis?.pendingSelection ?? 0} />
                     )}
                   </span>
                 </div>
@@ -150,10 +153,12 @@ export function DashboardContent() {
                 <CircularProgress
                   percentage={quotedPercent}
                   total={pipelineTotal}
+                  count={quotedCount}
                   label="Conversion Rate"
                   size={160}
                   strokeWidth={14}
                   primaryColor="oklch(0.696 0.17 162.48)"
+                  gradientTo="oklch(0.82 0.17 172)"
                   secondaryColor="oklch(0.696 0.17 162.48 / 0.1)"
                 />
               )}
@@ -162,7 +167,7 @@ export function DashboardContent() {
               {isLoading ? (
                 <div className="mx-auto h-8 w-16 rounded-md bg-accent animate-pulse" />
               ) : (
-                <p className="text-3xl font-bold text-foreground tracking-tight">{kpis?.quotedToday ?? 0}</p>
+                <AnimatedNumber value={kpis?.quotedToday ?? 0} className="block text-3xl font-bold text-foreground tracking-tight" />
               )}
               <p className="text-sm text-muted-foreground mt-1 font-medium">quotes sent today</p>
             </div>
@@ -273,10 +278,18 @@ export function DashboardContent() {
               <div className="space-y-4">
                 <div>
                   <p className="text-4xl font-light tracking-tighter text-foreground">
-                    AED {(kpis?.totalRevenueAED ?? 0).toLocaleString("en-US")}
+                    AED{" "}
+                    <AnimatedNumber
+                      value={kpis?.totalRevenueAED ?? 0}
+                      format={(n) => Math.round(n).toLocaleString("en-US")}
+                    />
                   </p>
                   <p className="text-sm text-muted-foreground font-medium mt-1">
-                    USD {(kpis?.totalRevenueUSD ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    USD{" "}
+                    <AnimatedNumber
+                      value={kpis?.totalRevenueUSD ?? 0}
+                      format={(n) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    />
                   </p>
                 </div>
                 <div className="flex items-center gap-4 pt-3 border-t border-dashed border-black/5 dark:border-white/10">

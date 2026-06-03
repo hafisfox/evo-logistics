@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Table,
@@ -120,10 +120,12 @@ export function RFQTable({ rfqs }: RFQTableProps) {
   const [page, setPage] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
-  // Reset to page 0 when the filtered dataset changes
-  useEffect(() => {
+  // Reset to page 0 when the filtered dataset changes (render-phase reset, no effect)
+  const [prevCount, setPrevCount] = useState(rfqs.length);
+  if (prevCount !== rfqs.length) {
+    setPrevCount(rfqs.length);
     setPage(0);
-  }, [rfqs.length]);
+  }
 
   const handleSort = useCallback(
     (key: SortKey) => {
@@ -199,9 +201,9 @@ export function RFQTable({ rfqs }: RFQTableProps) {
         </Button>
       </div>
 
-      <div className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-x-auto scrollbar-hide">
+      <div className="rounded-3xl border border-white/20 dark:border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-2xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(255,255,255,0.03)] overflow-auto scrollbar-hide max-h-[70vh]">
         <Table className="min-w-[800px]">
-          <TableHeader className="bg-black/[0.02] dark:bg-white/[0.02]">
+          <TableHeader className="sticky top-0 z-10 backdrop-blur-xl [&_th]:bg-card/85">
             <TableRow className="border-b border-black/5 dark:border-white/5 hover:bg-transparent">
               {renderSortableHeader("rfq_id", "RFQ ID")}
               {renderSortableHeader("customer_email", "Customer")}
@@ -218,7 +220,7 @@ export function RFQTable({ rfqs }: RFQTableProps) {
             {paginated.map((rfq) => (
               <TableRow
                 key={rfq.rfq_id}
-                className="group border-b border-black/5 dark:border-white/5 hover:bg-black/[0.015] dark:hover:bg-white/[0.015] transition-all cursor-pointer"
+                className="group border-b border-black/5 dark:border-white/5 hover:bg-accent/40 transition-colors cursor-pointer"
               >
                 <TableCell className="font-mono text-sm py-4">
                   <Link

@@ -215,6 +215,7 @@ Migration: `dashboard/supabase/migrations/20260304_017_ocean_freight_fields.sql`
 - Phase 1: extracts commodity, HS code, incoterms, DG/reefer flags, weight/volume from customer emails; writes to new DB columns; includes in agent outreach emails
 - Phase 2: extracts surcharges (BAF, CAF, THC, PSS, GRI, ISPS, ORC, war_risk, congestion) as JSONB; structured free_time_details (demurrage/detention/combined); validity_date; conditions
 - Phase 3: dynamic exchange rate from `exchange_rates` table (fallback 3.685); surcharge-aware pricing; enhanced quotation email with surcharge/free_time breakdown; enhanced sales notification with margin %
+  - Air freight pricing: when shipment `freight_mode = air`, base freight = quote price (interpreted as USD/chargeable-kg) × chargeable weight; chargeable weight = `total_chargeable_weight(rfq_shipment_pieces)` (DIM factor 6000) via `automations/dim_weight.py`; surcharges + margin applied like port-to-port (`calculate_air_price`). Ocean/land flow unchanged. Airline master-data rate tables remain deferred — see FUTURE_PLAN.md
 - Scheduled tasks: multi-step escalation (reminder_count 0→3hrs, 1→6hrs, 2→12hrs, 3→auto-close); quote expiry check (marks expired by validity_date); stale RFQ detection (no quotes after 48hrs → activity_logs)
 
 **Dashboard changes:**
