@@ -1,0 +1,1409 @@
+[
+  {
+    "id": "air_a2a_pvg_dxb_pallets",
+    "email": {
+      "subject": "Air freight rate PVG to DXB",
+      "from": "shipper1@example.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 +0400",
+      "body": "Dear Niyas,\nPlease quote air cargo airport-to-airport from PVG to DXB.\n10 pallets, each 120x100x150cm, 500kg each.\nCargo ready 2026-03-08.\nCommodity: machinery parts."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "PVG",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 10, "length_cm": 120, "width_cm": 100, "height_cm": 150, "weight_kg": 500, "packaging_type": "pallet"}],
+          "date": "2026-03-08",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2a_can_shj_boxes",
+    "email": {
+      "subject": "Air cargo CAN-SHJ",
+      "from": "shipper2@example.com",
+      "received_at": "Tue, 03 Mar 2026 10:00:00 +0400",
+      "body": "Hi,\nAirport to airport air freight CAN to SHJ.\n5 boxes 60x40x40cm 25kg each.\nReady 2026-03-09."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "CAN",
+          "pod": "SHJ",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 5, "length_cm": 60, "width_cm": 40, "height_cm": 40, "weight_kg": 25, "packaging_type": "box"}],
+          "date": "2026-03-09",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2a_szx_doh_skids",
+    "email": {
+      "subject": "SZX to DOH air rate",
+      "from": "shipper3@example.com",
+      "received_at": "Wed, 04 Mar 2026 08:00:00 +0400",
+      "body": "Need air freight airport-to-airport SZX to DOH.\n20 skids 100x120x80cm 300kg each, ready 2026-03-11."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "SZX",
+          "pod": "DOH",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 20, "length_cm": 100, "width_cm": 120, "height_cm": 80, "weight_kg": 300, "packaging_type": "skid"}],
+          "date": "2026-03-11",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2a_hkg_dxb_crates",
+    "email": {
+      "subject": "Air HKG DXB",
+      "from": "shipper4@example.com",
+      "received_at": "Thu, 05 Mar 2026 09:30:00 +0400",
+      "body": "Air cargo from HKG to DXB, airport to airport.\n8 crates 80x60x50cm 120kg each. Ready 2026-03-12."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "HKG",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 8, "length_cm": 80, "width_cm": 60, "height_cm": 50, "weight_kg": 120, "packaging_type": "crate"}],
+          "date": "2026-03-12",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2a_bom_dxb_cartons",
+    "email": {
+      "subject": "Airfreight BOM-DXB",
+      "from": "shipper5@example.com",
+      "received_at": "Fri, 06 Mar 2026 11:00:00 +0400",
+      "body": "Please quote air cargo BOM to DXB airport to airport.\n15 cartons 50x40x30cm 18kg each, ready 2026-03-13."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "BOM",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 15, "length_cm": 50, "width_cm": 40, "height_cm": 30, "weight_kg": 18, "packaging_type": "carton"}],
+          "date": "2026-03-13",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2a_del_auh_pallets",
+    "email": {
+      "subject": "DEL to AUH air",
+      "from": "shipper6@example.com",
+      "received_at": "Sat, 07 Mar 2026 09:00:00 +0400",
+      "body": "Air freight airport-to-airport DEL to AUH.\n12 pallets 110x110x140cm 450kg each. Ready 2026-03-14."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "DEL",
+          "pod": "AUH",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 12, "length_cm": 110, "width_cm": 110, "height_cm": 140, "weight_kg": 450, "packaging_type": "pallet"}],
+          "date": "2026-03-14",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2a_fra_dxb_pallets",
+    "email": {
+      "subject": "FRA DXB air cargo",
+      "from": "shipper7@example.com",
+      "received_at": "Mon, 09 Mar 2026 09:00:00 +0100",
+      "body": "Air freight FRA to DXB airport to airport.\n3 pallets 120x80x100cm 250kg each. Ready 2026-03-16."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "FRA",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 3, "length_cm": 120, "width_cm": 80, "height_cm": 100, "weight_kg": 250, "packaging_type": "pallet"}],
+          "date": "2026-03-16",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2a_ist_jed_boxes",
+    "email": {
+      "subject": "IST to JED air",
+      "from": "shipper8@example.com",
+      "received_at": "Tue, 10 Mar 2026 09:00:00 +0300",
+      "body": "Air cargo airport to airport IST to JED.\n6 boxes 70x50x40cm 30kg each, ready 2026-03-17."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "IST",
+          "pod": "JED",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 6, "length_cm": 70, "width_cm": 50, "height_cm": 40, "weight_kg": 30, "packaging_type": "box"}],
+          "date": "2026-03-17",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_city_shanghai_dubai",
+    "email": {
+      "subject": "Air rate Shanghai to Dubai",
+      "from": "shipper9@example.com",
+      "received_at": "Wed, 11 Mar 2026 09:00:00 +0400",
+      "body": "Dear team, air cargo from Shanghai to Dubai airport to airport.\n4 pallets 120x100x120cm 400kg each, ready 2026-03-18."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "SHANGHAI",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 4, "length_cm": 120, "width_cm": 100, "height_cm": 120, "weight_kg": 400, "packaging_type": "pallet"}],
+          "date": "2026-03-18",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_city_guangzhou_sharjah",
+    "email": {
+      "subject": "Air Guangzhou Sharjah",
+      "from": "shipper10@example.com",
+      "received_at": "Thu, 12 Mar 2026 09:00:00 +0400",
+      "body": "Air freight from Guangzhou to Sharjah airport to airport.\n7 boxes 60x40x40cm 22kg each, ready 2026-03-19."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "GUANGZHOU",
+          "pod": "SHJ",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 7, "length_cm": 60, "width_cm": 40, "height_cm": 40, "weight_kg": 22, "packaging_type": "box"}],
+          "date": "2026-03-19",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_city_shenzhen_doha",
+    "email": {
+      "subject": "Air Shenzhen Doha",
+      "from": "shipper11@example.com",
+      "received_at": "Fri, 13 Mar 2026 09:00:00 +0400",
+      "body": "Air cargo Shenzhen to Doha airport to airport.\n9 skids 100x100x90cm 280kg each, ready 2026-03-20."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "SHENZHEN",
+          "pod": "DOH",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 9, "length_cm": 100, "width_cm": 100, "height_cm": 90, "weight_kg": 280, "packaging_type": "skid"}],
+          "date": "2026-03-20",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_city_mumbai_jeddah",
+    "email": {
+      "subject": "Air Mumbai Jeddah",
+      "from": "shipper12@example.com",
+      "received_at": "Sat, 14 Mar 2026 09:00:00 +0400",
+      "body": "Air freight from Mumbai to Jeddah airport to airport.\n11 cartons 55x45x35cm 20kg each, ready 2026-03-21."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "MUMBAI",
+          "pod": "JED",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 11, "length_cm": 55, "width_cm": 45, "height_cm": 35, "weight_kg": 20, "packaging_type": "carton"}],
+          "date": "2026-03-21",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_city_delhi_riyadh",
+    "email": {
+      "subject": "Air Delhi Riyadh",
+      "from": "shipper13@example.com",
+      "received_at": "Sun, 15 Mar 2026 09:00:00 +0400",
+      "body": "Air cargo Delhi to Riyadh airport to airport.\n5 pallets 120x100x130cm 420kg each, ready 2026-03-22."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "DELHI",
+          "pod": "RUH",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 5, "length_cm": 120, "width_cm": 100, "height_cm": 130, "weight_kg": 420, "packaging_type": "pallet"}],
+          "date": "2026-03-22",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_city_istanbul_dubai",
+    "email": {
+      "subject": "Air Istanbul Dubai",
+      "from": "shipper14@example.com",
+      "received_at": "Mon, 16 Mar 2026 09:00:00 +0300",
+      "body": "Air freight Istanbul to Dubai airport to airport.\n2 crates 90x70x60cm 150kg each, ready 2026-03-23."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "ISTANBUL",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 2, "length_cm": 90, "width_cm": 70, "height_cm": 60, "weight_kg": 150, "packaging_type": "crate"}],
+          "date": "2026-03-23",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_d2a_dongguan_dxb_pallets",
+    "email": {
+      "subject": "Door to airport air cargo",
+      "from": "shipper15@example.com",
+      "received_at": "Tue, 17 Mar 2026 09:00:00 +0400",
+      "body": "Air freight door-to-airport, pickup from our factory to DXB.\nPICKUP: Room 706, Fuxin Building, Houjie Town, Dongguan, China.\nOrigin airport CAN, destination DXB.\n6 pallets 120x100x140cm 480kg each, ready 2026-03-24."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "CAN",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 6, "length_cm": 120, "width_cm": 100, "height_cm": 140, "weight_kg": 480, "packaging_type": "pallet"}],
+          "date": "2026-03-24",
+          "service_type": "door-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_d2a_shanghai_dxb_boxes",
+    "email": {
+      "subject": "Door to airport SHA to DXB",
+      "from": "shipper16@example.com",
+      "received_at": "Wed, 18 Mar 2026 09:00:00 +0400",
+      "body": "Air cargo door to airport. Collect from PICKUP: No.88 Huaihai Road, Shanghai, China. Origin PVG to DXB.\n10 boxes 60x40x40cm 24kg each, ready 2026-03-25."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "PVG",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 10, "length_cm": 60, "width_cm": 40, "height_cm": 40, "weight_kg": 24, "packaging_type": "box"}],
+          "date": "2026-03-25",
+          "service_type": "door-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_d2a_szx_shj_skids",
+    "email": {
+      "subject": "Air door to airport SZX SHJ",
+      "from": "shipper17@example.com",
+      "received_at": "Thu, 19 Mar 2026 09:00:00 +0400",
+      "body": "Air freight door to airport. PICKUP: Bao'an District warehouse, Shenzhen, China. Origin SZX to SHJ.\n8 skids 100x120x100cm 260kg each, ready 2026-03-26."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "SZX",
+          "pod": "SHJ",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 8, "length_cm": 100, "width_cm": 120, "height_cm": 100, "weight_kg": 260, "packaging_type": "skid"}],
+          "date": "2026-03-26",
+          "service_type": "door-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2d_pvg_dubai_pallets",
+    "email": {
+      "subject": "Airport to door air cargo",
+      "from": "shipper18@example.com",
+      "received_at": "Fri, 20 Mar 2026 09:00:00 +0400",
+      "body": "Air freight airport-to-door from PVG. Deliver to DELIVERY: Interior360 Warehouse, 13 Street 18A, Al Quoz, Dubai.\nDestination airport DXB.\n5 pallets 120x100x150cm 500kg each, ready 2026-03-27."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "PVG",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 5, "length_cm": 120, "width_cm": 100, "height_cm": 150, "weight_kg": 500, "packaging_type": "pallet"}],
+          "date": "2026-03-27",
+          "service_type": "port-to-door"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2d_can_dubai_boxes",
+    "email": {
+      "subject": "Airport to door CAN Dubai",
+      "from": "shipper19@example.com",
+      "received_at": "Sat, 21 Mar 2026 09:00:00 +0400",
+      "body": "Air cargo airport to door, origin CAN to Dubai. DELIVERY: Dragon Mart 2, Dubai.\nDest DXB.\n12 boxes 50x40x30cm 16kg each, ready 2026-03-28."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "CAN",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 12, "length_cm": 50, "width_cm": 40, "height_cm": 30, "weight_kg": 16, "packaging_type": "box"}],
+          "date": "2026-03-28",
+          "service_type": "port-to-door"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2d_hkg_sharjah_crates",
+    "email": {
+      "subject": "Airport to door HKG SHJ",
+      "from": "shipper20@example.com",
+      "received_at": "Sun, 22 Mar 2026 09:00:00 +0400",
+      "body": "Air freight airport-to-door from HKG to Sharjah. DELIVERY: SAIF Zone warehouse, Sharjah.\nDest SHJ.\n4 crates 85x65x55cm 130kg each, ready 2026-03-29."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "HKG",
+          "pod": "SHJ",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 4, "length_cm": 85, "width_cm": 65, "height_cm": 55, "weight_kg": 130, "packaging_type": "crate"}],
+          "date": "2026-03-29",
+          "service_type": "port-to-door"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_d2d_dongguan_alquoz_pallets",
+    "email": {
+      "subject": "Air door to door",
+      "from": "shipper21@example.com",
+      "received_at": "Mon, 23 Mar 2026 09:00:00 +0400",
+      "body": "Air freight door to door.\nPICKUP: Houjie Town factory, Dongguan, China.\nDELIVERY: Al Quoz Industrial Area 4, Dubai.\nOrigin CAN to DXB.\n6 pallets 120x100x150cm 500kg each, ready 2026-03-30."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "CAN",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 6, "length_cm": 120, "width_cm": 100, "height_cm": 150, "weight_kg": 500, "packaging_type": "pallet"}],
+          "date": "2026-03-30",
+          "service_type": "door-to-door"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_d2d_shanghai_dubai_boxes",
+    "email": {
+      "subject": "Air door-to-door SHA DXB",
+      "from": "shipper22@example.com",
+      "received_at": "Tue, 24 Mar 2026 09:00:00 +0400",
+      "body": "Air cargo door to door.\nPICKUP: Pudong New Area, Shanghai.\nDELIVERY: Business Bay, Dubai.\nOrigin PVG to DXB.\n10 boxes 60x40x40cm 25kg each, ready 2026-03-31."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "PVG",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 10, "length_cm": 60, "width_cm": 40, "height_cm": 40, "weight_kg": 25, "packaging_type": "box"}],
+          "date": "2026-03-31",
+          "service_type": "door-to-door"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_d2d_delhi_dubai_cartons",
+    "email": {
+      "subject": "Air DDP Delhi Dubai",
+      "from": "shipper23@example.com",
+      "received_at": "Wed, 25 Mar 2026 09:00:00 +0400",
+      "body": "Air freight door to door from Delhi to Dubai.\nPICKUP: Okhla Industrial Area, New Delhi.\nDELIVERY: Deira, Dubai.\nOrigin DEL to DXB.\n8 cartons 50x40x40cm 19kg each, ready 2026-04-01."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "DEL",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 8, "length_cm": 50, "width_cm": 40, "height_cm": 40, "weight_kg": 19, "packaging_type": "carton"}],
+          "date": "2026-04-01",
+          "service_type": "door-to-door"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_conv_inches_pvg_dxb",
+    "email": {
+      "subject": "Air cargo dims in inches",
+      "from": "shipper24@example.com",
+      "received_at": "Thu, 26 Mar 2026 09:00:00 +0400",
+      "body": "Air freight airport to airport PVG to DXB.\n4 pallets, each 48x40x60 inches, 500kg each. Ready 2026-04-02."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "PVG",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 4, "length_cm": 121.92, "width_cm": 101.6, "height_cm": 152.4, "weight_kg": 500, "packaging_type": "pallet"}],
+          "date": "2026-04-02",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_conv_meters_can_dxb",
+    "email": {
+      "subject": "Air cargo dims in meters",
+      "from": "shipper25@example.com",
+      "received_at": "Fri, 27 Mar 2026 09:00:00 +0400",
+      "body": "Air freight CAN to DXB airport to airport.\n3 pallets each 1.2 x 1.0 x 1.5 m, 450kg each. Ready 2026-04-03."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "CAN",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 3, "length_cm": 120, "width_cm": 100, "height_cm": 150, "weight_kg": 450, "packaging_type": "pallet"}],
+          "date": "2026-04-03",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_conv_lbs_szx_dxb",
+    "email": {
+      "subject": "Air cargo weight in lbs",
+      "from": "shipper26@example.com",
+      "received_at": "Sat, 28 Mar 2026 09:00:00 +0400",
+      "body": "Air freight SZX to DXB airport to airport.\n5 boxes 60x40x40cm, 220.5 lbs each. Ready 2026-04-04."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "SZX",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 5, "length_cm": 60, "width_cm": 40, "height_cm": 40, "weight_kg": 100, "packaging_type": "box"}],
+          "date": "2026-04-04",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_conv_tonnes_bom_dxb",
+    "email": {
+      "subject": "Air cargo weight in tonnes",
+      "from": "shipper27@example.com",
+      "received_at": "Sun, 29 Mar 2026 09:00:00 +0400",
+      "body": "Air freight BOM to DXB airport to airport.\n2 pallets 120x100x140cm, 1.5 tonnes each. Ready 2026-04-05."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "BOM",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 2, "length_cm": 120, "width_cm": 100, "height_cm": 140, "weight_kg": 1500, "packaging_type": "pallet"}],
+          "date": "2026-04-05",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_conv_mixed_in_lbs",
+    "email": {
+      "subject": "Air cargo inches and lbs",
+      "from": "shipper28@example.com",
+      "received_at": "Mon, 30 Mar 2026 09:00:00 +0400",
+      "body": "Air freight HKG to DXB airport to airport.\n6 crates each 40x30x30 inches, 441 lbs each. Ready 2026-04-06."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "HKG",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 6, "length_cm": 101.6, "width_cm": 76.2, "height_cm": 76.2, "weight_kg": 200, "packaging_type": "crate"}],
+          "date": "2026-04-06",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_multi_piece_single_ship",
+    "email": {
+      "subject": "Air mixed pieces",
+      "from": "shipper29@example.com",
+      "received_at": "Tue, 31 Mar 2026 09:00:00 +0400",
+      "body": "Air freight PVG to DXB airport to airport.\n5 pallets 120x100x120cm 400kg each and 3 boxes 60x40x40cm 30kg each. Ready 2026-04-07."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "PVG",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [
+            {"count": 5, "length_cm": 120, "width_cm": 100, "height_cm": 120, "weight_kg": 400, "packaging_type": "pallet"},
+            {"count": 3, "length_cm": 60, "width_cm": 40, "height_cm": 40, "weight_kg": 30, "packaging_type": "box"}
+          ],
+          "date": "2026-04-07",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_multi_piece_drums_pallets",
+    "email": {
+      "subject": "Air drums and pallets",
+      "from": "shipper30@example.com",
+      "received_at": "Wed, 01 Apr 2026 09:00:00 +0400",
+      "body": "Air freight CAN to SHJ airport to airport.\n4 drums 60x60x90cm 80kg each and 2 pallets 120x100x130cm 350kg each. Ready 2026-04-08."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "CAN",
+          "pod": "SHJ",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [
+            {"count": 4, "length_cm": 60, "width_cm": 60, "height_cm": 90, "weight_kg": 80, "packaging_type": "drum"},
+            {"count": 2, "length_cm": 120, "width_cm": 100, "height_cm": 130, "weight_kg": 350, "packaging_type": "pallet"}
+          ],
+          "date": "2026-04-08",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_multi_shipment_two_routes",
+    "email": {
+      "subject": "Two air shipments",
+      "from": "shipper31@example.com",
+      "received_at": "Thu, 02 Apr 2026 09:00:00 +0400",
+      "body": "Kindly quote two air cargo shipments airport to airport:\n1) PVG to DXB, 5 pallets 120x100x150cm 500kg each, ready 2026-04-09.\n2) CAN to SHJ, 4 boxes 60x40x40cm 25kg each, ready 2026-04-10."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "PVG",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 5, "length_cm": 120, "width_cm": 100, "height_cm": 150, "weight_kg": 500, "packaging_type": "pallet"}],
+          "date": "2026-04-09",
+          "service_type": "port-to-port"
+        },
+        {
+          "pol": "CAN",
+          "pod": "SHJ",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 4, "length_cm": 60, "width_cm": 40, "height_cm": 40, "weight_kg": 25, "packaging_type": "box"}],
+          "date": "2026-04-10",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_multi_shipment_three_routes",
+    "email": {
+      "subject": "Three air lanes",
+      "from": "shipper32@example.com",
+      "received_at": "Fri, 03 Apr 2026 09:00:00 +0400",
+      "body": "Air freight airport to airport, please quote:\n1) HKG to DXB, 3 crates 80x60x50cm 120kg each, ready 2026-04-11.\n2) BOM to DXB, 6 cartons 50x40x30cm 18kg each, ready 2026-04-11.\n3) DEL to AUH, 4 pallets 110x110x140cm 450kg each, ready 2026-04-12."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "HKG",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 3, "length_cm": 80, "width_cm": 60, "height_cm": 50, "weight_kg": 120, "packaging_type": "crate"}],
+          "date": "2026-04-11",
+          "service_type": "port-to-port"
+        },
+        {
+          "pol": "BOM",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 6, "length_cm": 50, "width_cm": 40, "height_cm": 30, "weight_kg": 18, "packaging_type": "carton"}],
+          "date": "2026-04-11",
+          "service_type": "port-to-port"
+        },
+        {
+          "pol": "DEL",
+          "pod": "AUH",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 4, "length_cm": 110, "width_cm": 110, "height_cm": 140, "weight_kg": 450, "packaging_type": "pallet"}],
+          "date": "2026-04-12",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_dg_lithium_pvg_dxb",
+    "email": {
+      "subject": "Air DG lithium batteries",
+      "from": "shipper33@example.com",
+      "received_at": "Sat, 04 Apr 2026 09:00:00 +0400",
+      "body": "Air freight PVG to DXB airport to airport. DANGEROUS GOODS: lithium batteries, IATA Class 9.\n3 pallets 120x100x120cm 350kg each, ready 2026-04-13."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "PVG",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 3, "length_cm": 120, "width_cm": 100, "height_cm": 120, "weight_kg": 350, "packaging_type": "pallet"}],
+          "date": "2026-04-13",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_perishable_nbo_dxb",
+    "email": {
+      "subject": "Air perishable flowers",
+      "from": "shipper34@example.com",
+      "received_at": "Sun, 05 Apr 2026 09:00:00 +0300",
+      "body": "Air freight NBO to DXB airport to airport. Perishable cut flowers, temperature controlled.\n20 boxes 60x40x30cm 12kg each, ready 2026-04-06."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "NBO",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 20, "length_cm": 60, "width_cm": 40, "height_cm": 30, "weight_kg": 12, "packaging_type": "box"}],
+          "date": "2026-04-06",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_express_lhr_dxb",
+    "email": {
+      "subject": "Express air cargo LHR DXB",
+      "from": "shipper35@example.com",
+      "received_at": "Mon, 06 Apr 2026 09:00:00 +0100",
+      "body": "Need express air freight LHR to DXB airport to airport, urgent.\n2 pallets 120x80x100cm 300kg each, ready 2026-04-07."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "LHR",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 2, "length_cm": 120, "width_cm": 80, "height_cm": 100, "weight_kg": 300, "packaging_type": "pallet"}],
+          "date": "2026-04-07",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_awb_keyword_cdg_dxb",
+    "email": {
+      "subject": "AWB rate CDG DXB",
+      "from": "shipper36@example.com",
+      "received_at": "Tue, 07 Apr 2026 09:00:00 +0200",
+      "body": "Please advise air waybill rate per kg, airline of your choice, CDG to DXB airport to airport.\n7 boxes 50x40x40cm 28kg each, ready 2026-04-14."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "CDG",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 7, "length_cm": 50, "width_cm": 40, "height_cm": 40, "weight_kg": 28, "packaging_type": "box"}],
+          "date": "2026-04-14",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_loose_pieces_icn_dxb",
+    "email": {
+      "subject": "Air loose cargo ICN DXB",
+      "from": "shipper37@example.com",
+      "received_at": "Wed, 08 Apr 2026 09:00:00 +0900",
+      "body": "Air freight ICN to DXB airport to airport.\n30 loose pieces 40x30x30cm 8kg each, ready 2026-04-15."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "ICN",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 30, "length_cm": 40, "width_cm": 30, "height_cm": 30, "weight_kg": 8, "packaging_type": "loose"}],
+          "date": "2026-04-15",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_bag_pieces_dac_dxb",
+    "email": {
+      "subject": "Air garment bags DAC DXB",
+      "from": "shipper38@example.com",
+      "received_at": "Thu, 09 Apr 2026 09:00:00 +0600",
+      "body": "Air freight DAC to DXB airport to airport.\n40 bags 80x50x20cm 15kg each, ready 2026-04-16."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "DAC",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 40, "length_cm": 80, "width_cm": 50, "height_cm": 20, "weight_kg": 15, "packaging_type": "bag"}],
+          "date": "2026-04-16",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2a_tao_dxb_pallets",
+    "email": {
+      "subject": "Air TAO DXB",
+      "from": "shipper39@example.com",
+      "received_at": "Fri, 10 Apr 2026 09:00:00 +0400",
+      "body": "Air freight TAO to DXB airport to airport.\n6 pallets 120x100x130cm 420kg each, ready 2026-04-17."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "TAO",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 6, "length_cm": 120, "width_cm": 100, "height_cm": 130, "weight_kg": 420, "packaging_type": "pallet"}],
+          "date": "2026-04-17",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2a_ams_jed_boxes",
+    "email": {
+      "subject": "Air AMS JED",
+      "from": "shipper40@example.com",
+      "received_at": "Sat, 11 Apr 2026 09:00:00 +0200",
+      "body": "Air freight AMS to JED airport to airport.\n9 boxes 55x45x35cm 21kg each, ready 2026-04-18."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "AMS",
+          "pod": "JED",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 9, "length_cm": 55, "width_cm": 45, "height_cm": 35, "weight_kg": 21, "packaging_type": "box"}],
+          "date": "2026-04-18",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2a_jfk_dxb_crates",
+    "email": {
+      "subject": "Air JFK DXB",
+      "from": "shipper41@example.com",
+      "received_at": "Sun, 12 Apr 2026 09:00:00 -0400",
+      "body": "Air freight JFK to DXB airport to airport.\n3 crates 90x70x60cm 160kg each, ready 2026-04-19."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "JFK",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 3, "length_cm": 90, "width_cm": 70, "height_cm": 60, "weight_kg": 160, "packaging_type": "crate"}],
+          "date": "2026-04-19",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2a_sin_dxb_skids",
+    "email": {
+      "subject": "Air SIN DXB",
+      "from": "shipper42@example.com",
+      "received_at": "Mon, 13 Apr 2026 09:00:00 +0800",
+      "body": "Air freight SIN to DXB airport to airport.\n10 skids 100x120x90cm 270kg each, ready 2026-04-20."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "SIN",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 10, "length_cm": 100, "width_cm": 120, "height_cm": 90, "weight_kg": 270, "packaging_type": "skid"}],
+          "date": "2026-04-20",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2a_bkk_dxb_cartons",
+    "email": {
+      "subject": "Air BKK DXB",
+      "from": "shipper43@example.com",
+      "received_at": "Tue, 14 Apr 2026 09:00:00 +0700",
+      "body": "Air freight BKK to DXB airport to airport.\n14 cartons 50x40x30cm 17kg each, ready 2026-04-21."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "BKK",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 14, "length_cm": 50, "width_cm": 40, "height_cm": 30, "weight_kg": 17, "packaging_type": "carton"}],
+          "date": "2026-04-21",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_d2a_frankfurt_dxb",
+    "email": {
+      "subject": "Air door to airport FRA DXB",
+      "from": "shipper44@example.com",
+      "received_at": "Wed, 15 Apr 2026 09:00:00 +0200",
+      "body": "Air freight door to airport. PICKUP: Industriestrasse 12, Frankfurt, Germany. Origin FRA to DXB.\n4 pallets 120x80x110cm 320kg each, ready 2026-04-22."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "FRA",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 4, "length_cm": 120, "width_cm": 80, "height_cm": 110, "weight_kg": 320, "packaging_type": "pallet"}],
+          "date": "2026-04-22",
+          "service_type": "door-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2d_can_abudhabi",
+    "email": {
+      "subject": "Air airport to door CAN AUH",
+      "from": "shipper45@example.com",
+      "received_at": "Thu, 16 Apr 2026 09:00:00 +0400",
+      "body": "Air freight airport to door CAN to Abu Dhabi. DELIVERY: Mussafah Industrial, Abu Dhabi. Dest AUH.\n5 boxes 60x40x40cm 26kg each, ready 2026-04-23."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "CAN",
+          "pod": "AUH",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 5, "length_cm": 60, "width_cm": 40, "height_cm": 40, "weight_kg": 26, "packaging_type": "box"}],
+          "date": "2026-04-23",
+          "service_type": "port-to-door"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_d2d_bom_dubai_pallets",
+    "email": {
+      "subject": "Air door to door BOM DXB",
+      "from": "shipper46@example.com",
+      "received_at": "Fri, 17 Apr 2026 09:00:00 +0530",
+      "body": "Air freight door to door.\nPICKUP: Andheri MIDC, Mumbai.\nDELIVERY: Jebel Ali Free Zone, Dubai.\nOrigin BOM to DXB.\n4 pallets 120x100x130cm 380kg each, ready 2026-04-24."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "BOM",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 4, "length_cm": 120, "width_cm": 100, "height_cm": 130, "weight_kg": 380, "packaging_type": "pallet"}],
+          "date": "2026-04-24",
+          "service_type": "door-to-door"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_incomplete_missing_date",
+    "email": {
+      "subject": "Air rate, date TBD",
+      "from": "shipper47@example.com",
+      "received_at": "Sat, 18 Apr 2026 09:00:00 +0400",
+      "body": "Air freight PVG to DXB airport to airport. Cargo ready date not confirmed yet.\n5 pallets 120x100x150cm 500kg each."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "PVG",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 5, "length_cm": 120, "width_cm": 100, "height_cm": 150, "weight_kg": 500, "packaging_type": "pallet"}],
+          "date": null,
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "need_port_data"
+    }
+  },
+  {
+    "id": "air_incomplete_missing_pod",
+    "email": {
+      "subject": "Air rate origin only",
+      "from": "shipper48@example.com",
+      "received_at": "Sun, 19 Apr 2026 09:00:00 +0400",
+      "body": "Air freight from CAN, destination to be advised.\n6 boxes 60x40x40cm 25kg each, ready 2026-04-26."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "CAN",
+          "pod": null,
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 6, "length_cm": 60, "width_cm": 40, "height_cm": 40, "weight_kg": 25, "packaging_type": "box"}],
+          "date": "2026-04-26",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "need_port_data"
+    }
+  },
+  {
+    "id": "air_incomplete_missing_pieces",
+    "email": {
+      "subject": "Air rate no piece details",
+      "from": "shipper49@example.com",
+      "received_at": "Mon, 20 Apr 2026 09:00:00 +0400",
+      "body": "Air freight PVG to DXB airport to airport, please send your best per kg rate. Piece count and dimensions will follow. Ready 2026-04-27."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "PVG",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-27",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "need_port_data"
+    }
+  },
+  {
+    "id": "air_a2a_kul_shj_pallets",
+    "email": {
+      "subject": "Air KUL SHJ",
+      "from": "shipper50@example.com",
+      "received_at": "Tue, 21 Apr 2026 09:00:00 +0800",
+      "body": "Air freight KUL to SHJ airport to airport.\n7 pallets 120x100x120cm 410kg each, ready 2026-04-28."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "KUL",
+          "pod": "SHJ",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 7, "length_cm": 120, "width_cm": 100, "height_cm": 120, "weight_kg": 410, "packaging_type": "pallet"}],
+          "date": "2026-04-28",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2a_pvg_doh_boxes",
+    "email": {
+      "subject": "Air PVG DOH",
+      "from": "shipper51@example.com",
+      "received_at": "Wed, 22 Apr 2026 09:00:00 +0400",
+      "body": "Air freight PVG to DOH airport to airport.\n11 boxes 50x40x40cm 23kg each, ready 2026-04-29."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "PVG",
+          "pod": "DOH",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 11, "length_cm": 50, "width_cm": 40, "height_cm": 40, "weight_kg": 23, "packaging_type": "box"}],
+          "date": "2026-04-29",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_a2a_szx_jed_crates",
+    "email": {
+      "subject": "Air SZX JED",
+      "from": "shipper52@example.com",
+      "received_at": "Thu, 23 Apr 2026 09:00:00 +0400",
+      "body": "Air freight SZX to JED airport to airport.\n5 crates 85x65x55cm 140kg each, ready 2026-04-30."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "SZX",
+          "pod": "JED",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [{"count": 5, "length_cm": 85, "width_cm": 65, "height_cm": 55, "weight_kg": 140, "packaging_type": "crate"}],
+          "date": "2026-04-30",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "decoy_ocean_fcl_40hc",
+    "email": {
+      "subject": "FCL ocean rate Shanghai Jebel Ali",
+      "from": "decoy1@example.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 +0400",
+      "body": "Dear Niyas, please quote FCL ocean freight 2x40HC containers from Shanghai to Jebel Ali port, sea freight, B/L required. Ready 2026-03-10."
+    },
+    "expected": {
+      "freight_mode": "ocean",
+      "shipments": [],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "decoy_ocean_lcl",
+    "email": {
+      "subject": "LCL sea freight inquiry",
+      "from": "decoy2@example.com",
+      "received_at": "Tue, 03 Mar 2026 09:00:00 +0400",
+      "body": "Need LCL ocean freight rates, 5 CBM from Ningbo port to Jebel Ali, vessel schedule please. Ready 2026-03-11."
+    },
+    "expected": {
+      "freight_mode": "ocean",
+      "shipments": [],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "decoy_ocean_reefer",
+    "email": {
+      "subject": "Reefer container ocean",
+      "from": "decoy3@example.com",
+      "received_at": "Wed, 04 Mar 2026 09:00:00 +0400",
+      "body": "Sea freight 1x40RF reefer container from Qingdao to Jebel Ali, shipping line of your choice, POL Qingdao POD Jebel Ali. Ready 2026-03-12."
+    },
+    "expected": {
+      "freight_mode": "ocean",
+      "shipments": [],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "decoy_ocean_20ft",
+    "email": {
+      "subject": "Ocean 20FT container",
+      "from": "decoy4@example.com",
+      "received_at": "Thu, 05 Mar 2026 09:00:00 +0400",
+      "body": "Please quote ocean freight 1x20FT FCL from Port Klang to Jebel Ali, bill of lading required, TEU. Ready 2026-03-13."
+    },
+    "expected": {
+      "freight_mode": "ocean",
+      "shipments": [],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "decoy_ocean_breakbulk",
+    "email": {
+      "subject": "Ocean breakbulk vessel",
+      "from": "decoy5@example.com",
+      "received_at": "Fri, 06 Mar 2026 09:00:00 +0400",
+      "body": "Sea freight breakbulk on vessel from Shanghai port to Jebel Ali port, shipping line quote, B/L. Ready 2026-03-14."
+    },
+    "expected": {
+      "freight_mode": "ocean",
+      "shipments": [],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "decoy_land_ftl_dryvan",
+    "email": {
+      "subject": "FTL trucking quote",
+      "from": "decoy6@example.com",
+      "received_at": "Mon, 09 Mar 2026 09:00:00 -0500",
+      "body": "Need FTL dry van trucking, per-mile rate, from Chicago IL to Dallas TX, 40000 lbs. Ready 2026-03-16."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "decoy_land_ltl",
+    "email": {
+      "subject": "LTL freight class quote",
+      "from": "decoy7@example.com",
+      "received_at": "Tue, 10 Mar 2026 09:00:00 -0500",
+      "body": "LTL trucking quote, freight class 70, 6 pallets 1500 lbs, liftgate delivery, from Atlanta GA to Miami FL. Ready 2026-03-17."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "decoy_land_flatbed",
+    "email": {
+      "subject": "Flatbed trucking per mile",
+      "from": "decoy8@example.com",
+      "received_at": "Wed, 11 Mar 2026 09:00:00 -0600",
+      "body": "Flatbed trailer trucking, per-mile rate, overland road freight from Houston TX to Phoenix AZ, steel coils. Ready 2026-03-18."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "decoy_land_drayage",
+    "email": {
+      "subject": "Drayage trucking quote",
+      "from": "decoy9@example.com",
+      "received_at": "Thu, 12 Mar 2026 09:00:00 -0500",
+      "body": "Port drayage trucking, dry van, intermodal truck move from Long Beach port terminal to LA warehouse. Ready 2026-03-19."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [],
+      "action": "complete"
+    }
+  }
+]

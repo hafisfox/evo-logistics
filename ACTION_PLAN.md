@@ -266,6 +266,7 @@ The system now runs with normalized reads active and dual-write retained:
 1. Expand audit event coverage for mailbox disconnect/error transitions and OAuth failures.
 2. Keep `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK` disabled in production except controlled rollback windows.
 3. Expand prompt-eval benchmark from synthetic fixtures to production paired RFQ/reply datasets and track drift over time.
+   - Coverage now includes ocean (`eval_phase1_prompt_fixtures.py`) **and air** (`eval_phase1_air_fixtures.py`, 52 air fixtures + 9 ocean/land decoys; mode-detection ≥0.90 + air extraction gates). Air mode-detection prompt is the hoisted `phase_1_request_analysis.MODE_DETECTION_SYSTEM_PROMPT` constant. Land fixtures still pending (land prompt remains a stub).
 
 ## Verification Gate (latest run)
 
@@ -358,3 +359,6 @@ Executed from this workspace branch:
 - `dashboard/src/components/rfqs/rfq-table.tsx`
 - `dashboard/src/types/analytics.ts`
 - `automations/tenant_context.py`
+- `automations/tests/fixtures/phase1_air_prompt_eval_cases.txt`
+- `automations/tests/eval_phase1_air_fixtures.py`
+- `automations/tests/test_phase1_air_prompt_parsing_rules.py`

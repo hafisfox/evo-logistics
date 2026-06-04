@@ -237,21 +237,25 @@ def classify_email(modal_llm_client, subject: str, sender: str, body_preview: st
         print(f"Classification error: {e}, defaulting to out_of_scope")
         return 'out_of_scope'
 
+# Module-level constant so eval harnesses can reuse the exact prompt (mirrors AI_SYSTEM_PROMPT).
+MODE_DETECTION_SYSTEM_PROMPT = (
+    "Determine the freight mode for this shipping inquiry. "
+    "Reply with ONLY one word: ocean, air, or land.\n\n"
+    "Signal words:\n"
+    "- OCEAN: container (20FT, 40FT, 40HC), FCL, LCL, vessel, port, POL, POD, "
+    "shipping line, B/L, bill of lading, TEU, sea freight\n"
+    "- AIR: airline, AWB, airway bill, per-kg, air cargo, airport, IATA, "
+    "flight, air freight, charter, express, ULD, pallet (air context)\n"
+    "- LAND: trucking, FTL, LTL, per-mile, dry van, flatbed, trailer, "
+    "overland, road freight, drayage, intermodal truck\n\n"
+    "If unclear or mixed, default to: ocean"
+)
+
+
 def detect_freight_mode(llm_client, subject: str, body_preview: str,
                         fallback_llm_client=None) -> str:
     """Detect freight mode from email content. Returns 'ocean', 'air', or 'land'."""
-    system_prompt = (
-        "Determine the freight mode for this shipping inquiry. "
-        "Reply with ONLY one word: ocean, air, or land.\n\n"
-        "Signal words:\n"
-        "- OCEAN: container (20FT, 40FT, 40HC), FCL, LCL, vessel, port, POL, POD, "
-        "shipping line, B/L, bill of lading, TEU, sea freight\n"
-        "- AIR: airline, AWB, airway bill, per-kg, air cargo, airport, IATA, "
-        "flight, air freight, charter, express, ULD, pallet (air context)\n"
-        "- LAND: trucking, FTL, LTL, per-mile, dry van, flatbed, trailer, "
-        "overland, road freight, drayage, intermodal truck\n\n"
-        "If unclear or mixed, default to: ocean"
-    )
+    system_prompt = MODE_DETECTION_SYSTEM_PROMPT
     input_text = f"Subject: {subject}\nBody: {body_preview[:800]}"
     messages = [
         {"role": "system", "content": system_prompt},

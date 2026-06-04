@@ -214,6 +214,14 @@ PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m py_compile automations/*.py
 python3 -m pytest automations/tests -q
 ```
 
+LLM prompt-eval harnesses (manual, require `OPENAI_API_KEY`, incur OpenAI cost — not part of the CI gate):
+
+```bash
+OPENAI_API_KEY=... python3 automations/tests/eval_phase1_prompt_fixtures.py   # ocean extraction
+OPENAI_API_KEY=... python3 automations/tests/eval_phase1_air_fixtures.py       # air mode-detection (>=0.90) + air extraction
+OPENAI_API_KEY=... python3 automations/tests/eval_phase2_prompt_fixtures.py    # quote parsing
+```
+
 ## 13. Normalization Cutover Status
 
 - Migration `dashboard/supabase/migrations/20260223_012_rfq_and_pricing_normalization.sql` applied.

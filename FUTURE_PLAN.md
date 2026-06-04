@@ -8,7 +8,7 @@
 
 | Phase | Weeks | Status | Blocker |
 |-------|-------|--------|---------|
-| Phase 1: Air Foundation | 1–10 | **In progress** | P0 automation subtasks 1a-1i complete; Phase 2 mode-awareness complete; `rfq_shipment_pieces` table live; DIM weight calc done; dashboard mode selector done; air rate tables (mig 019) + air pricing engine + analytics mode breakdown + dashboard mode UI (filter chips, row icons, mode-aware RFQ detail, air pricing tabs) done; remaining: 50+ synthetic air RFQ fixtures + extraction/classification eval |
+| Phase 1: Air Foundation | 1–10 | **Complete** | All P0/P1/P2 air tasks done; final blocker closed — 52 synthetic air RFQ fixtures + mode-classification/extraction eval harness (`automations/tests/eval_phase1_air_fixtures.py`) + offline CI rules test (`test_phase1_air_prompt_parsing_rules.py`) shipped |
 | Phase 2: Air API Integration | 11–18 | Not started | Depends on Phase 1; start enterprise sales in Phase 1 |
 | Phase 3: Land Foundation | 19–26 | Not started | Depends on Phase 1 schema patterns |
 | Phase 4: Land API Integration | 27–34 | Not started | Depends on Phase 3 |
@@ -342,13 +342,14 @@ agent_quotes (existing — `freight_mode` column LIVE)
 | ~~Dashboard mode selector~~ | ~~DONE — freight mode selector on RFQ form, mode-keyed constants (CARRIERS_BY_MODE, EQUIPMENT_BY_MODE, SERVICE_TYPES_BY_MODE), feature flags~~ | ~~P1~~ |
 | ~~Air pricing engine~~ | ~~DONE — `calculate_air_price` (per-kg × chargeable wt + surcharges + margin) wired in phase_3; `get_air_rate_per_kg` weight-tier fallback from `air_charge_rates`; `calculateAirPrice` parity in `pricing-engine.ts`~~ | ~~P1~~ |
 | ~~Analytics mode breakdown~~ | ~~DONE — `modeBreakdown` on `DashboardKPIs`, computed in `buildDashboardSummary()`; "RFQs by Freight Mode" dashboard widget (flag-gated)~~ | ~~P2~~ |
+| ~~Air fixtures + extraction/classification eval~~ | ~~DONE — 52 air fixtures + 9 ocean/land decoys (`automations/tests/fixtures/phase1_air_prompt_eval_cases.txt`); LLM eval harness `eval_phase1_air_fixtures.py` (mode-detection ≥0.90 gate + air extraction gates); offline CI rules test `test_phase1_air_prompt_parsing_rules.py`~~ | ~~P1~~ |
 
 **Phase 1 acceptance criteria:**
-- Mode detection correctly classifies 90%+ of 50 synthetic air RFQ email fixtures
-- Ocean extraction accuracy does not regress (benchmark against existing test set)
-- Manual RFQ creation supports ocean/air toggle with mode-appropriate fields
-- Air shipment pieces (with DIM weight calc) persist correctly to `rfq_shipment_pieces`
-- Feature flag `FEATURE_AIR_FREIGHT_ENABLED=false` fully hides air mode from UI
+- ~~Mode detection correctly classifies 90%+ of 50 synthetic air RFQ email fixtures~~ **DONE** — 52 air fixtures + 9 ocean/land decoys; `eval_phase1_air_fixtures.py` measures mode-detection accuracy with a `>= 0.90` gate. Run: `OPENAI_API_KEY=... python3 automations/tests/eval_phase1_air_fixtures.py`.
+- ~~Ocean extraction accuracy does not regress~~ **DONE** — `MODE_DETECTION_SYSTEM_PROMPT` refactor is non-behavioral (90 offline tests green); ocean eval (`eval_phase1_prompt_fixtures.py`) unchanged and decoy confusion breakdown tracks ocean→air leakage.
+- ~~Manual RFQ creation supports ocean/air toggle with mode-appropriate fields~~ **DONE** (shipped earlier).
+- ~~Air shipment pieces (with DIM weight calc) persist correctly to `rfq_shipment_pieces`~~ **DONE** (migration 018 + Phase 1 persistence).
+- ~~Feature flag fully hides air mode from UI~~ **DONE** — `NEXT_PUBLIC_FEATURE_AIR_FREIGHT`.
 
 ### Phase 2: Air Freight API Integration (Weeks 11–18)
 
