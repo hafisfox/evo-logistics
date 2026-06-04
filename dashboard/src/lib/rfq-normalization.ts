@@ -65,6 +65,32 @@ export interface RFQShipmentContainerRow {
   qty: number | string | null;
 }
 
+export interface RFQShipmentPieceRow {
+  rfq_id: string;
+  shipment_number: number | string;
+  piece_number: number | string;
+  count: number | null;
+  length_cm: number | null;
+  width_cm: number | null;
+  height_cm: number | null;
+  weight_kg: number | null;
+  packaging_type: string | null;
+}
+
+export interface RFQShipmentTruckDetailRow {
+  rfq_id: string;
+  shipment_number: number | string;
+  equipment_type: string | null;
+  load_type: string | null;
+  weight_lbs: number | null;
+  nmfc_class: string | null;
+  commodity_description: string | null;
+  hazmat: boolean | null;
+  accessorials: string[] | null;
+  origin_zip: string | null;
+  destination_zip: string | null;
+}
+
 function toLines(value: string | null | undefined): string[] {
   if (!value) return [];
   return String(value)
@@ -231,7 +257,9 @@ function normalizeContainerRows(containers: RFQShipmentContainerRow[]): RFQShipm
 
 export function buildShipmentsByRfq(
   shipmentRows: RFQShipmentRow[],
-  containerRows: RFQShipmentContainerRow[]
+  containerRows: RFQShipmentContainerRow[],
+  pieceRows: RFQShipmentPieceRow[] = [],
+  truckRows: RFQShipmentTruckDetailRow[] = []
 ): Map<string, RFQShipment[]> {
   const containerMap = new Map<string, RFQShipmentContainerRow[]>();
 
@@ -241,6 +269,21 @@ export function buildShipmentsByRfq(
     const existing = containerMap.get(key) || [];
     existing.push(row);
     containerMap.set(key, existing);
+  }
+
+  const pieceMap = new Map<string, RFQShipmentPieceRow[]>();
+  for (const row of pieceRows) {
+    const shipmentNumber = toPositiveInt(row.shipment_number, 1);
+    const key = `${row.rfq_id}::${shipmentNumber}`;
+    const existing = pieceMap.get(key) || [];
+    existing.push(row);
+    pieceMap.set(key, existing);
+  }
+
+  const truckMap = new Map<string, RFQShipmentTruckDetailRow>();
+  for (const row of truckRows) {
+    const shipmentNumber = toPositiveInt(row.shipment_number, 1);
+    truckMap.set(`${row.rfq_id}::${shipmentNumber}`, row);
   }
 
   const sortedShipments = [...shipmentRows].sort(
@@ -255,6 +298,18 @@ export function buildShipmentsByRfq(
     const shipmentNumber = toPositiveInt(row.shipment_number, 1);
     const containerKey = `${row.rfq_id}::${shipmentNumber}`;
     const containers = normalizeContainerRows(containerMap.get(containerKey) || []);
+    const pieces = (pieceMap.get(containerKey) || [])
+      .map((p) => ({
+        piece_number: toPositiveInt(p.piece_number, 1),
+        count: p.count ?? null,
+        length_cm: p.length_cm ?? null,
+        width_cm: p.width_cm ?? null,
+        height_cm: p.height_cm ?? null,
+        weight_kg: p.weight_kg ?? null,
+        packaging_type: p.packaging_type ?? null,
+      }))
+      .sort((a, b) => a.piece_number - b.piece_number);
+    const truckRow = truckMap.get(containerKey);
 
     const shipment: RFQShipment = {
       shipment_number: shipmentNumber,
@@ -269,6 +324,25 @@ export function buildShipmentsByRfq(
         containers.length > 0
           ? containers
           : [{ line_number: 1, container_type: "40HQ", qty: 1 }],
+      pieces,
+      truck_detail: truckRow
+        ? {
+            equipment_type: truckRow.equipment_type ?? null,
+            load_type:
+              truckRow.load_type === "FTL" ||
+              truckRow.load_type === "LTL" ||
+              truckRow.load_type === "PTL"
+                ? truckRow.load_type
+                : null,
+            weight_lbs: truckRow.weight_lbs ?? null,
+            nmfc_class: truckRow.nmfc_class ?? null,
+            commodity_description: truckRow.commodity_description ?? null,
+            hazmat: Boolean(truckRow.hazmat),
+            accessorials: truckRow.accessorials ?? null,
+            origin_zip: truckRow.origin_zip ?? null,
+            destination_zip: truckRow.destination_zip ?? null,
+          }
+        : null,
       ...defaultFieldsForMode((row.freight_mode as FreightMode) || "ocean"),
     };
 

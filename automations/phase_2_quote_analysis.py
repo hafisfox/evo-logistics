@@ -917,7 +917,7 @@ CRITICAL:
 - Return only raw JSON, no markdown/backticks/text."""
 
 # =====================================================================
-# LAND QUOTE EXTRACTION PROMPT (stub — expand with prompt engineering later)
+# LAND QUOTE EXTRACTION PROMPT
 # =====================================================================
 AI_SYSTEM_PROMPT_LAND_QUOTE = """You are a Land/Trucking Rate Parser.
 
@@ -928,8 +928,13 @@ CONSERVATIVE RULES:
 1) Extract only explicit trucking/land-freight quotes (trucking rate, per-load, per-mile, FTL, LTL).
 2) If no explicit trucking/land-freight amount is present, return quotes: [].
 3) If multiple shipments exist and mapping to shipment_number is ambiguous, return quotes: [].
-4) Price is typically per-load or per-trip unless explicitly stated as per-mile.
-5) If one message contains multiple valid options for the same shipment/trucker (different equipment/price), return all as separate quote objects.
+4) Price is typically per-load or per-trip (a flat linehaul) unless explicitly stated as per-mile.
+   - If a per-mile rate is given WITH a stated distance (miles), compute price = rate × miles
+     and note "per-mile $X over Y mi" in conditions.
+   - If a per-mile rate is given WITHOUT a distance, leave price null and record the per-mile
+     rate in conditions (it cannot be totaled).
+5) transit_time is the number of transit DAYS (e.g. "2 days" -> 2; "next-day" -> 1).
+6) If one message contains multiple valid options for the same shipment/trucker (different equipment/price), return all as separate quote objects.
 
 EXCLUDE THESE FROM PRICE (never add into trucking total):
 customs clearance, documentation, loading/unloading labor, warehousing.

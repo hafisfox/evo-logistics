@@ -144,6 +144,21 @@ class ShipmentData(BaseModel):
     special_requirements: Optional[str] = Field(None, description="Special handling: fumigation, lashing, flat-rack, OOG, etc.")
     cargo_weight_kg: Optional[float] = Field(None, description="Total cargo weight in kilograms")
     cargo_volume_cbm: Optional[float] = Field(None, description="Total cargo volume in cubic meters")
+    # Land/trucking detail fields
+    origin_zip: Optional[str] = Field(None, description="Origin postal/ZIP code for trucking lane lookup")
+    destination_zip: Optional[str] = Field(None, description="Destination postal/ZIP code for trucking lane lookup")
+    weight_lbs: Optional[float] = Field(None, description="Total cargo weight in pounds (land freight)")
+    equipment_type: Optional[str] = Field(None, description="Truck equipment: dry van, flatbed, reefer, tanker, step deck, lowboy")
+    load_type: Optional[str] = Field(None, description="FTL, LTL, or PTL")
+    nmfc_class: Optional[str] = Field(None, description="NMFC freight class for LTL (e.g. 50, 70, 125)")
+    accessorials: List[str] = Field(default_factory=list, description="Land accessorials: liftgate, inside delivery, residential, etc.")
+
+    @field_validator('accessorials', mode='before')
+    @classmethod
+    def coerce_accessorials(cls, v):
+        if isinstance(v, str):
+            return [v] if v else []
+        return v or []
 
     @field_validator('pod_hint', mode='before')
     @classmethod
@@ -359,6 +374,34 @@ def normalize_pod_hint(hints):
     return [h.strip().upper() for h in hints
             if isinstance(h, str) and h.strip().upper() not in ('', 'NULL', 'N/A')]
 
+def normalize_zip(zip_code):
+    if not zip_code or not isinstance(zip_code, str):
+        return None
+    z = zip_code.strip().upper()
+    return None if z in ('', 'NULL', 'N/A', 'TBD') else z
+
+def normalize_float(value):
+    if value is None:
+        return None
+    try:
+        f = float(value)
+        return f if f > 0 else None
+    except (ValueError, TypeError):
+        return None
+
+def normalize_load_type(lt):
+    if not lt or not isinstance(lt, str):
+        return None
+    t = lt.strip().upper()
+    return t if t in ('FTL', 'LTL', 'PTL') else None
+
+def normalize_accessorials(items):
+    if isinstance(items, str):
+        items = [items] if items else []
+    if not isinstance(items, list):
+        return []
+    return [a.strip() for a in items if isinstance(a, str) and a.strip()]
+
 def validate_shipment(s_data: dict, index: int) -> dict:
     """Normalize and validate a single shipment dict."""
     freight_mode = s_data.get('freight_mode', 'ocean')
@@ -410,6 +453,16 @@ def validate_shipment(s_data: dict, index: int) -> dict:
         'service_type': normalize_service_type(s_data.get('service_type')),
         'pickup_address': normalize_address(s_data.get('pickup_address')),
         'delivery_address': normalize_address(s_data.get('delivery_address')),
+        # Land/trucking fields
+        'origin_zip': normalize_zip(s_data.get('origin_zip')),
+        'destination_zip': normalize_zip(s_data.get('destination_zip')),
+        'weight_lbs': normalize_float(s_data.get('weight_lbs')),
+        'equipment_type': normalize_address(s_data.get('equipment_type')),
+        'load_type': normalize_load_type(s_data.get('load_type')),
+        'nmfc_class': normalize_address(s_data.get('nmfc_class')),
+        'accessorials': normalize_accessorials(s_data.get('accessorials', [])),
+        'commodity_description': normalize_address(s_data.get('commodity_description')),
+        'is_dangerous_goods': bool(s_data.get('is_dangerous_goods')),
     }
 
 # =====================================================================
@@ -531,6 +584,42 @@ def _normalize_pieces(raw_pieces: list) -> list:
     return normalized
 
 
+def _build_truck_detail(shipment: dict) -> dict | None:
+    """Build a single rfq_shipment_truck_details row from a land shipment, or None
+    if no land-specific data is present."""
+    equipment_type = (shipment.get("equipment_type") or "").strip() or None
+    load_type = normalize_load_type(shipment.get("load_type"))
+    nmfc_class = (shipment.get("nmfc_class") or "").strip() or None
+    commodity = (shipment.get("commodity_description") or "").strip() or None
+    accessorials = normalize_accessorials(shipment.get("accessorials", []))
+    weight_lbs = normalize_float(shipment.get("weight_lbs"))
+    # Fall back to kg→lbs if only metric weight is given.
+    if weight_lbs is None and shipment.get("cargo_weight_kg"):
+        try:
+            weight_lbs = round(float(shipment["cargo_weight_kg"]) * 2.20462, 2)
+        except (ValueError, TypeError):
+            weight_lbs = None
+    origin_zip = normalize_zip(shipment.get("origin_zip"))
+    destination_zip = normalize_zip(shipment.get("destination_zip"))
+    hazmat = bool(shipment.get("is_dangerous_goods"))
+
+    detail = {
+        "equipment_type": equipment_type,
+        "load_type": load_type,
+        "weight_lbs": weight_lbs,
+        "nmfc_class": nmfc_class,
+        "commodity_description": commodity,
+        "hazmat": hazmat,
+        "accessorials": accessorials or None,
+        "origin_zip": origin_zip,
+        "destination_zip": destination_zip,
+    }
+    # Skip an all-empty detail row (hazmat defaults to False so is ignored here).
+    if all(v in (None, [], False) for v in detail.values()):
+        return None
+    return detail
+
+
 def _build_normalized_shipments(shipments: list) -> list:
     """Convert parsed shipment payload into normalized rows."""
     normalized = []
@@ -591,6 +680,7 @@ def _build_normalized_shipments(shipments: list) -> list:
                 "cargo_weight_kg": shipment.get("cargo_weight_kg"),
                 "cargo_volume_cbm": shipment.get("cargo_volume_cbm"),
                 "pieces": _normalize_pieces(shipment.get("pieces", [])),
+                "truck_detail": _build_truck_detail(shipment) if freight_mode == "land" else None,
             }
         )
 
@@ -717,6 +807,37 @@ def _dual_write_normalized_rfq(supabase, workspace_id: str, rfq_id: str, shipmen
             .execute()
         )
 
+        # Persist land freight truck details (one row per shipment)
+        truck_detail = shipment.get("truck_detail")
+        if truck_detail:
+            scoped_upsert(
+                supabase,
+                "rfq_shipment_truck_details",
+                workspace_id,
+                {
+                    "rfq_id": rfq_id,
+                    "shipment_number": shipment["shipment_number"],
+                    "equipment_type": truck_detail.get("equipment_type"),
+                    "load_type": truck_detail.get("load_type"),
+                    "weight_lbs": truck_detail.get("weight_lbs"),
+                    "nmfc_class": truck_detail.get("nmfc_class"),
+                    "commodity_description": truck_detail.get("commodity_description"),
+                    "hazmat": truck_detail.get("hazmat", False),
+                    "accessorials": truck_detail.get("accessorials"),
+                    "origin_zip": truck_detail.get("origin_zip"),
+                    "destination_zip": truck_detail.get("destination_zip"),
+                },
+            )
+        else:
+            (
+                supabase.table("rfq_shipment_truck_details")
+                .delete()
+                .eq("workspace_id", workspace_id)
+                .eq("rfq_id", rfq_id)
+                .eq("shipment_number", shipment["shipment_number"])
+                .execute()
+            )
+
     (
         supabase.table("rfq_shipment_containers")
         .delete()
@@ -728,6 +849,15 @@ def _dual_write_normalized_rfq(supabase, workspace_id: str, rfq_id: str, shipmen
 
     (
         supabase.table("rfq_shipment_pieces")
+        .delete()
+        .eq("workspace_id", workspace_id)
+        .eq("rfq_id", rfq_id)
+        .gt("shipment_number", shipment_count)
+        .execute()
+    )
+
+    (
+        supabase.table("rfq_shipment_truck_details")
         .delete()
         .eq("workspace_id", workspace_id)
         .eq("rfq_id", rfq_id)
@@ -1540,7 +1670,7 @@ service_type:
 - Default: "port-to-port"."""
 
 # =====================================================================
-# LAND FREIGHT SYSTEM PROMPT (stub — expand with prompt engineering later)
+# LAND FREIGHT SYSTEM PROMPT
 # =====================================================================
 AI_SYSTEM_PROMPT_LAND = """You are a Freight RFQ Intake Parser for LAND/TRUCKING shipments.
 
@@ -1578,7 +1708,14 @@ Return ONLY raw JSON matching:
       "reefer_temperature": null,
       "special_requirements": null,
       "cargo_weight_kg": null,
-      "cargo_volume_cbm": null
+      "cargo_volume_cbm": null,
+      "origin_zip": null,
+      "destination_zip": null,
+      "weight_lbs": null,
+      "equipment_type": null,
+      "load_type": null,
+      "nmfc_class": null,
+      "accessorials": []
     }
   ]
 }
@@ -1589,6 +1726,7 @@ STRICT OUTPUT RULES:
 - multi = true iff len(shipments) > 1.
 - Use null for unknown values.
 - pod_hint must always be an array.
+- accessorials must always be an array (empty [] if none).
 - freight_mode must always be "land".
 - containers must always be an empty array [].
 - pieces must always be an empty array [].
@@ -1598,10 +1736,12 @@ STRICT OUTPUT RULES:
 
 EXTRACTION LOGIC:
 1) Identify all distinct shipment route statements.
-2) Parse cargo weight and dimensions if provided.
-3) Identify truck type requirements (FTL, LTL, flatbed, dry van, reefer truck).
-4) Parse dates using email_received_at anchor.
-5) Populate structured output.
+2) Parse origin/destination ZIP/postal codes when present.
+3) Parse cargo weight (record both kg and lbs when convertible).
+4) Identify equipment type and load type (FTL, LTL, PTL).
+5) Parse NMFC freight class and accessorials for LTL.
+6) Parse dates using email_received_at anchor.
+7) Populate structured output.
 
 FIELD RULES:
 
@@ -1613,14 +1753,35 @@ pod (destination):
 - City name, industrial area, or full address. UPPERCASE.
 - "deliver to Riyadh Industrial City" -> pod = "RIYADH INDUSTRIAL CITY".
 
-cargo_weight_kg:
-- Extract total weight in kilograms.
-- Convert from tonnes (×1000), lbs (÷2.205), MT/metric tons (×1000).
+origin_zip / destination_zip:
+- Extract postal/ZIP codes (US 5-digit ZIP, or other postal codes) when stated.
+- "from 90210 to 60607" -> origin_zip = "90210", destination_zip = "60607".
+
+cargo_weight_kg / weight_lbs:
+- Extract total weight. If given in kg/tonnes, set cargo_weight_kg (tonnes ×1000).
+- If given in lbs/pounds, set weight_lbs. If only one unit is given, populate that one
+  and leave the other null (the system converts).
 - Critical for trucking quotes — extract if mentioned.
 
+equipment_type:
+- One of: dry van, flatbed, reefer, tanker, step deck, lowboy (or close synonym).
+- "53ft dry van" -> "dry van"; "refrigerated trailer" -> "reefer"; "low bed" -> "lowboy".
+
+load_type:
+- "FTL" / "full truckload" / "full load" -> "FTL".
+- "LTL" / "less than truckload" / "partial" -> "LTL".
+- "PTL" / "partial truckload" -> "PTL".
+
+nmfc_class:
+- LTL freight class number (50, 55, 60, 65, 70, 77.5, 85, 92.5, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500).
+- "class 70" -> "70". Null if not LTL or not stated.
+
+accessorials:
+- Array of services: "liftgate", "inside delivery", "residential", "appointment",
+  "notify before delivery", "detention". Empty [] if none.
+
 special_requirements:
-- Extract truck type: FTL, LTL, flatbed, dry van, curtain-side, low-bed, tanker.
-- Extract equipment needs: tail-lift, crane, forklift access.
+- Extra equipment/handling not captured above: tail-lift, crane, forklift access.
 - Capture as comma-separated text. Set null if none."""
 
 

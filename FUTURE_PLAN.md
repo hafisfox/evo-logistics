@@ -10,7 +10,7 @@
 |-------|-------|--------|---------|
 | Phase 1: Air Foundation | 1–10 | **Complete** | All P0/P1/P2 air tasks done; final blocker closed — 52 synthetic air RFQ fixtures + mode-classification/extraction eval harness (`automations/tests/eval_phase1_air_fixtures.py`) + offline CI rules test (`test_phase1_air_prompt_parsing_rules.py`) shipped |
 | Phase 2: Air API Integration | 11–18 | Not started | Depends on Phase 1; start enterprise sales in Phase 1 |
-| Phase 3: Land Foundation | 19–26 | Not started | Depends on Phase 1 schema patterns |
+| Phase 3: Land Foundation | 19–26 | **Complete** | Land DB tables (migration 020), Phase 1/2 land prompts + extraction, FTL/LTL pricing engines, dashboard land mode + pricing tabs (Truckers/Lane Rates/LTL Classes), 52 synthetic land RFQ fixtures + eval harness (`automations/tests/eval_phase1_land_fixtures.py`) + offline CI rules test (`test_phase1_land_prompt_parsing_rules.py`) all shipped, flag-gated on `NEXT_PUBLIC_FEATURE_LAND_FREIGHT` |
 | Phase 4: Land API Integration | 27–34 | Not started | Depends on Phase 3 |
 | Phase 5: Multimodal/Intermodal | 35–44 | Not started | Depends on Phases 2 + 4 |
 | Phase 6: Intelligence/Optimization | 45–58 | Not started | Depends on Phase 5 |
@@ -361,16 +361,18 @@ agent_quotes (existing — `freight_mode` column LIVE)
 | Air carrier normalization | Master list of 50+ airlines with IATA codes | P1 |
 | IATA ONE Record compliance | Design data model around virtual shipment record standard | P2 |
 
-### Phase 3: Land Freight Foundation (Weeks 19–26)
+### Phase 3: Land Freight Foundation (Weeks 19–26) — **Complete**
 
 | Task | Details | Priority |
 |------|---------|----------|
-| Create land DB tables | `truck_carrier_profiles`, `truck_lane_rates`, `ltl_freight_classes`, `drayage_rates` | P0 |
-| Extend Phase 1 for land RFQs | Extract: origin/dest ZIP, weight, commodity, equipment type, FTL/LTL | P0 |
-| Extend Phase 2 for land quotes | Parse: per-mile rates, accessorials, fuel surcharge, transit days | P0 |
-| FTL pricing engine | Per-mile + fuel surcharge + accessorial stacking | P0 |
-| LTL pricing engine | Class-based rating with NMFC lookup | P1 |
-| Dashboard land mode | FTL/LTL toggle, truck type selector, weight/class inputs | P1 |
+| ~~Create land DB tables~~ | ~~DONE — migration 020: `truck_carrier_profiles`, `truck_lane_rates`, `ltl_freight_classes`, `drayage_rates`, `rfq_shipment_truck_details` (RLS, workspace-scoped)~~ | ~~P0~~ |
+| ~~Extend Phase 1 for land RFQs~~ | ~~DONE — land system prompt extracts origin/dest ZIP, weight (kg/lbs), commodity, equipment type, load type, NMFC class, accessorials; `_build_truck_detail` persists to `rfq_shipment_truck_details`~~ | ~~P0~~ |
+| ~~Extend Phase 2 for land quotes~~ | ~~DONE — land quote prompt parses per-mile/flat rate, fuel surcharge, accessorials, transit days~~ | ~~P0~~ |
+| ~~FTL pricing engine~~ | ~~DONE — `calculate_ftl_price` (per-mile×distance or flat + fuel% + accessorials, min-charge floor, margin) in phase_3; `get_truck_lane_rate` lane lookup; `calculateFtlPrice` parity in `pricing-engine.ts`~~ | ~~P0~~ |
+| ~~LTL pricing engine~~ | ~~DONE — `calculate_ltl_price` (class rate × weight/100 + fuel + accessorials) + `get_ltl_class_rate` NMFC lookup; `calculateLtlPrice` parity~~ | ~~P1~~ |
+| ~~Dashboard land mode~~ | ~~DONE — new-RFQ FTL/LTL toggle, truck-type selector, weight-lbs/NMFC/ZIP inputs; `/pricing` Truckers + Lane Rates + LTL Classes tabs (flag-gated); shipment-card land Truck Details section~~ | ~~P1~~ |
+
+**Phase 3 acceptance:** land mode detection + extraction covered by `eval_phase1_land_fixtures.py` (52 land fixtures + 9 ocean/air decoys, mode-detection ≥0.90 gate) and offline CI rules test `test_phase1_land_prompt_parsing_rules.py`. FTL/LTL pricing unit-tested in `pricing-engine.test.ts`; land pricing-table routes tested in `pricing-land-*.route.test.ts`. All gated behind `NEXT_PUBLIC_FEATURE_LAND_FREIGHT`.
 
 ### Phase 4: Land Freight API Integration (Weeks 27–34)
 
@@ -486,10 +488,10 @@ These UI changes are missing from the phased roadmap and should be added:
 
 | Missing Item | Phase | Priority | Details |
 |-------------|-------|----------|---------|
-| ~~RFQ detail page mode-awareness~~ | 1 | P1 | ~~DONE (air)~~ — `shipment-card` renders air Pieces & Dimensions + chargeable weight and hides ocean-only blocks; land (ZIP/equipment/class) sections still pending |
+| ~~RFQ detail page mode-awareness~~ | 1/3 | P1 | ~~DONE~~ — `shipment-card` renders air Pieces & Dimensions + chargeable weight and the land Truck Details section (load type, equipment, weight, NMFC class, ZIP lane, accessorials); detail route now loads pieces + truck details for air and land |
 | ~~Pipeline filter by freight mode~~ | 1 | P1 | ~~DONE~~ — mode filter chips (Ocean/Air/Land, flag-gated) on the RFQ list |
 | ~~Mode-specific icons on RFQ rows~~ | 1 | P1 | ~~DONE~~ — Ship/Plane/Truck `ModeIcon` on table rows + kanban cards |
-| Pricing tables page update | 3 | P1 | ~~DONE (air)~~ — `/pricing` now has Airlines + Air Rates tabs (flag-gated); land lane/accessorial tables still pending |
+| ~~Pricing tables page update~~ | 3 | P1 | ~~DONE~~ — `/pricing` has Airlines + Air Rates tabs and Truckers + Lane Rates + LTL Classes tabs (all flag-gated) |
 | Agents page mode tagging | 1 | P2 | Tag agents by mode specialization; filter agents by mode on the agents page |
 | Cross-mode quote comparison UI | 6 | P2 | Phase 6 mentions "Mode comparison engine" but provides no UI spec — add comparison table/chart design |
 

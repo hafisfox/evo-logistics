@@ -49,6 +49,13 @@ interface ShipmentEntry {
   special_requirements: string;
   cargo_weight_kg: string;
   cargo_volume_cbm: string;
+  // Land/trucking fields
+  load_type: string;
+  equipment_type: string;
+  weight_lbs: string;
+  nmfc_class: string;
+  origin_zip: string;
+  destination_zip: string;
 }
 
 function emptyPiece(): PieceEntry {
@@ -75,6 +82,12 @@ function emptyShipment(mode: FreightMode = "ocean"): ShipmentEntry {
     special_requirements: "",
     cargo_weight_kg: "",
     cargo_volume_cbm: "",
+    load_type: mode === "land" ? "FTL" : "",
+    equipment_type: mode === "land" ? EQUIPMENT_BY_MODE.land[0] : "",
+    weight_lbs: "",
+    nmfc_class: "",
+    origin_zip: "",
+    destination_zip: "",
   };
 }
 
@@ -193,6 +206,8 @@ export default function NewRFQPage() {
       service_type: SERVICE_TYPES_BY_MODE[newMode][0],
       containers: newMode === "ocean" ? [{ container_type: "40HQ", qty: 1 }] : [],
       pieces: newMode === "air" ? [emptyPiece()] : [],
+      load_type: newMode === "land" ? "FTL" : "",
+      equipment_type: newMode === "land" ? EQUIPMENT_BY_MODE.land[0] : "",
     });
   };
 
@@ -225,6 +240,18 @@ export default function NewRFQPage() {
                   packaging_type: p.packaging_type || null,
                 }))
               : [],
+          truck_detail:
+            s.freight_mode === "land"
+              ? {
+                  load_type: s.load_type || null,
+                  equipment_type: s.equipment_type || null,
+                  weight_lbs: s.weight_lbs ? parseFloat(s.weight_lbs) : null,
+                  nmfc_class: s.nmfc_class || null,
+                  origin_zip: s.origin_zip || null,
+                  destination_zip: s.destination_zip || null,
+                  accessorials: null,
+                }
+              : null,
           commodity_description: s.commodity_description || null,
           hs_code: s.hs_code || null,
           incoterms: s.incoterms || null,
@@ -698,27 +725,86 @@ export default function NewRFQPage() {
                   </div>
                 )}
 
-                {/* Land: Equipment Type */}
+                {/* Land: FTL/LTL toggle, equipment, weight, NMFC class, ZIP lane */}
                 {mode === "land" && (
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                      Equipment Type
-                    </label>
-                    <select
-                      value={shipment.containers[0]?.container_type || "DRY VAN"}
-                      onChange={(e) =>
-                        updateShipment(si, {
-                          containers: [{ container_type: e.target.value, qty: 1 }],
-                        })
-                      }
-                      className={selectClass}
-                    >
-                      {EQUIPMENT_BY_MODE.land.map((eq) => (
-                        <option key={eq} value={eq}>
-                          {eq}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                        Load Type
+                      </label>
+                      <select
+                        value={shipment.load_type || "FTL"}
+                        onChange={(e) => updateShipment(si, { load_type: e.target.value })}
+                        className={selectClass}
+                      >
+                        <option value="FTL">FTL — Full Truckload</option>
+                        <option value="LTL">LTL — Less Than Truckload</option>
+                        <option value="PTL">PTL — Partial Truckload</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                        Equipment Type
+                      </label>
+                      <select
+                        value={shipment.equipment_type || EQUIPMENT_BY_MODE.land[0]}
+                        onChange={(e) => updateShipment(si, { equipment_type: e.target.value })}
+                        className={selectClass}
+                      >
+                        {EQUIPMENT_BY_MODE.land.map((eq) => (
+                          <option key={eq} value={eq}>
+                            {eq}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                        Weight (lbs)
+                      </label>
+                      <input
+                        value={shipment.weight_lbs}
+                        onChange={(e) => updateShipment(si, { weight_lbs: e.target.value })}
+                        placeholder="e.g. 12000"
+                        inputMode="decimal"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                        Origin ZIP
+                      </label>
+                      <input
+                        value={shipment.origin_zip}
+                        onChange={(e) => updateShipment(si, { origin_zip: e.target.value })}
+                        placeholder="e.g. 90210"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                        Destination ZIP
+                      </label>
+                      <input
+                        value={shipment.destination_zip}
+                        onChange={(e) => updateShipment(si, { destination_zip: e.target.value })}
+                        placeholder="e.g. 60607"
+                        className={inputClass}
+                      />
+                    </div>
+                    {shipment.load_type === "LTL" && (
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                          NMFC Class
+                        </label>
+                        <input
+                          value={shipment.nmfc_class}
+                          onChange={(e) => updateShipment(si, { nmfc_class: e.target.value })}
+                          placeholder="e.g. 70"
+                          className={inputClass}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
 

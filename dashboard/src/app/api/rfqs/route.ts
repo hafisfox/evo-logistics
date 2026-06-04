@@ -62,6 +62,16 @@ interface ManualRFQPiece {
   packaging_type: string | null;
 }
 
+interface ManualRFQTruckDetail {
+  equipment_type: string | null;
+  load_type: string | null;
+  weight_lbs: number | null;
+  nmfc_class: string | null;
+  origin_zip: string | null;
+  destination_zip: string | null;
+  accessorials: string[] | null;
+}
+
 interface ManualRFQShipment {
   freight_mode: FreightMode;
   pol: string;
@@ -73,6 +83,7 @@ interface ManualRFQShipment {
   delivery_address: string | null;
   containers: Array<{ container_type: string; qty: number }>;
   pieces: ManualRFQPiece[];
+  truck_detail: ManualRFQTruckDetail | null;
   commodity_description: string | null;
   hs_code: string | null;
   incoterms: string | null;
@@ -174,6 +185,28 @@ export async function POST(request: Request) {
       });
     }
 
+    // Truck detail (for land freight)
+    let truckDetail: ManualRFQTruckDetail | null = null;
+    if (freightMode === "land") {
+      const td = (shipment.truck_detail && typeof shipment.truck_detail === "object"
+        ? shipment.truck_detail
+        : shipment) as Record<string, unknown>;
+      const loadTypeRaw = typeof td.load_type === "string" ? td.load_type.trim().toUpperCase() : "";
+      const rawAccessorials = Array.isArray(td.accessorials) ? td.accessorials : [];
+      const accessorials = rawAccessorials
+        .filter((a): a is string => typeof a === "string" && a.trim().length > 0)
+        .map((a) => a.trim());
+      truckDetail = {
+        equipment_type: typeof td.equipment_type === "string" && td.equipment_type.trim() ? td.equipment_type.trim() : null,
+        load_type: loadTypeRaw === "FTL" || loadTypeRaw === "LTL" || loadTypeRaw === "PTL" ? loadTypeRaw : null,
+        weight_lbs: typeof td.weight_lbs === "number" && Number.isFinite(td.weight_lbs) ? td.weight_lbs : null,
+        nmfc_class: typeof td.nmfc_class === "string" && td.nmfc_class.trim() ? td.nmfc_class.trim() : null,
+        origin_zip: typeof td.origin_zip === "string" && td.origin_zip.trim() ? td.origin_zip.trim().toUpperCase() : null,
+        destination_zip: typeof td.destination_zip === "string" && td.destination_zip.trim() ? td.destination_zip.trim().toUpperCase() : null,
+        accessorials: accessorials.length > 0 ? accessorials : null,
+      };
+    }
+
     shipments.push({
       freight_mode: freightMode,
       pol,
@@ -185,6 +218,7 @@ export async function POST(request: Request) {
       delivery_address: typeof shipment.delivery_address === "string" && shipment.delivery_address.trim() ? shipment.delivery_address.trim() : null,
       containers,
       pieces,
+      truck_detail: truckDetail,
       commodity_description: typeof shipment.commodity_description === "string" && shipment.commodity_description.trim() ? shipment.commodity_description.trim() : null,
       hs_code: typeof shipment.hs_code === "string" && shipment.hs_code.trim() ? shipment.hs_code.trim() : null,
       incoterms: typeof shipment.incoterms === "string" && shipment.incoterms.trim() ? shipment.incoterms.trim() : null,
@@ -309,10 +343,33 @@ export async function POST(request: Request) {
             if (pieceError) throw pieceError;
           }
         }
+
+        // Insert truck details for land freight
+        if (s.freight_mode === "land" && s.truck_detail) {
+          const td = s.truck_detail;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error: truckError } = await (supabase.from as any)("rfq_shipment_truck_details").insert({
+            workspace_id: workspaceId,
+            rfq_id: rfqId,
+            shipment_number: shipmentNumber,
+            equipment_type: td.equipment_type,
+            load_type: td.load_type,
+            weight_lbs: td.weight_lbs,
+            nmfc_class: td.nmfc_class,
+            commodity_description: s.commodity_description,
+            hazmat: s.is_dangerous_goods,
+            accessorials: td.accessorials,
+            origin_zip: td.origin_zip,
+            destination_zip: td.destination_zip,
+          });
+          if (truckError) throw truckError;
+        }
       }
     } catch (insertError) {
       // Clean up orphaned rows on partial failure
       console.error("Shipment/container/pieces insert failed, cleaning up:", insertError);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase.from as any)("rfq_shipment_truck_details").delete().eq("rfq_id", rfqId).eq("workspace_id", workspaceId);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase.from as any)("rfq_shipment_pieces").delete().eq("rfq_id", rfqId).eq("workspace_id", workspaceId);
       await supabase.from("rfq_shipment_containers").delete().eq("rfq_id", rfqId).eq("workspace_id", workspaceId);

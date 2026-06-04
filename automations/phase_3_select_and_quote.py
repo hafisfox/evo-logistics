@@ -137,6 +137,72 @@ def get_air_rate_per_kg(supabase, workspace_id, carrier, origin, destination, ch
     return None
 
 
+def get_truck_lane_rate(supabase, workspace_id, carrier, origin_zip, destination_zip, equipment_type=None):
+    """Look up an FTL lane rate from truck_lane_rates.
+
+    Returns a dict {rate_per_mile_usd, flat_rate_usd, min_charge_usd, fuel_surcharge_pct}
+    for the (carrier, origin_zip, destination_zip[, equipment_type]) lane, or None if not
+    configured. Used as a fallback so land pricing still resolves when an agent quote does
+    not carry a usable total price. The primary path keeps using the quoted total.
+    """
+    carrier_u = (carrier or "").upper().strip()
+    o_zip = (origin_zip or "").upper().strip()
+    d_zip = (destination_zip or "").upper().strip()
+    if not carrier_u or not o_zip or not d_zip:
+        return None
+    try:
+        query = (
+            supabase.table("truck_lane_rates")
+            .select("rate_per_mile_usd, flat_rate_usd, min_charge_usd, fuel_surcharge_pct")
+            .eq("workspace_id", workspace_id)
+            .eq("carrier", carrier_u)
+            .eq("origin_zip", o_zip)
+            .eq("destination_zip", d_zip)
+        )
+        if equipment_type:
+            query = query.eq("equipment_type", equipment_type.upper().strip())
+        result = query.limit(1).execute()
+        if result.data:
+            row = result.data[0]
+            return {
+                "rate_per_mile_usd": float(row["rate_per_mile_usd"]) if row.get("rate_per_mile_usd") is not None else None,
+                "flat_rate_usd": float(row["flat_rate_usd"]) if row.get("flat_rate_usd") is not None else None,
+                "min_charge_usd": float(row.get("min_charge_usd") or 0.0),
+                "fuel_surcharge_pct": float(row.get("fuel_surcharge_pct") or 0.0),
+            }
+    except Exception as e:
+        print(f"Warning: truck lane rate lookup failed for {carrier_u} {o_zip}->{d_zip}: {e}")
+    return None
+
+
+def get_ltl_class_rate(supabase, workspace_id, nmfc_class):
+    """Look up an LTL class rate from ltl_freight_classes.
+
+    Returns {rate_per_100lb_usd, min_charge_usd} for the NMFC class, or None.
+    """
+    cls = (str(nmfc_class).strip() if nmfc_class is not None else "")
+    if not cls:
+        return None
+    try:
+        result = (
+            supabase.table("ltl_freight_classes")
+            .select("rate_per_100lb_usd, min_charge_usd")
+            .eq("workspace_id", workspace_id)
+            .eq("nmfc_class", cls)
+            .limit(1)
+            .execute()
+        )
+        if result.data:
+            row = result.data[0]
+            return {
+                "rate_per_100lb_usd": float(row["rate_per_100lb_usd"]),
+                "min_charge_usd": float(row.get("min_charge_usd") or 0.0),
+            }
+    except Exception as e:
+        print(f"Warning: LTL class rate lookup failed for class {cls}: {e}")
+    return None
+
+
 def sum_surcharges(surcharges: dict) -> float:
     """Sum all non-null surcharge values from a JSONB dict."""
     if not surcharges or not isinstance(surcharges, dict):
@@ -269,6 +335,74 @@ def calculate_air_price(rate_per_kg_usd, chargeable_weight_kg, margin,
         "surcharges_aed": round(surcharges_aed, 2),
         "exchange_rate": fx,
     }
+
+
+def calculate_land_price(land_freight_usd, margin, exchange_rate=None, surcharges_usd=0):
+    """Land freight pricing: base = quoted land freight total (per-load), then add
+    surcharges and apply margin. Mirrors calculate_port_price rounding so downstream
+    email/template handling is identical to ocean/air."""
+    fx = exchange_rate or DEFAULT_EXCHANGE_RATE
+    land_freight_aed = land_freight_usd * fx
+    surcharges_aed = surcharges_usd * fx
+    subtotal_aed = land_freight_aed + surcharges_aed
+    with_margin = subtotal_aed * (1 + margin)
+    final_price_aed = math.ceil(with_margin / 10) * 10
+    final_price_usd = math.ceil(final_price_aed / fx)
+    return {
+        "final_price_aed": final_price_aed,
+        "final_price_usd": final_price_usd,
+        "margin_amount": round(with_margin - subtotal_aed, 2),
+        "margin_percent": margin,
+        "land_freight_usd": round(land_freight_usd, 2),
+        "land_freight_aed": round(land_freight_aed, 2),
+        "surcharges_usd": round(surcharges_usd, 2),
+        "surcharges_aed": round(surcharges_aed, 2),
+        "exchange_rate": fx,
+    }
+
+
+def calculate_ftl_price(margin, rate_per_mile_usd=None, distance_miles=None,
+                        flat_rate_usd=None, fuel_surcharge_pct=0.0,
+                        accessorials_usd=0.0, min_charge_usd=0.0, exchange_rate=None):
+    """FTL rate-book estimate: linehaul = flat_rate OR (per_mile x distance), floored at
+    min_charge; + fuel surcharge (% of linehaul) + accessorials; x (1 + margin).
+    Returns a dict shaped like calculate_land_price for downstream parity."""
+    if flat_rate_usd is not None:
+        linehaul = float(flat_rate_usd)
+    elif rate_per_mile_usd is not None and distance_miles is not None:
+        linehaul = float(rate_per_mile_usd) * float(distance_miles)
+    else:
+        raise ValueError("FTL pricing requires flat_rate_usd or (rate_per_mile_usd and distance_miles)")
+    linehaul = max(linehaul, float(min_charge_usd or 0.0))
+    fuel_usd = linehaul * (float(fuel_surcharge_pct or 0.0) / 100.0)
+    land_freight_usd = linehaul + fuel_usd
+    surcharges_usd = float(accessorials_usd or 0.0)
+    result = calculate_land_price(land_freight_usd, margin,
+                                  exchange_rate=exchange_rate, surcharges_usd=surcharges_usd)
+    result["linehaul_usd"] = round(linehaul, 2)
+    result["fuel_surcharge_usd"] = round(fuel_usd, 2)
+    result["load_type"] = "FTL"
+    return result
+
+
+def calculate_ltl_price(rate_per_100lb_usd, weight_lbs, margin,
+                        fuel_surcharge_pct=0.0, accessorials_usd=0.0,
+                        min_charge_usd=0.0, exchange_rate=None):
+    """LTL class-based estimate: linehaul = rate_per_100lb x (weight_lbs / 100), floored at
+    min_charge; + fuel surcharge + accessorials; x (1 + margin)."""
+    if weight_lbs is None or float(weight_lbs) <= 0:
+        raise ValueError("LTL pricing requires a positive weight_lbs")
+    linehaul = float(rate_per_100lb_usd) * (float(weight_lbs) / 100.0)
+    linehaul = max(linehaul, float(min_charge_usd or 0.0))
+    fuel_usd = linehaul * (float(fuel_surcharge_pct or 0.0) / 100.0)
+    land_freight_usd = linehaul + fuel_usd
+    surcharges_usd = float(accessorials_usd or 0.0)
+    result = calculate_land_price(land_freight_usd, margin,
+                                  exchange_rate=exchange_rate, surcharges_usd=surcharges_usd)
+    result["linehaul_usd"] = round(linehaul, 2)
+    result["fuel_surcharge_usd"] = round(fuel_usd, 2)
+    result["load_type"] = "LTL"
+    return result
 
 
 def calculate_door_price(ocean_freight_usd, qty, container_type, carrier,
@@ -465,6 +599,41 @@ def calculate_full_pricing(rfq, quote, do_charges, dest_charges, transp_charges,
             "freight_mode": "air",
         }
 
+    if (freight_mode or "ocean").lower() == "land":
+        service_type = (rfq.get("service_type") or "door-to-door").lower().strip()
+        land_shipments = []
+        grand_total_aed = 0
+        grand_total_usd = 0
+        for i in range(len(prices)):
+            price_str = prices[i]
+            try:
+                land_freight_usd = float(price_str)
+                if land_freight_usd <= 0:
+                    raise ValueError(f"Land freight must be positive, got {price_str}")
+            except (ValueError, TypeError) as e:
+                raise ValueError(f"Invalid land freight price '{price_str}' for shipment {i+1}: {e}")
+            result = calculate_land_price(land_freight_usd, margin,
+                                          exchange_rate=fx, surcharges_usd=surcharges_usd)
+            result["shipment_number"] = i + 1
+            result["service_type"] = service_type
+            result["freight_mode"] = "land"
+            result["pol"] = pols[i] if i < len(pols) else (pols[0] if pols else (rfq.get("pol") or "N/A"))
+            result["pod"] = pods[i] if i < len(pods) else (pods[0] if pods else (rfq.get("pod") or "N/A"))
+            result["container_display"] = "Truck load"
+            result["carrier"] = carrier
+            result["surcharge_breakdown"] = surcharges_data if surcharges_usd > 0 else None
+            land_shipments.append(result)
+            grand_total_aed += result["final_price_aed"]
+            grand_total_usd += result["final_price_usd"]
+        return {
+            "shipments": land_shipments,
+            "grand_total_aed": grand_total_aed,
+            "grand_total_usd": round(grand_total_usd, 2),
+            "exchange_rate": fx,
+            "margin_percent": margin,
+            "freight_mode": "land",
+        }
+
     service_type = (rfq.get("service_type") or "port-to-port").lower().strip()
     is_port_only = service_type == "port-to-port"
     has_delivery = service_type in ("port-to-door", "door-to-door")
@@ -611,6 +780,20 @@ def _load_pieces(supabase, workspace_id: str, rfq_id: str) -> list:
         .select("*")
         .eq("workspace_id", workspace_id)
         .eq("rfq_id", rfq_id)
+        .execute()
+        .data
+        or []
+    )
+
+
+def _load_truck_details(supabase, workspace_id: str, rfq_id: str) -> list:
+    """Load land-freight truck details (equipment/load type/weight/class) for pricing."""
+    return (
+        supabase.table("rfq_shipment_truck_details")
+        .select("*")
+        .eq("workspace_id", workspace_id)
+        .eq("rfq_id", rfq_id)
+        .order("shipment_number")
         .execute()
         .data
         or []
@@ -989,10 +1172,14 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
     if normalized_shipments:
         freight_mode = (normalized_shipments[0].get("freight_mode") or "ocean").lower()
     chargeable_weight_kg = 0.0
+    truck_details = []
     if freight_mode == "air":
         pieces = _load_pieces(supabase, workspace_id, request.rfq_id)
         chargeable_weight_kg = total_chargeable_weight(pieces)
         print(f"Air freight: chargeable weight = {chargeable_weight_kg} kg from {len(pieces)} piece line(s)")
+    elif freight_mode == "land":
+        truck_details = _load_truck_details(supabase, workspace_id, request.rfq_id)
+        print(f"Land freight: loaded {len(truck_details)} truck detail row(s)")
 
     print(f"Found RFQ {request.rfq_id}")
 
@@ -1042,6 +1229,45 @@ def _process_agent_selection(request: SelectAgentRequest) -> dict:
                     f"Air rate fallback: {effective_rate:.4f} USD/kg from air_charge_rates "
                     f"(tier {rate_per_kg}/kg, min charge {min_charge})"
                 )
+
+    # 5c. Land rate fallback: if the selected quote lacks a usable total price, fall back to
+    # the workspace land rate book — FTL truck_lane_rates (per-mile/flat) or LTL class rate —
+    # so land pricing still resolves. The primary path keeps using the quoted total.
+    if freight_mode == "land":
+        try:
+            quoted_total = float(parse_multi_value(quote_data.get("price"))[0])
+        except (TypeError, ValueError, IndexError):
+            quoted_total = 0.0
+        if quoted_total <= 0 and truck_details:
+            detail = truck_details[0]
+            load_type = (detail.get("load_type") or "").upper().strip()
+            fallback_total = None
+            if load_type == "LTL" and detail.get("nmfc_class") and detail.get("weight_lbs"):
+                cls_rate = get_ltl_class_rate(supabase, workspace_id, detail.get("nmfc_class"))
+                if cls_rate:
+                    est = calculate_ltl_price(
+                        cls_rate["rate_per_100lb_usd"], detail.get("weight_lbs"), request.margin,
+                        min_charge_usd=cls_rate.get("min_charge_usd", 0.0), exchange_rate=fx,
+                    )
+                    fallback_total = est["land_freight_usd"]
+            else:
+                lane = get_truck_lane_rate(
+                    supabase, workspace_id, quote_data.get("carrier"),
+                    detail.get("origin_zip"), detail.get("destination_zip"),
+                    detail.get("equipment_type"),
+                )
+                if lane and (lane.get("flat_rate_usd") or lane.get("rate_per_mile_usd")):
+                    # Without a distance we can only use a configured flat rate.
+                    if lane.get("flat_rate_usd"):
+                        est = calculate_ftl_price(
+                            request.margin, flat_rate_usd=lane["flat_rate_usd"],
+                            fuel_surcharge_pct=lane.get("fuel_surcharge_pct", 0.0),
+                            min_charge_usd=lane.get("min_charge_usd", 0.0), exchange_rate=fx,
+                        )
+                        fallback_total = est["land_freight_usd"]
+            if fallback_total and fallback_total > 0:
+                quote_data = {**quote_data, "price": str(fallback_total)}
+                print(f"Land rate fallback: {fallback_total:.2f} USD total from land rate book")
 
     # 6. Calculate pricing (surcharges auto-extracted from quote_data)
     pricing = calculate_full_pricing(

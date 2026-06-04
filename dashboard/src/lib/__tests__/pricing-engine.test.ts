@@ -3,6 +3,9 @@ import {
   calculateAirPrice,
   calculateFullPricing,
   calculatePortPrice,
+  calculateLandPrice,
+  calculateFtlPrice,
+  calculateLtlPrice,
   DEFAULT_EXCHANGE_RATE,
 } from "@/lib/pricing-engine";
 
@@ -153,5 +156,88 @@ describe("calculateAirPrice", () => {
 
     expect(result.exchangeRate).toBe(3.7);
     expect(result.airFreightAED).toBe(Math.round(5 * 100 * 3.7 * 100) / 100);
+  });
+});
+
+describe("calculateLandPrice", () => {
+  const settings = { margin: 0.13, quoteThreshold: 2 };
+
+  it("prices the quoted land total then margin + 10 AED rounding", () => {
+    const landFreightUSD = 1500;
+    const result = calculateLandPrice(landFreightUSD, settings);
+
+    const landFreightAED = landFreightUSD * EXCHANGE_RATE;
+    const expectedAED = Math.ceil((landFreightAED * 1.13) / 10) * 10;
+    const expectedUSD = Math.ceil(expectedAED / EXCHANGE_RATE);
+
+    expect(result.landFreightUSD).toBe(1500);
+    expect(result.finalPriceAED).toBe(expectedAED);
+    expect(result.finalPriceUSD).toBe(expectedUSD);
+  });
+
+  it("adds surcharges before margin", () => {
+    const base = calculateLandPrice(1000, settings);
+    const withSurcharges = calculateLandPrice(1000, settings, 250);
+    expect(withSurcharges.finalPriceAED).toBeGreaterThan(base.finalPriceAED);
+    expect(withSurcharges.surchargesUSD).toBe(250);
+  });
+});
+
+describe("calculateFtlPrice", () => {
+  const settings = { margin: 0.13, quoteThreshold: 2 };
+
+  it("prices per-mile × distance + fuel surcharge", () => {
+    const result = calculateFtlPrice({
+      settings,
+      ratePerMileUSD: 2.5,
+      distanceMiles: 1000,
+      fuelSurchargePct: 20,
+    });
+    // linehaul 2500, fuel 500 => land freight 3000
+    expect(result.linehaulUSD).toBe(2500);
+    expect(result.fuelSurchargeUSD).toBe(500);
+    expect(result.landFreightUSD).toBe(3000);
+    expect(result.loadType).toBe("FTL");
+  });
+
+  it("uses a flat rate when provided and floors at the min charge", () => {
+    const result = calculateFtlPrice({ settings, flatRateUSD: 100, minChargeUSD: 800 });
+    expect(result.linehaulUSD).toBe(800);
+  });
+
+  it("throws when neither flat nor per-mile rate is given", () => {
+    expect(() => calculateFtlPrice({ settings })).toThrow();
+  });
+});
+
+describe("calculateLtlPrice", () => {
+  const settings = { margin: 0.13, quoteThreshold: 2 };
+
+  it("prices class rate × (weight / 100) + fuel", () => {
+    const result = calculateLtlPrice({
+      ratePer100lbUSD: 30,
+      weightLbs: 2000,
+      settings,
+      fuelSurchargePct: 10,
+    });
+    // linehaul 30 × 20 = 600, fuel 60 => 660
+    expect(result.linehaulUSD).toBe(600);
+    expect(result.fuelSurchargeUSD).toBe(60);
+    expect(result.landFreightUSD).toBe(660);
+    expect(result.loadType).toBe("LTL");
+  });
+
+  it("floors the linehaul at the min charge", () => {
+    const result = calculateLtlPrice({
+      ratePer100lbUSD: 10,
+      weightLbs: 100,
+      settings,
+      minChargeUSD: 150,
+    });
+    expect(result.linehaulUSD).toBe(150);
+  });
+
+  it("throws on non-positive weight", () => {
+    expect(() => calculateLtlPrice({ ratePer100lbUSD: 30, weightLbs: 0, settings })).toThrow();
   });
 });

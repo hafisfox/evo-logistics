@@ -239,6 +239,61 @@ export function ShipmentCard({ rfq }: ShipmentCardProps) {
                   </p>
                 </div>
               ) : null}
+
+              {mode === "land" && shipment.truck_detail ? (
+                <div className="mt-4 border-t pt-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Truck Details
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                    {shipment.truck_detail.load_type ? (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Load Type</p>
+                        <span className="inline-block mt-0.5 rounded-md bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                          {shipment.truck_detail.load_type}
+                        </span>
+                      </div>
+                    ) : null}
+                    {shipment.truck_detail.equipment_type ? (
+                      <div className="flex items-start gap-1.5">
+                        <Truck className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Equipment</p>
+                          <p className="text-sm font-medium">{shipment.truck_detail.equipment_type}</p>
+                        </div>
+                      </div>
+                    ) : null}
+                    {shipment.truck_detail.weight_lbs != null ? (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Weight</p>
+                        <p className="text-sm font-medium font-mono">
+                          {shipment.truck_detail.weight_lbs.toLocaleString()} lbs
+                        </p>
+                      </div>
+                    ) : null}
+                    {shipment.truck_detail.nmfc_class ? (
+                      <div>
+                        <p className="text-xs text-muted-foreground">NMFC Class</p>
+                        <p className="text-sm font-medium font-mono">{shipment.truck_detail.nmfc_class}</p>
+                      </div>
+                    ) : null}
+                    {shipment.truck_detail.origin_zip || shipment.truck_detail.destination_zip ? (
+                      <div>
+                        <p className="text-xs text-muted-foreground">ZIP Lane</p>
+                        <p className="text-sm font-medium font-mono">
+                          {shipment.truck_detail.origin_zip ?? "?"} → {shipment.truck_detail.destination_zip ?? "?"}
+                        </p>
+                      </div>
+                    ) : null}
+                    {shipment.truck_detail.accessorials && shipment.truck_detail.accessorials.length > 0 ? (
+                      <div className="col-span-2">
+                        <p className="text-xs text-muted-foreground">Accessorials</p>
+                        <p className="text-sm">{shipment.truck_detail.accessorials.join(", ")}</p>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
             </div>
             );
           })}

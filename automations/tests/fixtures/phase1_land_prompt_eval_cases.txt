@@ -1,0 +1,1961 @@
+[
+  {
+    "id": "land_ftl_90001_60601_dry_van",
+    "email": {
+      "subject": "FTL quote LOS ANGELES to CHICAGO",
+      "from": "dispatch@carrierco.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hi team,\nNeed an FTL dry van truckload quote.\nPickup: 1000 Industrial Pkwy, LOS ANGELES (90001)\nDelivery: 500 Commerce Dr, CHICAGO (60601)\nWeight approx 12000 lbs, commodity auto parts.\nReady 2026-03-01. Full truckload, door to door."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "LOS ANGELES",
+          "pod": "CHICAGO",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-01",
+          "service_type": "door-to-door",
+          "pickup_address": "1000 Industrial Pkwy, LOS ANGELES",
+          "delivery_address": "500 Commerce Dr, CHICAGO",
+          "load_type": "FTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 12000,
+          "nmfc_class": null,
+          "origin_zip": "90001",
+          "destination_zip": "60601"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_75201_30301_dry_van",
+    "email": {
+      "subject": "FTL quote DALLAS to ATLANTA",
+      "from": "ops@fleetlines.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hello,\nPlease quote a full truckload (FTL) dry van.\nFrom DALLAS 75201 to ATLANTA 30301.\nGross weight 13500 lbs, canned food.\nCargo ready 2026-03-02. Terminal to terminal is fine."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "DALLAS",
+          "pod": "ATLANTA",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-02",
+          "service_type": "port-to-port",
+          "load_type": "FTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 13500,
+          "nmfc_class": null,
+          "origin_zip": "75201",
+          "destination_zip": "30301"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_07101_33101_reefer",
+    "email": {
+      "subject": "FTL quote NEWARK to MIAMI",
+      "from": "rates@haulpro.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hello,\nPlease quote a full truckload (FTL) reefer.\nFrom NEWARK 07101 to MIAMI 33101.\nGross weight 15000 lbs, frozen poultry.\nCargo ready 2026-03-03. Terminal to terminal is fine."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "NEWARK",
+          "pod": "MIAMI",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-03",
+          "service_type": "port-to-port",
+          "load_type": "FTL",
+          "equipment_type": "REEFER",
+          "weight_lbs": 15000,
+          "nmfc_class": null,
+          "origin_zip": "07101",
+          "destination_zip": "33101"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_77001_80201_flatbed",
+    "email": {
+      "subject": "FTL quote HOUSTON to DENVER",
+      "from": "quotes@roadway.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hi team,\nNeed an FTL flatbed truckload quote.\nPickup: 1003 Industrial Pkwy, HOUSTON (77001)\nDelivery: 503 Commerce Dr, DENVER (80201)\nWeight approx 16500 lbs, commodity steel beams.\nReady 2026-03-04. Full truckload, door to door."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "HOUSTON",
+          "pod": "DENVER",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-04",
+          "service_type": "door-to-door",
+          "pickup_address": "1003 Industrial Pkwy, HOUSTON",
+          "delivery_address": "503 Commerce Dr, DENVER",
+          "load_type": "FTL",
+          "equipment_type": "FLATBED",
+          "weight_lbs": 16500,
+          "nmfc_class": null,
+          "origin_zip": "77001",
+          "destination_zip": "80201"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_98101_85001_dry_van",
+    "email": {
+      "subject": "FTL quote SEATTLE to PHOENIX",
+      "from": "booking@trucknet.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hello,\nPlease quote a full truckload (FTL) dry van.\nFrom SEATTLE 98101 to PHOENIX 85001.\nGross weight 18000 lbs, consumer electronics.\nCargo ready 2026-03-05. Terminal to terminal is fine."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "SEATTLE",
+          "pod": "PHOENIX",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-05",
+          "service_type": "port-to-port",
+          "load_type": "FTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 18000,
+          "nmfc_class": null,
+          "origin_zip": "98101",
+          "destination_zip": "85001"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_48201_37201_dry_van",
+    "email": {
+      "subject": "FTL quote DETROIT to NASHVILLE",
+      "from": "dispatch@carrierco.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hello,\nPlease quote a full truckload (FTL) dry van.\nFrom DETROIT 48201 to NASHVILLE 37201.\nGross weight 19500 lbs, furniture.\nCargo ready 2026-03-06. Terminal to terminal is fine."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "DETROIT",
+          "pod": "NASHVILLE",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-06",
+          "service_type": "port-to-port",
+          "load_type": "FTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 19500,
+          "nmfc_class": null,
+          "origin_zip": "48201",
+          "destination_zip": "37201"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_02101_28201_reefer",
+    "email": {
+      "subject": "FTL quote BOSTON to CHARLOTTE",
+      "from": "ops@fleetlines.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hi team,\nNeed an FTL reefer truckload quote.\nPickup: 1006 Industrial Pkwy, BOSTON (02101)\nDelivery: 506 Commerce Dr, CHARLOTTE (28201)\nWeight approx 21000 lbs, commodity paper goods.\nReady 2026-03-07. Full truckload, door to door."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "BOSTON",
+          "pod": "CHARLOTTE",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-07",
+          "service_type": "door-to-door",
+          "pickup_address": "1006 Industrial Pkwy, BOSTON",
+          "delivery_address": "506 Commerce Dr, CHARLOTTE",
+          "load_type": "FTL",
+          "equipment_type": "REEFER",
+          "weight_lbs": 21000,
+          "nmfc_class": null,
+          "origin_zip": "02101",
+          "destination_zip": "28201"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_55401_64101_dry_van",
+    "email": {
+      "subject": "FTL quote MINNEAPOLIS to KANSAS CITY",
+      "from": "rates@haulpro.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hello,\nPlease quote a full truckload (FTL) dry van.\nFrom MINNEAPOLIS 55401 to KANSAS CITY 64101.\nGross weight 22500 lbs, plastic resin.\nCargo ready 2026-03-08. Terminal to terminal is fine."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "MINNEAPOLIS",
+          "pod": "KANSAS CITY",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-08",
+          "service_type": "port-to-port",
+          "load_type": "FTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 22500,
+          "nmfc_class": null,
+          "origin_zip": "55401",
+          "destination_zip": "64101"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_97201_84101_flatbed",
+    "email": {
+      "subject": "FTL quote PORTLAND to SALT LAKE CITY",
+      "from": "quotes@roadway.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hello,\nPlease quote a full truckload (FTL) flatbed.\nFrom PORTLAND 97201 to SALT LAKE CITY 84101.\nGross weight 24000 lbs, building materials.\nCargo ready 2026-03-09. Terminal to terminal is fine."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "PORTLAND",
+          "pod": "SALT LAKE CITY",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-09",
+          "service_type": "port-to-port",
+          "load_type": "FTL",
+          "equipment_type": "FLATBED",
+          "weight_lbs": 24000,
+          "nmfc_class": null,
+          "origin_zip": "97201",
+          "destination_zip": "84101"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_78201_38101_dry_van",
+    "email": {
+      "subject": "FTL quote SAN ANTONIO to MEMPHIS",
+      "from": "booking@trucknet.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hi team,\nNeed an FTL dry van truckload quote.\nPickup: 1009 Industrial Pkwy, SAN ANTONIO (78201)\nDelivery: 509 Commerce Dr, MEMPHIS (38101)\nWeight approx 25500 lbs, commodity packaged beverages.\nReady 2026-03-10. Full truckload, door to door."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "SAN ANTONIO",
+          "pod": "MEMPHIS",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-10",
+          "service_type": "door-to-door",
+          "pickup_address": "1009 Industrial Pkwy, SAN ANTONIO",
+          "delivery_address": "509 Commerce Dr, MEMPHIS",
+          "load_type": "FTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 25500,
+          "nmfc_class": null,
+          "origin_zip": "78201",
+          "destination_zip": "38101"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_43201_46201_dry_van",
+    "email": {
+      "subject": "FTL quote COLUMBUS to INDIANAPOLIS",
+      "from": "dispatch@carrierco.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hello,\nPlease quote a full truckload (FTL) dry van.\nFrom COLUMBUS 43201 to INDIANAPOLIS 46201.\nGross weight 27000 lbs, industrial machinery.\nCargo ready 2026-03-11. Terminal to terminal is fine."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "COLUMBUS",
+          "pod": "INDIANAPOLIS",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-11",
+          "service_type": "port-to-port",
+          "load_type": "FTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 27000,
+          "nmfc_class": null,
+          "origin_zip": "43201",
+          "destination_zip": "46201"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_33601_27601_reefer",
+    "email": {
+      "subject": "FTL quote TAMPA to RALEIGH",
+      "from": "ops@fleetlines.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hello,\nPlease quote a full truckload (FTL) reefer.\nFrom TAMPA 33601 to RALEIGH 27601.\nGross weight 28500 lbs, textiles.\nCargo ready 2026-03-12. Terminal to terminal is fine."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "TAMPA",
+          "pod": "RALEIGH",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-12",
+          "service_type": "port-to-port",
+          "load_type": "FTL",
+          "equipment_type": "REEFER",
+          "weight_lbs": 28500,
+          "nmfc_class": null,
+          "origin_zip": "33601",
+          "destination_zip": "27601"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_89101_95801_dry_van",
+    "email": {
+      "subject": "FTL quote LAS VEGAS to SACRAMENTO",
+      "from": "rates@haulpro.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hi team,\nNeed an FTL dry van truckload quote.\nPickup: 1012 Industrial Pkwy, LAS VEGAS (89101)\nDelivery: 512 Commerce Dr, SACRAMENTO (95801)\nWeight approx 30000 lbs, commodity pharmaceuticals.\nReady 2026-03-13. Full truckload, door to door."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "LAS VEGAS",
+          "pod": "SACRAMENTO",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-13",
+          "service_type": "door-to-door",
+          "pickup_address": "1012 Industrial Pkwy, LAS VEGAS",
+          "delivery_address": "512 Commerce Dr, SACRAMENTO",
+          "load_type": "FTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 30000,
+          "nmfc_class": null,
+          "origin_zip": "89101",
+          "destination_zip": "95801"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_73101_72201_flatbed",
+    "email": {
+      "subject": "FTL quote OKLAHOMA CITY to LITTLE ROCK",
+      "from": "quotes@roadway.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hello,\nPlease quote a full truckload (FTL) flatbed.\nFrom OKLAHOMA CITY 73101 to LITTLE ROCK 72201.\nGross weight 31500 lbs, fresh produce.\nCargo ready 2026-03-14. Terminal to terminal is fine."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "OKLAHOMA CITY",
+          "pod": "LITTLE ROCK",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-14",
+          "service_type": "port-to-port",
+          "load_type": "FTL",
+          "equipment_type": "FLATBED",
+          "weight_lbs": 31500,
+          "nmfc_class": null,
+          "origin_zip": "73101",
+          "destination_zip": "72201"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_53201_68101_dry_van",
+    "email": {
+      "subject": "FTL quote MILWAUKEE to OMAHA",
+      "from": "booking@trucknet.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hello,\nPlease quote a full truckload (FTL) dry van.\nFrom MILWAUKEE 53201 to OMAHA 68101.\nGross weight 33000 lbs, appliances.\nCargo ready 2026-03-15. Terminal to terminal is fine."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "MILWAUKEE",
+          "pod": "OMAHA",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-15",
+          "service_type": "port-to-port",
+          "load_type": "FTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 33000,
+          "nmfc_class": null,
+          "origin_zip": "53201",
+          "destination_zip": "68101"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_23218_15201_dry_van",
+    "email": {
+      "subject": "FTL quote RICHMOND to PITTSBURGH",
+      "from": "dispatch@carrierco.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hi team,\nNeed an FTL dry van truckload quote.\nPickup: 1015 Industrial Pkwy, RICHMOND (23218)\nDelivery: 515 Commerce Dr, PITTSBURGH (15201)\nWeight approx 34500 lbs, commodity auto parts.\nReady 2026-03-16. Full truckload, door to door."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "RICHMOND",
+          "pod": "PITTSBURGH",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-16",
+          "service_type": "door-to-door",
+          "pickup_address": "1015 Industrial Pkwy, RICHMOND",
+          "delivery_address": "515 Commerce Dr, PITTSBURGH",
+          "load_type": "FTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 34500,
+          "nmfc_class": null,
+          "origin_zip": "23218",
+          "destination_zip": "15201"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_79901_85701_tanker",
+    "email": {
+      "subject": "FTL quote EL PASO to TUCSON",
+      "from": "ops@fleetlines.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hello,\nPlease quote a full truckload (FTL) tanker.\nFrom EL PASO 79901 to TUCSON 85701.\nGross weight 36000 lbs, canned food.\nCargo ready 2026-03-17. Terminal to terminal is fine."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "EL PASO",
+          "pod": "TUCSON",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-17",
+          "service_type": "port-to-port",
+          "load_type": "FTL",
+          "equipment_type": "TANKER",
+          "weight_lbs": 36000,
+          "nmfc_class": null,
+          "origin_zip": "79901",
+          "destination_zip": "85701"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_93701_89501_reefer",
+    "email": {
+      "subject": "FTL quote FRESNO to RENO",
+      "from": "rates@haulpro.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hello,\nPlease quote a full truckload (FTL) reefer.\nFrom FRESNO 93701 to RENO 89501.\nGross weight 37500 lbs, frozen poultry.\nCargo ready 2026-03-18. Terminal to terminal is fine."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "FRESNO",
+          "pod": "RENO",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-18",
+          "service_type": "port-to-port",
+          "load_type": "FTL",
+          "equipment_type": "REEFER",
+          "weight_lbs": 37500,
+          "nmfc_class": null,
+          "origin_zip": "93701",
+          "destination_zip": "89501"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_40201_63101_dry_van",
+    "email": {
+      "subject": "FTL quote LOUISVILLE to ST LOUIS",
+      "from": "quotes@roadway.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hi team,\nNeed an FTL dry van truckload quote.\nPickup: 1018 Industrial Pkwy, LOUISVILLE (40201)\nDelivery: 518 Commerce Dr, ST LOUIS (63101)\nWeight approx 39000 lbs, commodity steel beams.\nReady 2026-03-19. Full truckload, door to door."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "LOUISVILLE",
+          "pod": "ST LOUIS",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-19",
+          "service_type": "door-to-door",
+          "pickup_address": "1018 Industrial Pkwy, LOUISVILLE",
+          "delivery_address": "518 Commerce Dr, ST LOUIS",
+          "load_type": "FTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 39000,
+          "nmfc_class": null,
+          "origin_zip": "40201",
+          "destination_zip": "63101"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_35201_39201_lowbed",
+    "email": {
+      "subject": "FTL quote BIRMINGHAM to JACKSON",
+      "from": "booking@trucknet.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hello,\nPlease quote a full truckload (FTL) lowbed.\nFrom BIRMINGHAM 35201 to JACKSON 39201.\nGross weight 40500 lbs, consumer electronics.\nCargo ready 2026-03-20. Terminal to terminal is fine."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "BIRMINGHAM",
+          "pod": "JACKSON",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-20",
+          "service_type": "port-to-port",
+          "load_type": "FTL",
+          "equipment_type": "LOWBED",
+          "weight_lbs": 40500,
+          "nmfc_class": null,
+          "origin_zip": "35201",
+          "destination_zip": "39201"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_14201_44101_dry_van",
+    "email": {
+      "subject": "FTL quote BUFFALO to CLEVELAND",
+      "from": "dispatch@carrierco.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hello,\nPlease quote a full truckload (FTL) dry van.\nFrom BUFFALO 14201 to CLEVELAND 44101.\nGross weight 12000 lbs, furniture.\nCargo ready 2026-03-21. Terminal to terminal is fine."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "BUFFALO",
+          "pod": "CLEVELAND",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-21",
+          "service_type": "port-to-port",
+          "load_type": "FTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 12000,
+          "nmfc_class": null,
+          "origin_zip": "14201",
+          "destination_zip": "44101"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_87101_79101_step_deck",
+    "email": {
+      "subject": "FTL quote ALBUQUERQUE to AMARILLO",
+      "from": "ops@fleetlines.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hi team,\nNeed an FTL step deck truckload quote.\nPickup: 1021 Industrial Pkwy, ALBUQUERQUE (87101)\nDelivery: 521 Commerce Dr, AMARILLO (79101)\nWeight approx 13500 lbs, commodity paper goods.\nReady 2026-03-22. Full truckload, door to door."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "ALBUQUERQUE",
+          "pod": "AMARILLO",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-22",
+          "service_type": "door-to-door",
+          "pickup_address": "1021 Industrial Pkwy, ALBUQUERQUE",
+          "delivery_address": "521 Commerce Dr, AMARILLO",
+          "load_type": "FTL",
+          "equipment_type": "STEP DECK",
+          "weight_lbs": 13500,
+          "nmfc_class": null,
+          "origin_zip": "87101",
+          "destination_zip": "79101"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_83701_99201_dry_van",
+    "email": {
+      "subject": "FTL quote BOISE to SPOKANE",
+      "from": "rates@haulpro.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hello,\nPlease quote a full truckload (FTL) dry van.\nFrom BOISE 83701 to SPOKANE 99201.\nGross weight 15000 lbs, plastic resin.\nCargo ready 2026-03-23. Terminal to terminal is fine."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "BOISE",
+          "pod": "SPOKANE",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-23",
+          "service_type": "port-to-port",
+          "load_type": "FTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 15000,
+          "nmfc_class": null,
+          "origin_zip": "83701",
+          "destination_zip": "99201"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_50301_53701_reefer",
+    "email": {
+      "subject": "FTL quote DES MOINES to MADISON",
+      "from": "quotes@roadway.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hello,\nPlease quote a full truckload (FTL) reefer.\nFrom DES MOINES 50301 to MADISON 53701.\nGross weight 16500 lbs, building materials.\nCargo ready 2026-03-24. Terminal to terminal is fine."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "DES MOINES",
+          "pod": "MADISON",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-24",
+          "service_type": "port-to-port",
+          "load_type": "FTL",
+          "equipment_type": "REEFER",
+          "weight_lbs": 16500,
+          "nmfc_class": null,
+          "origin_zip": "50301",
+          "destination_zip": "53701"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_74101_67201_dry_van",
+    "email": {
+      "subject": "FTL quote TULSA to WICHITA",
+      "from": "booking@trucknet.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hi team,\nNeed an FTL dry van truckload quote.\nPickup: 1024 Industrial Pkwy, TULSA (74101)\nDelivery: 524 Commerce Dr, WICHITA (67201)\nWeight approx 18000 lbs, commodity packaged beverages.\nReady 2026-03-25. Full truckload, door to door."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "TULSA",
+          "pod": "WICHITA",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-25",
+          "service_type": "door-to-door",
+          "pickup_address": "1024 Industrial Pkwy, TULSA",
+          "delivery_address": "524 Commerce Dr, WICHITA",
+          "load_type": "FTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 18000,
+          "nmfc_class": null,
+          "origin_zip": "74101",
+          "destination_zip": "67201"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ftl_27401_29201_dry_van",
+    "email": {
+      "subject": "FTL quote GREENSBORO to COLUMBIA",
+      "from": "dispatch@carrierco.com",
+      "received_at": "Mon, 02 Mar 2026 09:00:00 -0500",
+      "body": "Hello,\nPlease quote a full truckload (FTL) dry van.\nFrom GREENSBORO 27401 to COLUMBIA 29201.\nGross weight 19500 lbs, industrial machinery.\nCargo ready 2026-03-26. Terminal to terminal is fine."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "GREENSBORO",
+          "pod": "COLUMBIA",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-03-26",
+          "service_type": "port-to-port",
+          "load_type": "FTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 19500,
+          "nmfc_class": null,
+          "origin_zip": "27401",
+          "destination_zip": "29201"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_90001_60601_class50",
+    "email": {
+      "subject": "LTL class 50 LOS ANGELES to CHICAGO",
+      "from": "rates@haulpro.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hi,\nLTL shipment, class 50, 800 lbs of auto parts.\nPickup 2000 Warehouse Rd, LOS ANGELES (90001) to 700 Retail Blvd, CHICAGO (60601).\nReady 2026-04-01. Accessorials: liftgate. Less than truckload, dry van."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "LOS ANGELES",
+          "pod": "CHICAGO",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-01",
+          "service_type": "door-to-door",
+          "pickup_address": "2000 Warehouse Rd, LOS ANGELES",
+          "delivery_address": "700 Retail Blvd, CHICAGO",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 800,
+          "nmfc_class": "50",
+          "origin_zip": "90001",
+          "destination_zip": "60601",
+          "accessorials": [
+            "liftgate"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_75201_30301_class55",
+    "email": {
+      "subject": "LTL class 55 DALLAS to ATLANTA",
+      "from": "quotes@roadway.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hello,\nNeed LTL pricing, NMFC class 55, weight 1150 lbs.\nFrom DALLAS 75201 to ATLANTA 30301, commodity canned food.\nReady 2026-04-02. Accessorials: inside delivery. Terminal to terminal."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "DALLAS",
+          "pod": "ATLANTA",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-02",
+          "service_type": "port-to-port",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 1150,
+          "nmfc_class": "55",
+          "origin_zip": "75201",
+          "destination_zip": "30301",
+          "accessorials": [
+            "inside delivery"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_07101_33101_class60",
+    "email": {
+      "subject": "LTL class 60 NEWARK to MIAMI",
+      "from": "booking@trucknet.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hi,\nLTL shipment, class 60, 1500 lbs of frozen poultry.\nPickup 2002 Warehouse Rd, NEWARK (07101) to 702 Retail Blvd, MIAMI (33101).\nReady 2026-04-03. Accessorials: residential. Less than truckload, dry van."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "NEWARK",
+          "pod": "MIAMI",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-03",
+          "service_type": "door-to-door",
+          "pickup_address": "2002 Warehouse Rd, NEWARK",
+          "delivery_address": "702 Retail Blvd, MIAMI",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 1500,
+          "nmfc_class": "60",
+          "origin_zip": "07101",
+          "destination_zip": "33101",
+          "accessorials": [
+            "residential"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_77001_80201_class65",
+    "email": {
+      "subject": "LTL class 65 HOUSTON to DENVER",
+      "from": "dispatch@carrierco.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hello,\nNeed LTL pricing, NMFC class 65, weight 1850 lbs.\nFrom HOUSTON 77001 to DENVER 80201, commodity steel beams.\nReady 2026-04-04. Accessorials: liftgate, residential. Terminal to terminal."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "HOUSTON",
+          "pod": "DENVER",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-04",
+          "service_type": "port-to-port",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 1850,
+          "nmfc_class": "65",
+          "origin_zip": "77001",
+          "destination_zip": "80201",
+          "accessorials": [
+            "liftgate",
+            "residential"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_98101_85001_class70",
+    "email": {
+      "subject": "LTL class 70 SEATTLE to PHOENIX",
+      "from": "ops@fleetlines.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hi,\nLTL shipment, class 70, 2200 lbs of consumer electronics.\nPickup 2004 Warehouse Rd, SEATTLE (98101) to 704 Retail Blvd, PHOENIX (85001).\nReady 2026-04-05. Accessorials: appointment. Less than truckload, dry van."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "SEATTLE",
+          "pod": "PHOENIX",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-05",
+          "service_type": "door-to-door",
+          "pickup_address": "2004 Warehouse Rd, SEATTLE",
+          "delivery_address": "704 Retail Blvd, PHOENIX",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 2200,
+          "nmfc_class": "70",
+          "origin_zip": "98101",
+          "destination_zip": "85001",
+          "accessorials": [
+            "appointment"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_48201_37201_class77_5",
+    "email": {
+      "subject": "LTL class 77.5 DETROIT to NASHVILLE",
+      "from": "rates@haulpro.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hello,\nNeed LTL pricing, NMFC class 77.5, weight 2550 lbs.\nFrom DETROIT 48201 to NASHVILLE 37201, commodity furniture.\nReady 2026-04-06. Accessorials: notify before delivery. Terminal to terminal."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "DETROIT",
+          "pod": "NASHVILLE",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-06",
+          "service_type": "port-to-port",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 2550,
+          "nmfc_class": "77.5",
+          "origin_zip": "48201",
+          "destination_zip": "37201",
+          "accessorials": [
+            "notify before delivery"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_02101_28201_class85",
+    "email": {
+      "subject": "LTL class 85 BOSTON to CHARLOTTE",
+      "from": "quotes@roadway.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hi,\nLTL shipment, class 85, 2900 lbs of paper goods.\nPickup 2006 Warehouse Rd, BOSTON (02101) to 706 Retail Blvd, CHARLOTTE (28201).\nReady 2026-04-07. Less than truckload, dry van."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "BOSTON",
+          "pod": "CHARLOTTE",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-07",
+          "service_type": "door-to-door",
+          "pickup_address": "2006 Warehouse Rd, BOSTON",
+          "delivery_address": "706 Retail Blvd, CHARLOTTE",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 2900,
+          "nmfc_class": "85",
+          "origin_zip": "02101",
+          "destination_zip": "28201",
+          "accessorials": []
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_55401_64101_class92_5",
+    "email": {
+      "subject": "LTL class 92.5 MINNEAPOLIS to KANSAS CITY",
+      "from": "booking@trucknet.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hello,\nNeed LTL pricing, NMFC class 92.5, weight 3250 lbs.\nFrom MINNEAPOLIS 55401 to KANSAS CITY 64101, commodity plastic resin.\nReady 2026-04-08. Accessorials: liftgate, inside delivery. Terminal to terminal."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "MINNEAPOLIS",
+          "pod": "KANSAS CITY",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-08",
+          "service_type": "port-to-port",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 3250,
+          "nmfc_class": "92.5",
+          "origin_zip": "55401",
+          "destination_zip": "64101",
+          "accessorials": [
+            "liftgate",
+            "inside delivery"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_97201_84101_class100",
+    "email": {
+      "subject": "LTL class 100 PORTLAND to SALT LAKE CITY",
+      "from": "dispatch@carrierco.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hi,\nLTL shipment, class 100, 3600 lbs of building materials.\nPickup 2008 Warehouse Rd, PORTLAND (97201) to 708 Retail Blvd, SALT LAKE CITY (84101).\nReady 2026-04-09. Accessorials: liftgate. Less than truckload, dry van."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "PORTLAND",
+          "pod": "SALT LAKE CITY",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-09",
+          "service_type": "door-to-door",
+          "pickup_address": "2008 Warehouse Rd, PORTLAND",
+          "delivery_address": "708 Retail Blvd, SALT LAKE CITY",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 3600,
+          "nmfc_class": "100",
+          "origin_zip": "97201",
+          "destination_zip": "84101",
+          "accessorials": [
+            "liftgate"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_78201_38101_class110",
+    "email": {
+      "subject": "LTL class 110 SAN ANTONIO to MEMPHIS",
+      "from": "ops@fleetlines.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hello,\nNeed LTL pricing, NMFC class 110, weight 3950 lbs.\nFrom SAN ANTONIO 78201 to MEMPHIS 38101, commodity packaged beverages.\nReady 2026-04-10. Accessorials: inside delivery. Terminal to terminal."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "SAN ANTONIO",
+          "pod": "MEMPHIS",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-10",
+          "service_type": "port-to-port",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 3950,
+          "nmfc_class": "110",
+          "origin_zip": "78201",
+          "destination_zip": "38101",
+          "accessorials": [
+            "inside delivery"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_43201_46201_class125",
+    "email": {
+      "subject": "LTL class 125 COLUMBUS to INDIANAPOLIS",
+      "from": "rates@haulpro.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hi,\nLTL shipment, class 125, 4300 lbs of industrial machinery.\nPickup 2010 Warehouse Rd, COLUMBUS (43201) to 710 Retail Blvd, INDIANAPOLIS (46201).\nReady 2026-04-11. Accessorials: residential. Less than truckload, dry van."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "COLUMBUS",
+          "pod": "INDIANAPOLIS",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-11",
+          "service_type": "door-to-door",
+          "pickup_address": "2010 Warehouse Rd, COLUMBUS",
+          "delivery_address": "710 Retail Blvd, INDIANAPOLIS",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 4300,
+          "nmfc_class": "125",
+          "origin_zip": "43201",
+          "destination_zip": "46201",
+          "accessorials": [
+            "residential"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_33601_27601_class150",
+    "email": {
+      "subject": "LTL class 150 TAMPA to RALEIGH",
+      "from": "quotes@roadway.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hello,\nNeed LTL pricing, NMFC class 150, weight 4650 lbs.\nFrom TAMPA 33601 to RALEIGH 27601, commodity textiles.\nReady 2026-04-12. Accessorials: liftgate, residential. Terminal to terminal."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "TAMPA",
+          "pod": "RALEIGH",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-12",
+          "service_type": "port-to-port",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 4650,
+          "nmfc_class": "150",
+          "origin_zip": "33601",
+          "destination_zip": "27601",
+          "accessorials": [
+            "liftgate",
+            "residential"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_89101_95801_class175",
+    "email": {
+      "subject": "LTL class 175 LAS VEGAS to SACRAMENTO",
+      "from": "booking@trucknet.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hi,\nLTL shipment, class 175, 5000 lbs of pharmaceuticals.\nPickup 2012 Warehouse Rd, LAS VEGAS (89101) to 712 Retail Blvd, SACRAMENTO (95801).\nReady 2026-04-13. Accessorials: appointment. Less than truckload, dry van."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "LAS VEGAS",
+          "pod": "SACRAMENTO",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-13",
+          "service_type": "door-to-door",
+          "pickup_address": "2012 Warehouse Rd, LAS VEGAS",
+          "delivery_address": "712 Retail Blvd, SACRAMENTO",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 5000,
+          "nmfc_class": "175",
+          "origin_zip": "89101",
+          "destination_zip": "95801",
+          "accessorials": [
+            "appointment"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_73101_72201_class200",
+    "email": {
+      "subject": "LTL class 200 OKLAHOMA CITY to LITTLE ROCK",
+      "from": "dispatch@carrierco.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hello,\nNeed LTL pricing, NMFC class 200, weight 5350 lbs.\nFrom OKLAHOMA CITY 73101 to LITTLE ROCK 72201, commodity fresh produce.\nReady 2026-04-14. Accessorials: notify before delivery. Terminal to terminal."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "OKLAHOMA CITY",
+          "pod": "LITTLE ROCK",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-14",
+          "service_type": "port-to-port",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 5350,
+          "nmfc_class": "200",
+          "origin_zip": "73101",
+          "destination_zip": "72201",
+          "accessorials": [
+            "notify before delivery"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_53201_68101_class250",
+    "email": {
+      "subject": "LTL class 250 MILWAUKEE to OMAHA",
+      "from": "ops@fleetlines.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hi,\nLTL shipment, class 250, 5700 lbs of appliances.\nPickup 2014 Warehouse Rd, MILWAUKEE (53201) to 714 Retail Blvd, OMAHA (68101).\nReady 2026-04-15. Less than truckload, dry van."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "MILWAUKEE",
+          "pod": "OMAHA",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-15",
+          "service_type": "door-to-door",
+          "pickup_address": "2014 Warehouse Rd, MILWAUKEE",
+          "delivery_address": "714 Retail Blvd, OMAHA",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 5700,
+          "nmfc_class": "250",
+          "origin_zip": "53201",
+          "destination_zip": "68101",
+          "accessorials": []
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_23218_15201_class50",
+    "email": {
+      "subject": "LTL class 50 RICHMOND to PITTSBURGH",
+      "from": "rates@haulpro.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hello,\nNeed LTL pricing, NMFC class 50, weight 6050 lbs.\nFrom RICHMOND 23218 to PITTSBURGH 15201, commodity auto parts.\nReady 2026-04-16. Accessorials: liftgate, inside delivery. Terminal to terminal."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "RICHMOND",
+          "pod": "PITTSBURGH",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-16",
+          "service_type": "port-to-port",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 6050,
+          "nmfc_class": "50",
+          "origin_zip": "23218",
+          "destination_zip": "15201",
+          "accessorials": [
+            "liftgate",
+            "inside delivery"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_79901_85701_class55",
+    "email": {
+      "subject": "LTL class 55 EL PASO to TUCSON",
+      "from": "quotes@roadway.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hi,\nLTL shipment, class 55, 6400 lbs of canned food.\nPickup 2016 Warehouse Rd, EL PASO (79901) to 716 Retail Blvd, TUCSON (85701).\nReady 2026-04-17. Accessorials: liftgate. Less than truckload, dry van."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "EL PASO",
+          "pod": "TUCSON",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-17",
+          "service_type": "door-to-door",
+          "pickup_address": "2016 Warehouse Rd, EL PASO",
+          "delivery_address": "716 Retail Blvd, TUCSON",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 6400,
+          "nmfc_class": "55",
+          "origin_zip": "79901",
+          "destination_zip": "85701",
+          "accessorials": [
+            "liftgate"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_93701_89501_class60",
+    "email": {
+      "subject": "LTL class 60 FRESNO to RENO",
+      "from": "booking@trucknet.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hello,\nNeed LTL pricing, NMFC class 60, weight 6750 lbs.\nFrom FRESNO 93701 to RENO 89501, commodity frozen poultry.\nReady 2026-04-18. Accessorials: inside delivery. Terminal to terminal."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "FRESNO",
+          "pod": "RENO",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-18",
+          "service_type": "port-to-port",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 6750,
+          "nmfc_class": "60",
+          "origin_zip": "93701",
+          "destination_zip": "89501",
+          "accessorials": [
+            "inside delivery"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_40201_63101_class65",
+    "email": {
+      "subject": "LTL class 65 LOUISVILLE to ST LOUIS",
+      "from": "dispatch@carrierco.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hi,\nLTL shipment, class 65, 7100 lbs of steel beams.\nPickup 2018 Warehouse Rd, LOUISVILLE (40201) to 718 Retail Blvd, ST LOUIS (63101).\nReady 2026-04-19. Accessorials: residential. Less than truckload, dry van."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "LOUISVILLE",
+          "pod": "ST LOUIS",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-19",
+          "service_type": "door-to-door",
+          "pickup_address": "2018 Warehouse Rd, LOUISVILLE",
+          "delivery_address": "718 Retail Blvd, ST LOUIS",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 7100,
+          "nmfc_class": "65",
+          "origin_zip": "40201",
+          "destination_zip": "63101",
+          "accessorials": [
+            "residential"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_35201_39201_class70",
+    "email": {
+      "subject": "LTL class 70 BIRMINGHAM to JACKSON",
+      "from": "ops@fleetlines.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hello,\nNeed LTL pricing, NMFC class 70, weight 7450 lbs.\nFrom BIRMINGHAM 35201 to JACKSON 39201, commodity consumer electronics.\nReady 2026-04-20. Accessorials: liftgate, residential. Terminal to terminal."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "BIRMINGHAM",
+          "pod": "JACKSON",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-20",
+          "service_type": "port-to-port",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 7450,
+          "nmfc_class": "70",
+          "origin_zip": "35201",
+          "destination_zip": "39201",
+          "accessorials": [
+            "liftgate",
+            "residential"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_14201_44101_class77_5",
+    "email": {
+      "subject": "LTL class 77.5 BUFFALO to CLEVELAND",
+      "from": "rates@haulpro.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hi,\nLTL shipment, class 77.5, 7800 lbs of furniture.\nPickup 2020 Warehouse Rd, BUFFALO (14201) to 720 Retail Blvd, CLEVELAND (44101).\nReady 2026-04-21. Accessorials: appointment. Less than truckload, dry van."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "BUFFALO",
+          "pod": "CLEVELAND",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-21",
+          "service_type": "door-to-door",
+          "pickup_address": "2020 Warehouse Rd, BUFFALO",
+          "delivery_address": "720 Retail Blvd, CLEVELAND",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 7800,
+          "nmfc_class": "77.5",
+          "origin_zip": "14201",
+          "destination_zip": "44101",
+          "accessorials": [
+            "appointment"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_87101_79101_class85",
+    "email": {
+      "subject": "LTL class 85 ALBUQUERQUE to AMARILLO",
+      "from": "quotes@roadway.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hello,\nNeed LTL pricing, NMFC class 85, weight 8150 lbs.\nFrom ALBUQUERQUE 87101 to AMARILLO 79101, commodity paper goods.\nReady 2026-04-22. Accessorials: notify before delivery. Terminal to terminal."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "ALBUQUERQUE",
+          "pod": "AMARILLO",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-22",
+          "service_type": "port-to-port",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 8150,
+          "nmfc_class": "85",
+          "origin_zip": "87101",
+          "destination_zip": "79101",
+          "accessorials": [
+            "notify before delivery"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_83701_99201_class92_5",
+    "email": {
+      "subject": "LTL class 92.5 BOISE to SPOKANE",
+      "from": "booking@trucknet.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hi,\nLTL shipment, class 92.5, 8500 lbs of plastic resin.\nPickup 2022 Warehouse Rd, BOISE (83701) to 722 Retail Blvd, SPOKANE (99201).\nReady 2026-04-23. Less than truckload, dry van."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "BOISE",
+          "pod": "SPOKANE",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-23",
+          "service_type": "door-to-door",
+          "pickup_address": "2022 Warehouse Rd, BOISE",
+          "delivery_address": "722 Retail Blvd, SPOKANE",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 8500,
+          "nmfc_class": "92.5",
+          "origin_zip": "83701",
+          "destination_zip": "99201",
+          "accessorials": []
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_50301_53701_class100",
+    "email": {
+      "subject": "LTL class 100 DES MOINES to MADISON",
+      "from": "dispatch@carrierco.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hello,\nNeed LTL pricing, NMFC class 100, weight 850 lbs.\nFrom DES MOINES 50301 to MADISON 53701, commodity building materials.\nReady 2026-04-24. Accessorials: liftgate, inside delivery. Terminal to terminal."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "DES MOINES",
+          "pod": "MADISON",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-24",
+          "service_type": "port-to-port",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 850,
+          "nmfc_class": "100",
+          "origin_zip": "50301",
+          "destination_zip": "53701",
+          "accessorials": [
+            "liftgate",
+            "inside delivery"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_74101_67201_class110",
+    "email": {
+      "subject": "LTL class 110 TULSA to WICHITA",
+      "from": "ops@fleetlines.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hi,\nLTL shipment, class 110, 1200 lbs of packaged beverages.\nPickup 2024 Warehouse Rd, TULSA (74101) to 724 Retail Blvd, WICHITA (67201).\nReady 2026-04-25. Accessorials: liftgate. Less than truckload, dry van."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "TULSA",
+          "pod": "WICHITA",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-25",
+          "service_type": "door-to-door",
+          "pickup_address": "2024 Warehouse Rd, TULSA",
+          "delivery_address": "724 Retail Blvd, WICHITA",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 1200,
+          "nmfc_class": "110",
+          "origin_zip": "74101",
+          "destination_zip": "67201",
+          "accessorials": [
+            "liftgate"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "land_ltl_27401_29201_class125",
+    "email": {
+      "subject": "LTL class 125 GREENSBORO to COLUMBIA",
+      "from": "rates@haulpro.com",
+      "received_at": "Tue, 03 Mar 2026 10:30:00 -0500",
+      "body": "Hello,\nNeed LTL pricing, NMFC class 125, weight 1550 lbs.\nFrom GREENSBORO 27401 to COLUMBIA 29201, commodity industrial machinery.\nReady 2026-04-26. Accessorials: inside delivery. Terminal to terminal."
+    },
+    "expected": {
+      "freight_mode": "land",
+      "shipments": [
+        {
+          "pol": "GREENSBORO",
+          "pod": "COLUMBIA",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [],
+          "date": "2026-04-26",
+          "service_type": "port-to-port",
+          "load_type": "LTL",
+          "equipment_type": "DRY VAN",
+          "weight_lbs": 1550,
+          "nmfc_class": "125",
+          "origin_zip": "27401",
+          "destination_zip": "29201",
+          "accessorials": [
+            "inside delivery"
+          ]
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "ocean_decoy_1",
+    "email": {
+      "subject": "Ocean FCL NINGBO to JEBEL ALI",
+      "from": "shipping@oceanco.com",
+      "received_at": "Wed, 04 Mar 2026 08:00:00 +0000",
+      "body": "Sea freight FCL quote, 2x40HC Ningbo to Jebel Ali, ready 2026-03-10."
+    },
+    "expected": {
+      "freight_mode": "ocean",
+      "shipments": [
+        {
+          "pol": "NINGBO",
+          "pod": "JEBEL ALI",
+          "pod_hint": [],
+          "containers": [
+            {
+              "qty": 2,
+              "type": "40HC"
+            }
+          ],
+          "pieces": [],
+          "date": "2026-03-10",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "ocean_decoy_2",
+    "email": {
+      "subject": "Ocean FCL SHANGHAI to ROTTERDAM",
+      "from": "shipping@oceanco.com",
+      "received_at": "Wed, 04 Mar 2026 08:00:00 +0000",
+      "body": "Ocean FCL 1x20FT Shanghai to Rotterdam, vessel ETD 2026-03-12."
+    },
+    "expected": {
+      "freight_mode": "ocean",
+      "shipments": [
+        {
+          "pol": "SHANGHAI",
+          "pod": "ROTTERDAM",
+          "pod_hint": [],
+          "containers": [
+            {
+              "qty": 1,
+              "type": "20FT"
+            }
+          ],
+          "pieces": [],
+          "date": "2026-03-10",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "ocean_decoy_3",
+    "email": {
+      "subject": "Ocean FCL QINGDAO to HAMBURG",
+      "from": "shipping@oceanco.com",
+      "received_at": "Wed, 04 Mar 2026 08:00:00 +0000",
+      "body": "Please quote 3x40FT containers Qingdao to Hamburg by sea, B/L terms."
+    },
+    "expected": {
+      "freight_mode": "ocean",
+      "shipments": [
+        {
+          "pol": "QINGDAO",
+          "pod": "HAMBURG",
+          "pod_hint": [],
+          "containers": [
+            {
+              "qty": 3,
+              "type": "40FT"
+            }
+          ],
+          "pieces": [],
+          "date": "2026-03-10",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "ocean_decoy_4",
+    "email": {
+      "subject": "Ocean FCL BUSAN to LOS ANGELES",
+      "from": "shipping@oceanco.com",
+      "received_at": "Wed, 04 Mar 2026 08:00:00 +0000",
+      "body": "FCL ocean 1x40HC Busan to LA, shipping line MAERSK preferred."
+    },
+    "expected": {
+      "freight_mode": "ocean",
+      "shipments": [
+        {
+          "pol": "BUSAN",
+          "pod": "LOS ANGELES",
+          "pod_hint": [],
+          "containers": [
+            {
+              "qty": 1,
+              "type": "40HC"
+            }
+          ],
+          "pieces": [],
+          "date": "2026-03-10",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "ocean_decoy_5",
+    "email": {
+      "subject": "Ocean FCL SHENZHEN to FELIXSTOWE",
+      "from": "shipping@oceanco.com",
+      "received_at": "Wed, 04 Mar 2026 08:00:00 +0000",
+      "body": "Sea freight 4x20FT Shenzhen to Felixstowe, port to port."
+    },
+    "expected": {
+      "freight_mode": "ocean",
+      "shipments": [
+        {
+          "pol": "SHENZHEN",
+          "pod": "FELIXSTOWE",
+          "pod_hint": [],
+          "containers": [
+            {
+              "qty": 4,
+              "type": "20FT"
+            }
+          ],
+          "pieces": [],
+          "date": "2026-03-10",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_decoy_1",
+    "email": {
+      "subject": "Air freight PVG to DXB",
+      "from": "cargo@airfreightco.com",
+      "received_at": "Thu, 05 Mar 2026 11:00:00 +0400",
+      "body": "Air cargo airport-to-airport PVG to DXB, 5 pallets 100x120x140cm 400kg each, ready 2026-03-09."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "PVG",
+          "pod": "DXB",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [
+            {
+              "count": 5,
+              "length_cm": 100,
+              "width_cm": 120,
+              "height_cm": 140,
+              "weight_kg": 400,
+              "packaging_type": "pallet"
+            }
+          ],
+          "date": "2026-03-09",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_decoy_2",
+    "email": {
+      "subject": "Air freight HKG to LHR",
+      "from": "cargo@airfreightco.com",
+      "received_at": "Thu, 05 Mar 2026 11:00:00 +0400",
+      "body": "Air freight HKG to LHR, per-kg rate please, 800kg general cargo, AWB needed."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "HKG",
+          "pod": "LHR",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [
+            {
+              "count": 5,
+              "length_cm": 100,
+              "width_cm": 120,
+              "height_cm": 140,
+              "weight_kg": 400,
+              "packaging_type": "pallet"
+            }
+          ],
+          "date": "2026-03-09",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_decoy_3",
+    "email": {
+      "subject": "Air freight CAN to JED",
+      "from": "cargo@airfreightco.com",
+      "received_at": "Thu, 05 Mar 2026 11:00:00 +0400",
+      "body": "Airline rate CAN to JED, 3 boxes 60x40x40 25kg each, express air."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "CAN",
+          "pod": "JED",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [
+            {
+              "count": 5,
+              "length_cm": 100,
+              "width_cm": 120,
+              "height_cm": 140,
+              "weight_kg": 400,
+              "packaging_type": "pallet"
+            }
+          ],
+          "date": "2026-03-09",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  },
+  {
+    "id": "air_decoy_4",
+    "email": {
+      "subject": "Air freight BOM to SIN",
+      "from": "cargo@airfreightco.com",
+      "received_at": "Thu, 05 Mar 2026 11:00:00 +0400",
+      "body": "Air cargo BOM to SIN, 1200 kg chargeable, IATA agent, ready 2026-03-15."
+    },
+    "expected": {
+      "freight_mode": "air",
+      "shipments": [
+        {
+          "pol": "BOM",
+          "pod": "SIN",
+          "pod_hint": [],
+          "containers": [],
+          "pieces": [
+            {
+              "count": 5,
+              "length_cm": 100,
+              "width_cm": 120,
+              "height_cm": 140,
+              "weight_kg": 400,
+              "packaging_type": "pallet"
+            }
+          ],
+          "date": "2026-03-09",
+          "service_type": "port-to-port"
+        }
+      ],
+      "action": "complete"
+    }
+  }
+]
