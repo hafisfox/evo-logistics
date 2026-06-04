@@ -374,15 +374,17 @@ agent_quotes (existing — `freight_mode` column LIVE)
 
 **Phase 3 acceptance:** land mode detection + extraction covered by `eval_phase1_land_fixtures.py` (52 land fixtures + 9 ocean/air decoys, mode-detection ≥0.90 gate) and offline CI rules test `test_phase1_land_prompt_parsing_rules.py`. FTL/LTL pricing unit-tested in `pricing-engine.test.ts`; land pricing-table routes tested in `pricing-land-*.route.test.ts`. All gated behind `NEXT_PUBLIC_FEATURE_LAND_FREIGHT`.
 
-### Phase 4: Land Freight API Integration (Weeks 27–34)
+### Phase 4: Land Freight API Integration (Weeks 27–34) — **In progress (mock-first)**
 
-| Task | Details | Priority |
-|------|---------|----------|
-| DAT API integration | Rate intelligence, load board access, BookNow | P0 |
-| SMC3 LTL API | Standard LTL rating, booking, tracking | P1 |
-| Uber Freight / Loadsmart API | FTL instant quoting and booking | P1 |
-| Detention/demurrage tracking | Automated D&D fee calculation and alerts | P2 |
-| Cross-border module | VUCEM integration for Mexico, USMCA doc generation | P2 |
+Status (2026-06-04): the rate-aggregator interface (`NormalizedRate`), provider clients, the `fetch_market_rates` Modal endpoint, `external_rate_quotes` persistence, and a flag-gated dashboard "Market Rates" tab shipped in **mock mode** (no credentials yet). Live calls activate via `FREIGHT_API_MODE=live` + per-provider creds — no code change. Booking/BookNow flows and feeding API rates into customer pricing remain deferred until credentials/contracts land.
+
+| Task | Details | Priority | Status |
+|------|---------|----------|--------|
+| DAT API integration | Rate intelligence, load board access, BookNow | P0 | Rating scaffolded (mock, live-ready); BookNow deferred |
+| SMC3 LTL API | Standard LTL rating, booking, tracking | P1 | Rating scaffolded (mock, live-ready); booking deferred |
+| Uber Freight / Loadsmart API | FTL instant quoting and booking | P1 | Quoting scaffolded (mock, live-ready); booking deferred |
+| ~~Detention/demurrage tracking~~ | ~~Automated D&D fee calculation and alerts~~ | P2 | **DONE** — `detention.py` + `check_detention_demurrage` (6-hourly) + `detention_demurrage_events` |
+| Cross-border module | VUCEM integration for Mexico, USMCA doc generation | P2 | Scaffold only — `freight_apis/vucem.py` returns mock docs |
 
 ### Phase 5: Multimodal & Intermodal (Weeks 35–44)
 

@@ -9,6 +9,9 @@ export const FEATURE_AIR_FREIGHT_ENABLED =
   process.env.NEXT_PUBLIC_FEATURE_AIR_FREIGHT === "true";
 export const FEATURE_LAND_FREIGHT_ENABLED =
   process.env.NEXT_PUBLIC_FEATURE_LAND_FREIGHT === "true";
+// Phase 4 — external land-freight API rate intelligence (market rates surface)
+export const FEATURE_LAND_API_RATES_ENABLED =
+  process.env.NEXT_PUBLIC_FEATURE_LAND_API_RATES === "true";
 
 // Mode-keyed carrier lists
 export const CARRIERS_BY_MODE: Record<FreightMode, readonly string[]> = {

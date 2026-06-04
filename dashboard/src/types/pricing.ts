@@ -1,3 +1,5 @@
+import type { FreightMode } from "@/types/rfq";
+
 export interface DOCharge {
   id?: number;
   carrier: string;
@@ -124,4 +126,40 @@ export interface PricingResult {
   grandTotalUSD: number;
   exchangeRate: number;
   marginPercent: number;
+}
+
+// Unified rate aggregator schema — parity with the Python NormalizedRate
+// (automations/freight_apis/base.py). One rate quote normalized across sources
+// (agent email, external API). See FUTURE_PLAN.md "Design Rate Aggregator interface".
+export interface NormalizedRate {
+  carrier: string;
+  origin: string;
+  destination: string;
+  price: number;
+  currency: string;
+  transit_time_days: number | null;
+  valid_until: string | null;
+  freight_mode: FreightMode;
+  surcharges: { type: string; amount: number }[];
+  source: "agent_email" | "api";
+  provider?: string;
+  equipment_type?: string | null;
+}
+
+// A persisted row from external_rate_quotes (Phase 4 land-freight market rates).
+export interface ExternalRateQuote {
+  id: number;
+  provider: string;
+  carrier: string;
+  origin: string;
+  destination: string;
+  equipment_type: string | null;
+  price_usd: number;
+  currency: string;
+  transit_time_days: number | null;
+  valid_until: string | null;
+  surcharges: { type: string; amount: number }[];
+  source: string;
+  freight_mode: string;
+  created_at: string | null;
 }

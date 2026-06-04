@@ -75,3 +75,36 @@ export async function selectAgent(payload: {
     body: payload,
   });
 }
+
+export interface MarketRatesResponse {
+  success: boolean;
+  mode?: string;
+  count?: number;
+  persisted?: number;
+  rates?: unknown[];
+  error?: string;
+}
+
+// Phase 4 — trigger the land-freight market-rates aggregation endpoint
+// (automations/phase_4_market_rates.py). The Modal worker fetches + persists
+// the rate snapshot for the lane (workspace-scoped) and returns it.
+export async function fetchMarketRates(payload: {
+  workspace_id: string;
+  origin: string;
+  destination: string;
+  freight_mode?: string;
+  equipment_type?: string | null;
+  load_type?: string | null;
+  weight_lbs?: number | null;
+  nmfc_class?: string | null;
+  rfq_id?: string | null;
+}) {
+  const webhookUrl = process.env.MODAL_WEBHOOK_MARKET_RATES || "";
+  if (!webhookUrl) {
+    throw new Error("MODAL_WEBHOOK_MARKET_RATES environment variable is not configured");
+  }
+  return callModalWebhook<MarketRatesResponse>({
+    url: webhookUrl,
+    body: payload,
+  });
+}

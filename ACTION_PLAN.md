@@ -256,6 +256,23 @@ Migration: `dashboard/supabase/migrations/20260304_017_ocean_freight_fields.sql`
 - Extended `DashboardKPIs` type with: `totalRFQs`, `selectedCount`, `quotedCount`, `conversionRate`, `totalRevenueAED`, `totalRevenueUSD`
 - Revenue computed from `final_price_aed`/`final_price_usd` of "Selected" status RFQs in `buildDashboardSummary()`
 
+### 11. Land Freight API Integration — Phase 4 (2026-06-04, mock-first)
+
+External land-freight rate intelligence + detention/demurrage tracking. Built mock-first (no provider credentials yet); live activation is a config switch (`FREIGHT_API_MODE=live` + per-provider creds), not a rewrite.
+
+**Rate aggregator (`automations/freight_apis/`):**
+- `base.py`: `NormalizedRate` schema + `RateRequest` + `RateProvider` ABC + `aggregate_land_rates()` (cheapest-first, resilient to per-provider failure). TS parity: `NormalizedRate`/`ExternalRateQuote` in `dashboard/src/types/pricing.ts`.
+- Providers (mock payloads in `mocks.py`, live HTTP gated by creds + `FREIGHT_API_MODE`): `dat.py` (P0 FTL rate intelligence), `smc3.py` (P1 LTL rating), `uber_freight.py` (P1 `UberFreightProvider` + `LoadsmartProvider` FTL quotes), `vucem.py` (P2 cross-border scaffold — mock USMCA cert/pedimento).
+- `phase_4_market_rates.py`: `fetch_market_rates` Modal endpoint → aggregates → persists one snapshot per lane to `external_rate_quotes` (`source='api'`).
+
+**Detention/demurrage:** `automations/detention.py` (`calculate_dd_fee`, `days_past`) + `scheduled_tasks.check_detention_demurrage` (6-hourly accrual on `detention_demurrage_events`, `activity_logs` entry, opt-in `DD_ALERT_EMAILS` internal alert).
+
+**Schema:** migration `20260604_021_land_api_integration.sql` adds `external_rate_quotes` + `detention_demurrage_events` (workspace-scoped, force RLS, owner/admin/member policies). Both added to `tenant_context.TENANT_TABLES`.
+
+**Dashboard:** `/api/rates/market` (GET persisted quotes, POST triggers Modal refresh), `use-market-rates.ts` hook, flag-gated **Market Rates** tab on `/pricing` (`NEXT_PUBLIC_FEATURE_LAND_API_RATES`, `MODAL_WEBHOOK_MARKET_RATES`). Display-only market intelligence — **not** used in customer pricing.
+
+**Deferred (pending credentials/contracts):** booking/BookNow flows, feeding API rates into live customer quoting, real VUCEM submission, project44/unified aggregator (Phase 5).
+
 ## Cutover Mode (Current)
 
 The system now runs with normalized reads active and dual-write retained:

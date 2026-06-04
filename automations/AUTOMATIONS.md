@@ -22,8 +22,11 @@ All Gmail access is now workspace-scoped and OAuth-backed through `workspace_mai
 - `phase_1_request_analysis.py`
 - `phase_2_quote_analysis.py`
 - `phase_3_select_and_quote.py`
+- `phase_4_market_rates.py` (land-freight external rate aggregation endpoint)
 - `scheduled_tasks.py`
 - `tenant_context.py`
+- `detention.py` (D&D fee math used by `scheduled_tasks.check_detention_demurrage`)
+- `freight_apis/` (external rate provider package: `base`, `dat`, `smc3`, `uber_freight`, `vucem`, `mocks`)
 - `gmail_workspace_auth.py` (workspace Gmail credential resolver + refresh/persist)
 - `authenticate_google.py` (legacy local helper; not used by production flow)
 
@@ -119,6 +122,14 @@ Enforcement migration:
 - reads normalized tables first when `RFQ_NORMALIZED_READ_SOURCE=normalized|shadow`, with legacy fallback retained for safety
 - **Surcharge-aware pricing (2026-03-04):** replaced hardcoded `EXCHANGE_RATE = 3.685` with `get_exchange_rate()` DB lookup (fallback to 3.685); `sum_surcharges()` + surcharge-inclusive subtotals in `calculate_port_price`/`calculate_door_price`/`calculate_full_pricing`; quotation email shows USD amounts, surcharge breakdown, free_time_details, conditions, validity_date; sales notification includes margin %, FX rate, per-shipment margin column.
 
+### Phase 4 (`phase_4_market_rates.py`)
+
+- `fetch_market_rates` web endpoint (POST `{workspace_id, origin, destination, ...}`); dashboard triggers it via `MODAL_WEBHOOK_MARKET_RATES`.
+- aggregates land rates across providers via `freight_apis.aggregate_land_rates` (DAT, SMC3, Uber Freight, Loadsmart).
+- **Mock-first:** providers return synthetic responses unless `FREIGHT_API_MODE=live` **and** the provider's credentials are set; arriving credentials are a config switch, not a code change.
+- persists a one-snapshot-per-lane result to `external_rate_quotes` (workspace-scoped, `source='api'`). These are **market-rate intelligence only** — not fed into customer pricing.
+- `freight_apis.vucem.VucemCrossBorder` is a P2 cross-border scaffold (USMCA cert / pedimento, mock-only).
+
 ### Scheduled Tasks (`scheduled_tasks.py`)
 
 - resolves Gmail credentials per workspace row before sending reminders/follow-ups
@@ -128,6 +139,7 @@ Enforcement migration:
 - **Multi-step escalation (2026-03-04):** `reminder_count` column tracks escalation level; timing: 0→3hrs, 1→6hrs, 2→12hrs, 3→auto-close (MAX_REMINDER_COUNT=3); escalating tone (gentle → 2nd follow-up → urgent).
 - **Quote expiry check (2026-03-04):** runs every 6 hours; marks quotes past `validity_date` as `Expired`; logs to `activity_logs`.
 - **Stale RFQ detection (2026-03-04):** runs every 4 hours; flags RFQs with no quotes after 48 hours; logs to `activity_logs`.
+- **Detention/demurrage accrual (Phase 4):** `check_detention_demurrage` runs every 6 hours; for each `accruing` `detention_demurrage_events` row past its `free_until`, computes `fee_usd = detention.calculate_dd_fee(...)`, updates the row, and logs to `activity_logs`. Internal alert email is opt-in via `DD_ALERT_EMAILS=true`.
 
 ### Data Types & Schema Additions
 
@@ -176,6 +188,10 @@ Optional:
 - `ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK`
 - `RFQ_NORMALIZED_DUAL_WRITE` (default: `true`)
 - `RFQ_NORMALIZED_READ_SOURCE` (`legacy` | `shadow` | `normalized`; production now uses `normalized`)
+- `FREIGHT_API_MODE` (`mock` | `live`; default `mock`) — Phase 4 freight APIs
+- `DAT_API_KEY`, `SMC3_USERNAME`, `SMC3_PASSWORD`, `UBER_FREIGHT_API_KEY`, `LOADSMART_API_KEY` — per-provider creds (live mode only)
+- `VUCEM_RFC`, `VUCEM_API_KEY` — cross-border scaffold (live mode only)
+- `DD_ALERT_EMAILS` (default: `false`) — internal detention/demurrage alert emails
 
 Reference file:
 

@@ -34,12 +34,13 @@ import { toast } from "sonner";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import type { DestinationCharge, DOCharge, TransportCharge } from "@/types/pricing";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
-import { FEATURE_AIR_FREIGHT_ENABLED, FEATURE_LAND_FREIGHT_ENABLED } from "@/lib/constants";
+import { FEATURE_AIR_FREIGHT_ENABLED, FEATURE_LAND_FREIGHT_ENABLED, FEATURE_LAND_API_RATES_ENABLED } from "@/lib/constants";
 import { AirCarriersTab } from "@/components/pricing/air-carriers-tab";
 import { AirRatesTab } from "@/components/pricing/air-rates-tab";
 import { LandCarriersTab } from "@/components/pricing/land-carriers-tab";
 import { LandRatesTab } from "@/components/pricing/land-rates-tab";
 import { LtlClassesTab } from "@/components/pricing/ltl-classes-tab";
+import { MarketRatesTab } from "@/components/pricing/market-rates-tab";
 
 function toNumber(value: string | number) {
   if (typeof value === "number") return value;
@@ -297,6 +298,9 @@ export default function PricingPage() {
               <TabsTrigger value="land-rates" className="shrink-0 font-medium tracking-tight rounded-2xl data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-md transition-all px-6 py-2">Lane Rates</TabsTrigger>
               <TabsTrigger value="ltl-classes" className="shrink-0 font-medium tracking-tight rounded-2xl data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-md transition-all px-6 py-2">LTL Classes</TabsTrigger>
             </>
+          )}
+          {FEATURE_LAND_API_RATES_ENABLED && (
+            <TabsTrigger value="market-rates" className="shrink-0 font-medium tracking-tight rounded-2xl data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=active]:shadow-md transition-all px-6 py-2">Market Rates</TabsTrigger>
           )}
         </TabsList>
 
@@ -851,6 +855,11 @@ export default function PricingPage() {
               <LtlClassesTab />
             </TabsContent>
           </>
+        )}
+        {FEATURE_LAND_API_RATES_ENABLED && (
+          <TabsContent value="market-rates" className="mt-2 focus-visible:outline-none focus-visible:ring-0">
+            <MarketRatesTab />
+          </TabsContent>
         )}
       </Tabs>
       <ConfirmDeleteDialog

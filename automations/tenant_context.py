@@ -32,6 +32,8 @@ TENANT_TABLES = {
     "audit_events",
     "processed_email_events",
     "rfq_id_aliases",
+    "external_rate_quotes",
+    "detention_demurrage_events",
 }
 
 

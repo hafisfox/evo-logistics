@@ -8,6 +8,7 @@ from gmail_workspace_auth import (
     get_gmail_service_for_workspace,
 )
 from tenant_context import scoped_select, scoped_eq_filter, scoped_update_by_eq
+from detention import calculate_dd_fee, days_past
 
 # =====================================================================
 # TIMEZONES
@@ -32,6 +33,9 @@ image = modal.Image.debian_slim(python_version="3.11").pip_install(
 ).add_local_file(
     os.path.join(os.path.dirname(__file__), "gmail_workspace_auth.py"),
     "/root/gmail_workspace_auth.py"
+).add_local_file(
+    os.path.join(os.path.dirname(__file__), "detention.py"),
+    "/root/detention.py"
 )
 
 # =====================================================================
@@ -542,6 +546,130 @@ def check_stale_rfqs():
             print(f"Error checking stale RFQs for workspace {wid}: {e}")
 
     print(f"Stale RFQ check complete. Found {stale_count} stale RFQs.")
+
+
+# =====================================================================
+# DETENTION / DEMURRAGE ACCRUAL (Every 6 hours)
+# =====================================================================
+# Set DD_ALERT_EMAILS=true to also send an internal alert to the workspace
+# mailbox when a tracked container/load starts accruing D&D. Default: off
+# (accrual + activity log only) so the cron never sends surprise emails.
+DD_ALERT_EMAILS = os.environ.get("DD_ALERT_EMAILS", "false").lower() in {"1", "true", "yes", "on"}
+
+
+@app.function(
+    schedule=modal.Cron("0 */6 * * *"),
+    image=image,
+    secrets=[modal.Secret.from_name("evo-logistics-env")]
+)
+def check_detention_demurrage():
+    """Accrue detention/demurrage fees on tracked events and alert when they start.
+
+    Reads ``detention_demurrage_events`` rows with status ``accruing`` and a
+    ``free_until`` date. For each, computes whole days past free time and the
+    chargeable fee (``detention.calculate_dd_fee``), updates the row, and logs
+    to ``activity_logs``. Optionally emails an internal alert (see DD_ALERT_EMAILS).
+    """
+    supabase = get_supabase_client()
+    today_str = datetime.now(UAE_TZ).date().isoformat()
+    gmail_cache: dict = {}
+
+    workspace_rows = (
+        supabase.table("workspace_mailboxes")
+        .select("workspace_id")
+        .eq("status", "connected")
+        .execute()
+        .data or []
+    )
+    workspace_ids = list({r["workspace_id"] for r in workspace_rows if r.get("workspace_id")})
+
+    accruing_count = 0
+    for wid in workspace_ids:
+        try:
+            events = (
+                supabase.table("detention_demurrage_events")
+                .select("id, rfq_id, shipment_number, kind, reference, free_until, daily_rate_usd, last_alerted_at")
+                .eq("workspace_id", wid)
+                .eq("status", "accruing")
+                .not_.is_("free_until", "null")
+                .execute()
+                .data or []
+            )
+
+            for ev in events:
+                days_used = days_past(ev.get("free_until"))
+                if days_used <= 0:
+                    continue  # still within free time
+
+                fee = calculate_dd_fee(
+                    free_time_days=0,  # free_until already marks the end of free time
+                    days_used=days_used,
+                    daily_rate_usd=ev.get("daily_rate_usd"),
+                )
+
+                try:
+                    (
+                        supabase.table("detention_demurrage_events")
+                        .update({"days_used": days_used, "fee_usd": fee})
+                        .eq("id", ev["id"])
+                        .execute()
+                    )
+                except Exception as e:
+                    print(f"Error updating D&D event {ev.get('id')}: {e}")
+                    continue
+
+                # Log + (optionally) alert once per day
+                if ev.get("last_alerted_at") != today_str:
+                    try:
+                        supabase.table("activity_logs").insert({
+                            "workspace_id": wid,
+                            "entity_type": "detention_demurrage",
+                            "entity_id": str(ev["id"]),
+                            "action": "dd_accruing",
+                            "metadata": {
+                                "kind": ev.get("kind"),
+                                "rfq_id": ev.get("rfq_id"),
+                                "reference": ev.get("reference"),
+                                "days_used": days_used,
+                                "fee_usd": fee,
+                            },
+                        }).execute()
+                    except Exception:
+                        pass
+
+                    if DD_ALERT_EMAILS and fee > 0:
+                        gmail_service, mailbox_email = _get_workspace_gmail_client(
+                            supabase, wid, gmail_cache
+                        )
+                        if gmail_service and mailbox_email:
+                            try:
+                                send_email(
+                                    gmail_service,
+                                    mailbox_email,
+                                    f"[Evo] {ev.get('kind','D&D')} accruing — {ev.get('reference') or ev.get('rfq_id') or ev['id']}",
+                                    f"A tracked {ev.get('kind','detention/demurrage')} event is accruing.\n"
+                                    f"RFQ: {ev.get('rfq_id')}\nReference: {ev.get('reference')}\n"
+                                    f"Days past free time: {days_used}\nAccrued fee: USD {fee}\n",
+                                )
+                            except Exception as e:
+                                print(f"D&D alert email failed for event {ev.get('id')}: {e}")
+
+                    try:
+                        (
+                            supabase.table("detention_demurrage_events")
+                            .update({"last_alerted_at": today_str})
+                            .eq("id", ev["id"])
+                            .execute()
+                        )
+                    except Exception:
+                        pass
+
+                accruing_count += 1
+
+        except Exception as e:
+            print(f"Error checking detention/demurrage for workspace {wid}: {e}")
+
+    print(f"Detention/demurrage check complete. {accruing_count} event(s) accruing.")
 
 
 if __name__ == "__main__":
