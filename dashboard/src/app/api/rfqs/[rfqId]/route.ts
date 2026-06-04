@@ -10,7 +10,14 @@ import {
   mapNormalizedQuoteToLegacy,
   type RFQShipmentContainerRow,
   type RFQShipmentRow,
+  type RFQShipmentPieceRow,
+  type RFQShipmentTruckDetailRow,
 } from "@/lib/rfq-normalization";
+
+// rfq_shipment_pieces and rfq_shipment_truck_details are newer than the generated
+// Database types; cast the query builder to bypass typing.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- tables not yet in generated types
+type AnyTable = (name: string) => any;
 import { isMissingRelationError } from "@/lib/supabase-errors";
 
 export const dynamic = "force-dynamic";
@@ -59,11 +66,12 @@ export async function GET(
     let normalizedShipments: RFQShipment[] | undefined;
 
     try {
-      const [shipmentsRes, containersRes] = await Promise.all([
+      const fromAny = supabase.from as unknown as AnyTable;
+      const [shipmentsRes, containersRes, piecesRes, trucksRes] = await Promise.all([
         supabase
           .from("rfq_shipments")
           .select(
-            "workspace_id, rfq_id, shipment_number, pol, pod, ready_date, delivery_deadline, service_type, pickup_address, delivery_address"
+            "workspace_id, rfq_id, shipment_number, pol, pod, ready_date, delivery_deadline, service_type, pickup_address, delivery_address, freight_mode"
           )
           .eq("workspace_id", workspaceId)
           .eq("rfq_id", rfqId),
@@ -72,14 +80,29 @@ export async function GET(
           .select("workspace_id, rfq_id, shipment_number, line_number, container_type, qty")
           .eq("workspace_id", workspaceId)
           .eq("rfq_id", rfqId),
+        fromAny("rfq_shipment_pieces")
+          .select("*")
+          .eq("workspace_id", workspaceId)
+          .eq("rfq_id", rfqId),
+        fromAny("rfq_shipment_truck_details")
+          .select("*")
+          .eq("workspace_id", workspaceId)
+          .eq("rfq_id", rfqId),
       ]);
 
       if (shipmentsRes.error) throw shipmentsRes.error;
       if (containersRes.error) throw containersRes.error;
+      // Pieces/truck tables degrade gracefully if their migration is not applied yet.
+      const pieceRows =
+        piecesRes.error || !piecesRes.data ? [] : (piecesRes.data as RFQShipmentPieceRow[]);
+      const truckRows =
+        trucksRes.error || !trucksRes.data ? [] : (trucksRes.data as RFQShipmentTruckDetailRow[]);
 
       const shipmentMap = buildShipmentsByRfq(
-        (shipmentsRes.data || []) as RFQShipmentRow[],
-        (containersRes.data || []) as RFQShipmentContainerRow[]
+        (shipmentsRes.data || []) as unknown as RFQShipmentRow[],
+        (containersRes.data || []) as RFQShipmentContainerRow[],
+        pieceRows,
+        truckRows
       );
       normalizedShipments = shipmentMap.get(rfqId);
     } catch (error) {

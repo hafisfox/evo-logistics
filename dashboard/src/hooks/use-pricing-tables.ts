@@ -7,6 +7,9 @@ import type {
   TransportCharge,
   AirCarrierProfile,
   AirChargeRate,
+  TruckCarrierProfile,
+  TruckLaneRate,
+  LtlFreightClass,
 } from "@/types/pricing";
 
 export function useDOCharges() {
@@ -384,6 +387,213 @@ export function useDeleteAirRate() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["pricing", "air-rates"] });
+    },
+  });
+}
+
+// --- Land freight: truck carrier profiles, FTL lane rates, LTL freight classes ---
+
+type TruckCarrierCreatePayload = Omit<TruckCarrierProfile, "id">;
+type TruckCarrierUpdatePayload = { id: number } & Partial<Omit<TruckCarrierProfile, "id">>;
+type TruckLaneRateCreatePayload = Omit<TruckLaneRate, "id">;
+type TruckLaneRateUpdatePayload = { id: number } & Partial<Omit<TruckLaneRate, "id">>;
+type LtlClassCreatePayload = Omit<LtlFreightClass, "id">;
+type LtlClassUpdatePayload = { id: number } & Partial<Omit<LtlFreightClass, "id">>;
+
+export function useTruckCarriers() {
+  return useQuery<TruckCarrierProfile[]>({
+    queryKey: ["pricing", "land-carriers"],
+    queryFn: async () => {
+      const res = await fetch("/api/pricing/land-carriers");
+      if (!res.ok) throw new Error("Failed to fetch truck carriers");
+      return res.json();
+    },
+    refetchInterval: 600_000,
+  });
+}
+
+export function useCreateTruckCarrier() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: TruckCarrierCreatePayload) => {
+      const res = await fetch("/api/pricing/land-carriers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await parseError(res, "Failed to create truck carrier"));
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pricing", "land-carriers"] });
+    },
+  });
+}
+
+export function useUpdateTruckCarrier() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: TruckCarrierUpdatePayload) => {
+      const res = await fetch("/api/pricing/land-carriers", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await parseError(res, "Failed to update truck carrier"));
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pricing", "land-carriers"] });
+    },
+  });
+}
+
+export function useDeleteTruckCarrier() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: IdPayload) => {
+      const res = await fetch("/api/pricing/land-carriers", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await parseError(res, "Failed to delete truck carrier"));
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pricing", "land-carriers"] });
+    },
+  });
+}
+
+export function useTruckLaneRates() {
+  return useQuery<TruckLaneRate[]>({
+    queryKey: ["pricing", "land-rates"],
+    queryFn: async () => {
+      const res = await fetch("/api/pricing/land-rates");
+      if (!res.ok) throw new Error("Failed to fetch lane rates");
+      return res.json();
+    },
+    refetchInterval: 600_000,
+  });
+}
+
+export function useCreateTruckLaneRate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: TruckLaneRateCreatePayload) => {
+      const res = await fetch("/api/pricing/land-rates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await parseError(res, "Failed to create lane rate"));
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pricing", "land-rates"] });
+    },
+  });
+}
+
+export function useUpdateTruckLaneRate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: TruckLaneRateUpdatePayload) => {
+      const res = await fetch("/api/pricing/land-rates", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await parseError(res, "Failed to update lane rate"));
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pricing", "land-rates"] });
+    },
+  });
+}
+
+export function useDeleteTruckLaneRate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: IdPayload) => {
+      const res = await fetch("/api/pricing/land-rates", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await parseError(res, "Failed to delete lane rate"));
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pricing", "land-rates"] });
+    },
+  });
+}
+
+export function useLtlClasses() {
+  return useQuery<LtlFreightClass[]>({
+    queryKey: ["pricing", "ltl-classes"],
+    queryFn: async () => {
+      const res = await fetch("/api/pricing/ltl-classes");
+      if (!res.ok) throw new Error("Failed to fetch LTL classes");
+      return res.json();
+    },
+    refetchInterval: 600_000,
+  });
+}
+
+export function useCreateLtlClass() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: LtlClassCreatePayload) => {
+      const res = await fetch("/api/pricing/ltl-classes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await parseError(res, "Failed to create LTL class"));
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pricing", "ltl-classes"] });
+    },
+  });
+}
+
+export function useUpdateLtlClass() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: LtlClassUpdatePayload) => {
+      const res = await fetch("/api/pricing/ltl-classes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await parseError(res, "Failed to update LTL class"));
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pricing", "ltl-classes"] });
+    },
+  });
+}
+
+export function useDeleteLtlClass() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: IdPayload) => {
+      const res = await fetch("/api/pricing/ltl-classes", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await parseError(res, "Failed to delete LTL class"));
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pricing", "ltl-classes"] });
     },
   });
 }

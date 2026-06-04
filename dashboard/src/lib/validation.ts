@@ -140,6 +140,65 @@ export interface AirRateUpdateBody {
   min_charge_usd?: number;
 }
 
+export interface TruckCarrierCreateBody {
+  name: string;
+  mc_number: string;
+  dot_number: string;
+  equipment_types: string;
+  active: boolean;
+}
+
+export interface TruckCarrierUpdateBody {
+  id: number;
+  name?: string;
+  mc_number?: string;
+  dot_number?: string;
+  equipment_types?: string;
+  active?: boolean;
+}
+
+export interface TruckLaneRateCreateBody {
+  carrier: string;
+  origin_zip: string;
+  destination_zip: string;
+  equipment_type: string;
+  rate_per_mile_usd: number | null;
+  flat_rate_usd: number | null;
+  min_charge_usd: number;
+  fuel_surcharge_pct: number;
+}
+
+export interface TruckLaneRateUpdateBody {
+  id: number;
+  carrier?: string;
+  origin_zip?: string;
+  destination_zip?: string;
+  equipment_type?: string;
+  rate_per_mile_usd?: number | null;
+  flat_rate_usd?: number | null;
+  min_charge_usd?: number;
+  fuel_surcharge_pct?: number;
+}
+
+export interface LtlClassCreateBody {
+  nmfc_class: string;
+  description: string;
+  min_density: number | null;
+  max_density: number | null;
+  rate_per_100lb_usd: number;
+  min_charge_usd: number;
+}
+
+export interface LtlClassUpdateBody {
+  id: number;
+  nmfc_class?: string;
+  description?: string;
+  min_density?: number | null;
+  max_density?: number | null;
+  rate_per_100lb_usd?: number;
+  min_charge_usd?: number;
+}
+
 export interface IdDeleteBody {
   id: number;
 }
@@ -1212,6 +1271,230 @@ export function validateAirRateUpdateBody(
     return { success: false, error: "Invalid air rate payload", details };
   }
 
+  return { success: true, data: { id, ...updates } };
+}
+
+export function validateTruckCarrierCreateBody(
+  body: unknown
+): ValidationResult<TruckCarrierCreateBody> {
+  if (!isRecord(body)) {
+    return { success: false, error: "Invalid truck carrier payload", details: ["Body must be a JSON object."] };
+  }
+  const details: string[] = [];
+  const name = asStringOrNull(body.name);
+  if (!name) details.push("name is required.");
+  const mc_number = asStringOrNull(body.mc_number) ?? "";
+  const dot_number = asStringOrNull(body.dot_number) ?? "";
+  const equipment_types = asStringOrNull(body.equipment_types) ?? "";
+
+  let active: boolean | null = true;
+  if ("active" in body && body.active != null) {
+    if (typeof body.active !== "boolean") {
+      details.push("active must be a boolean when provided.");
+      active = null;
+    } else {
+      active = body.active;
+    }
+  }
+
+  if (details.length > 0 || !name || active === null) {
+    return { success: false, error: "Invalid truck carrier payload", details };
+  }
+  return { success: true, data: { name, mc_number, dot_number, equipment_types, active } };
+}
+
+export function validateTruckCarrierUpdateBody(
+  body: unknown
+): ValidationResult<TruckCarrierUpdateBody> {
+  if (!isRecord(body)) {
+    return { success: false, error: "Invalid truck carrier payload", details: ["Body must be a JSON object."] };
+  }
+  const details: string[] = [];
+  const id = parseRequiredId(body.id, "Truck carrier", details);
+  const updates: Omit<TruckCarrierUpdateBody, "id"> = {};
+
+  if ("name" in body) {
+    const value = asStringOrNull(body.name);
+    if (!value) details.push("name must be a non-empty string when provided.");
+    else updates.name = value;
+  }
+  for (const field of ["mc_number", "dot_number", "equipment_types"] as const) {
+    if (field in body) updates[field] = asStringOrNull(body[field]) ?? "";
+  }
+  if ("active" in body) {
+    if (typeof body.active !== "boolean") details.push("active must be a boolean when provided.");
+    else updates.active = body.active;
+  }
+
+  if (Object.keys(updates).length === 0) details.push("At least one updatable field is required.");
+  if (details.length > 0 || id == null) {
+    return { success: false, error: "Invalid truck carrier payload", details };
+  }
+  return { success: true, data: { id, ...updates } };
+}
+
+export function validateTruckLaneRateCreateBody(
+  body: unknown
+): ValidationResult<TruckLaneRateCreateBody> {
+  if (!isRecord(body)) {
+    return { success: false, error: "Invalid lane rate payload", details: ["Body must be a JSON object."] };
+  }
+  const details: string[] = [];
+  const carrierRaw = asStringOrNull(body.carrier);
+  const carrier = carrierRaw ? carrierRaw.toUpperCase() : null;
+  if (!carrier) details.push("carrier is required.");
+  const originRaw = asStringOrNull(body.origin_zip);
+  const origin_zip = originRaw ? originRaw.toUpperCase() : null;
+  if (!origin_zip) details.push("origin_zip is required.");
+  const destRaw = asStringOrNull(body.destination_zip);
+  const destination_zip = destRaw ? destRaw.toUpperCase() : null;
+  if (!destination_zip) details.push("destination_zip is required.");
+  const equipmentRaw = asStringOrNull(body.equipment_type);
+  const equipment_type = (equipmentRaw ? equipmentRaw.toUpperCase() : "DRY VAN");
+
+  const rate_per_mile_usd = parseOptionalNumber(body.rate_per_mile_usd, "rate_per_mile_usd", details) ?? null;
+  if (rate_per_mile_usd != null && rate_per_mile_usd < 0) details.push("rate_per_mile_usd must be >= 0.");
+  const flat_rate_usd = parseOptionalNumber(body.flat_rate_usd, "flat_rate_usd", details) ?? null;
+  if (flat_rate_usd != null && flat_rate_usd < 0) details.push("flat_rate_usd must be >= 0.");
+  if (rate_per_mile_usd == null && flat_rate_usd == null) {
+    details.push("Provide rate_per_mile_usd or flat_rate_usd.");
+  }
+  const min_charge_usd = parseOptionalNumber(body.min_charge_usd, "min_charge_usd", details) ?? 0;
+  if (min_charge_usd < 0) details.push("min_charge_usd must be >= 0.");
+  const fuel_surcharge_pct = parseOptionalNumber(body.fuel_surcharge_pct, "fuel_surcharge_pct", details) ?? 0;
+  if (fuel_surcharge_pct < 0) details.push("fuel_surcharge_pct must be >= 0.");
+
+  if (details.length > 0 || !carrier || !origin_zip || !destination_zip) {
+    return { success: false, error: "Invalid lane rate payload", details };
+  }
+  return {
+    success: true,
+    data: { carrier, origin_zip, destination_zip, equipment_type, rate_per_mile_usd, flat_rate_usd, min_charge_usd, fuel_surcharge_pct },
+  };
+}
+
+export function validateTruckLaneRateUpdateBody(
+  body: unknown
+): ValidationResult<TruckLaneRateUpdateBody> {
+  if (!isRecord(body)) {
+    return { success: false, error: "Invalid lane rate payload", details: ["Body must be a JSON object."] };
+  }
+  const details: string[] = [];
+  const id = parseRequiredId(body.id, "Lane rate", details);
+  const updates: Omit<TruckLaneRateUpdateBody, "id"> = {};
+
+  for (const field of ["carrier", "origin_zip", "destination_zip", "equipment_type"] as const) {
+    if (field in body) {
+      const value = asStringOrNull(body[field]);
+      if (!value) details.push(`${field} must be a non-empty string when provided.`);
+      else updates[field] = value.toUpperCase();
+    }
+  }
+  if ("rate_per_mile_usd" in body) {
+    const value = parseOptionalNumber(body.rate_per_mile_usd, "rate_per_mile_usd", details);
+    if (value != null) {
+      if (value < 0) details.push("rate_per_mile_usd must be >= 0.");
+      else updates.rate_per_mile_usd = value;
+    } else if (body.rate_per_mile_usd === null) {
+      updates.rate_per_mile_usd = null;
+    }
+  }
+  if ("flat_rate_usd" in body) {
+    const value = parseOptionalNumber(body.flat_rate_usd, "flat_rate_usd", details);
+    if (value != null) {
+      if (value < 0) details.push("flat_rate_usd must be >= 0.");
+      else updates.flat_rate_usd = value;
+    } else if (body.flat_rate_usd === null) {
+      updates.flat_rate_usd = null;
+    }
+  }
+  for (const field of ["min_charge_usd", "fuel_surcharge_pct"] as const) {
+    if (field in body) {
+      const value = parseOptionalNumber(body[field], field, details);
+      if (value != null) {
+        if (value < 0) details.push(`${field} must be >= 0.`);
+        else updates[field] = value;
+      }
+    }
+  }
+
+  if (Object.keys(updates).length === 0) details.push("At least one updatable field is required.");
+  if (details.length > 0 || id == null) {
+    return { success: false, error: "Invalid lane rate payload", details };
+  }
+  return { success: true, data: { id, ...updates } };
+}
+
+export function validateLtlClassCreateBody(
+  body: unknown
+): ValidationResult<LtlClassCreateBody> {
+  if (!isRecord(body)) {
+    return { success: false, error: "Invalid LTL class payload", details: ["Body must be a JSON object."] };
+  }
+  const details: string[] = [];
+  const nmfc_class = asStringOrNull(body.nmfc_class);
+  if (!nmfc_class) details.push("nmfc_class is required.");
+  const description = asStringOrNull(body.description) ?? "";
+  const min_density = parseOptionalNumber(body.min_density, "min_density", details) ?? null;
+  const max_density = parseOptionalNumber(body.max_density, "max_density", details) ?? null;
+  const rate_per_100lb_usd = parseRequiredNumber(body.rate_per_100lb_usd, "rate_per_100lb_usd", details);
+  if (rate_per_100lb_usd != null && rate_per_100lb_usd < 0) details.push("rate_per_100lb_usd must be >= 0.");
+  const min_charge_usd = parseOptionalNumber(body.min_charge_usd, "min_charge_usd", details) ?? 0;
+  if (min_charge_usd < 0) details.push("min_charge_usd must be >= 0.");
+
+  if (details.length > 0 || !nmfc_class || rate_per_100lb_usd == null || rate_per_100lb_usd < 0) {
+    return { success: false, error: "Invalid LTL class payload", details };
+  }
+  return {
+    success: true,
+    data: { nmfc_class, description, min_density, max_density, rate_per_100lb_usd, min_charge_usd },
+  };
+}
+
+export function validateLtlClassUpdateBody(
+  body: unknown
+): ValidationResult<LtlClassUpdateBody> {
+  if (!isRecord(body)) {
+    return { success: false, error: "Invalid LTL class payload", details: ["Body must be a JSON object."] };
+  }
+  const details: string[] = [];
+  const id = parseRequiredId(body.id, "LTL class", details);
+  const updates: Omit<LtlClassUpdateBody, "id"> = {};
+
+  if ("nmfc_class" in body) {
+    const value = asStringOrNull(body.nmfc_class);
+    if (!value) details.push("nmfc_class must be a non-empty string when provided.");
+    else updates.nmfc_class = value;
+  }
+  if ("description" in body) updates.description = asStringOrNull(body.description) ?? "";
+  for (const field of ["min_density", "max_density"] as const) {
+    if (field in body) {
+      if (body[field] === null) updates[field] = null;
+      else {
+        const value = parseOptionalNumber(body[field], field, details);
+        if (value != null) updates[field] = value;
+      }
+    }
+  }
+  if ("rate_per_100lb_usd" in body) {
+    const value = parseOptionalNumber(body.rate_per_100lb_usd, "rate_per_100lb_usd", details);
+    if (value != null) {
+      if (value < 0) details.push("rate_per_100lb_usd must be >= 0.");
+      else updates.rate_per_100lb_usd = value;
+    }
+  }
+  if ("min_charge_usd" in body) {
+    const value = parseOptionalNumber(body.min_charge_usd, "min_charge_usd", details);
+    if (value != null) {
+      if (value < 0) details.push("min_charge_usd must be >= 0.");
+      else updates.min_charge_usd = value;
+    }
+  }
+
+  if (Object.keys(updates).length === 0) details.push("At least one updatable field is required.");
+  if (details.length > 0 || id == null) {
+    return { success: false, error: "Invalid LTL class payload", details };
+  }
   return { success: true, data: { id, ...updates } };
 }
 

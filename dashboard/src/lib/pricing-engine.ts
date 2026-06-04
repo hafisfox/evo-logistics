@@ -261,6 +261,127 @@ export function calculateAirPrice(params: {
   };
 }
 
+/**
+ * Land freight pricing: base = quoted land freight total (per-load), then add surcharges
+ * and apply margin. Mirrors `calculate_land_price` in automations/phase_3_select_and_quote.py.
+ */
+export function calculateLandPrice(
+  landFreightUSD: number,
+  settings: PricingSettings,
+  surchargesUSD = 0
+): {
+  finalPriceAED: number;
+  finalPriceUSD: number;
+  marginAmount: number;
+  marginPercent: number;
+  landFreightUSD: number;
+  landFreightAED: number;
+  surchargesUSD: number;
+  surchargesAED: number;
+  exchangeRate: number;
+} {
+  const fx = settings.exchangeRate ?? DEFAULT_EXCHANGE_RATE;
+  const landFreightAED = landFreightUSD * fx;
+  const surchargesAED = surchargesUSD * fx;
+  const subtotalAED = landFreightAED + surchargesAED;
+  const withMargin = subtotalAED * (1 + settings.margin);
+  const finalPriceAED = Math.ceil(withMargin / 10) * 10;
+  const finalPriceUSD = Math.ceil(finalPriceAED / fx);
+  return {
+    finalPriceAED,
+    finalPriceUSD,
+    marginAmount: Math.round((withMargin - subtotalAED) * 100) / 100,
+    marginPercent: settings.margin,
+    landFreightUSD: Math.round(landFreightUSD * 100) / 100,
+    landFreightAED: Math.round(landFreightAED * 100) / 100,
+    surchargesUSD: Math.round(surchargesUSD * 100) / 100,
+    surchargesAED: Math.round(surchargesAED * 100) / 100,
+    exchangeRate: fx,
+  };
+}
+
+/**
+ * FTL rate-book estimate: linehaul = flatRateUSD OR ratePerMileUSD × distanceMiles, floored
+ * at minChargeUSD; + fuel surcharge (% of linehaul) + accessorials; × (1 + margin).
+ * Mirrors `calculate_ftl_price` in automations/phase_3_select_and_quote.py.
+ */
+export function calculateFtlPrice(params: {
+  settings: PricingSettings;
+  ratePerMileUSD?: number | null;
+  distanceMiles?: number | null;
+  flatRateUSD?: number | null;
+  fuelSurchargePct?: number;
+  accessorialsUSD?: number;
+  minChargeUSD?: number;
+}) {
+  const {
+    settings,
+    ratePerMileUSD,
+    distanceMiles,
+    flatRateUSD,
+    fuelSurchargePct = 0,
+    accessorialsUSD = 0,
+    minChargeUSD = 0,
+  } = params;
+  let linehaul: number;
+  if (flatRateUSD != null) {
+    linehaul = flatRateUSD;
+  } else if (ratePerMileUSD != null && distanceMiles != null) {
+    linehaul = ratePerMileUSD * distanceMiles;
+  } else {
+    throw new Error(
+      "FTL pricing requires flatRateUSD or (ratePerMileUSD and distanceMiles)"
+    );
+  }
+  linehaul = Math.max(linehaul, minChargeUSD);
+  const fuelUSD = linehaul * (fuelSurchargePct / 100);
+  const landFreightUSD = linehaul + fuelUSD;
+  const result = calculateLandPrice(landFreightUSD, settings, accessorialsUSD);
+  return {
+    ...result,
+    linehaulUSD: Math.round(linehaul * 100) / 100,
+    fuelSurchargeUSD: Math.round(fuelUSD * 100) / 100,
+    loadType: "FTL" as const,
+  };
+}
+
+/**
+ * LTL class-based estimate: linehaul = ratePer100lbUSD × (weightLbs / 100), floored at
+ * minChargeUSD; + fuel surcharge + accessorials; × (1 + margin).
+ * Mirrors `calculate_ltl_price` in automations/phase_3_select_and_quote.py.
+ */
+export function calculateLtlPrice(params: {
+  ratePer100lbUSD: number;
+  weightLbs: number;
+  settings: PricingSettings;
+  fuelSurchargePct?: number;
+  accessorialsUSD?: number;
+  minChargeUSD?: number;
+}) {
+  const {
+    ratePer100lbUSD,
+    weightLbs,
+    settings,
+    fuelSurchargePct = 0,
+    accessorialsUSD = 0,
+    minChargeUSD = 0,
+  } = params;
+  if (!weightLbs || weightLbs <= 0) {
+    throw new Error("LTL pricing requires a positive weightLbs");
+  }
+  let linehaul = ratePer100lbUSD * (weightLbs / 100);
+  linehaul = Math.max(linehaul, minChargeUSD);
+  const fuelUSD = linehaul * (fuelSurchargePct / 100);
+  const landFreightUSD = linehaul + fuelUSD;
+  const result = calculateLandPrice(landFreightUSD, settings, accessorialsUSD);
+  return {
+    ...result,
+    linehaulUSD: Math.round(linehaul * 100) / 100,
+    fuelSurchargeUSD: Math.round(fuelUSD * 100) / 100,
+    loadType: "LTL" as const,
+  };
+}
+
 export function calculateDoorPrice(params: {
   oceanFreightUSD: number;
   qty: number;

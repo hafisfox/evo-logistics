@@ -51,6 +51,18 @@ export interface RFQShipmentPiece {
   packaging_type: string | null;
 }
 
+export interface RFQShipmentTruckDetail {
+  equipment_type: string | null;
+  load_type: "FTL" | "LTL" | "PTL" | null;
+  weight_lbs: number | null;
+  nmfc_class: string | null;
+  commodity_description: string | null;
+  hazmat: boolean;
+  accessorials: string[] | null;
+  origin_zip: string | null;
+  destination_zip: string | null;
+}
+
 export interface RFQShipment {
   shipment_number: number;
   pol: string;
@@ -62,6 +74,7 @@ export interface RFQShipment {
   delivery_address: string | null;
   containers: RFQShipmentContainer[];
   pieces?: RFQShipmentPiece[];
+  truck_detail?: RFQShipmentTruckDetail | null;
   // Ocean freight fields
   commodity_description: string | null;
   hs_code: string | null;
