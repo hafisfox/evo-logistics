@@ -220,7 +220,7 @@ Migration: `dashboard/supabase/migrations/20260304_017_ocean_freight_fields.sql`
   - Air rate book (migration 019, RLS workspace-scoped): `air_carrier_profiles` (IATA airlines) + `air_charge_rates` (USD/kg weight-tier rates per lane); managed via the `/pricing` Airlines + Air Rates tabs (gated by `NEXT_PUBLIC_FEATURE_AIR_FREIGHT`)
   - Land freight pricing (Phase 3): when shipment `freight_mode = land`, base freight = quote price (interpreted as the per-load USD total) + parsed surcharges (fuel/detention/accessorials) + margin, rounded like port-to-port (`calculate_land_price`). FTL/LTL rate-book estimators `calculate_ftl_price` (per-mile×distance or flat + fuel% + accessorials, min-charge floor) and `calculate_ltl_price` (class rate × weight/100 + fuel + accessorials) mirror the dashboard `calculateFtlPrice`/`calculateLtlPrice`.
   - Land rate fallback: if the selected land quote lacks a usable total, `get_truck_lane_rate` (FTL flat rate) / `get_ltl_class_rate` (LTL class) look up the workspace land rate book using `rfq_shipment_truck_details`; default path still uses the quoted total.
-  - Land tables (migration 020, RLS workspace-scoped): `truck_carrier_profiles`, `truck_lane_rates` (per-mile/flat FTL lanes), `ltl_freight_classes` (NMFC class rates), `drayage_rates`, and `rfq_shipment_truck_details` (equipment/load type/weight/NMFC/ZIP/accessorials per shipment); managed via the `/pricing` Truckers + Lane Rates + LTL Classes tabs (gated by `NEXT_PUBLIC_FEATURE_LAND_FREIGHT`)
+  - Land tables (migration 020, RLS workspace-scoped): `truck_carrier_profiles`, `truck_lane_rates` (per-mile/flat FTL lanes), `ltl_freight_classes` (NMFC class rates), and `rfq_shipment_truck_details` (equipment/load type/weight/NMFC/ZIP/accessorials per shipment); managed via the `/pricing` Truckers + Lane Rates + LTL Classes tabs (gated by `NEXT_PUBLIC_FEATURE_LAND_FREIGHT`). `drayage_rates` is a **reserved/deferred scaffold** (table + RLS only; not yet queried by pricing or exposed in the UI)
 - Scheduled tasks: multi-step escalation (reminder_count 0→3hrs, 1→6hrs, 2→12hrs, 3→auto-close); quote expiry check (marks expired by validity_date); stale RFQ detection (no quotes after 48hrs → activity_logs)
 
 **Dashboard changes:**
@@ -289,16 +289,18 @@ The system now runs with normalized reads active and dual-write retained:
 3. Expand prompt-eval benchmark from synthetic fixtures to production paired RFQ/reply datasets and track drift over time.
    - Coverage now includes ocean (`eval_phase1_prompt_fixtures.py`), **air** (`eval_phase1_air_fixtures.py`, 52 air fixtures + 9 ocean/land decoys), **and land** (`eval_phase1_land_fixtures.py`, 52 land fixtures + 9 ocean/air decoys; mode-detection ≥0.90 + land extraction gates for ZIP/load-type/equipment/weight/NMFC). Mode-detection prompt is the hoisted `phase_1_request_analysis.MODE_DETECTION_SYSTEM_PROMPT` constant; offline CI rules tests `test_phase1_air_prompt_parsing_rules.py` + `test_phase1_land_prompt_parsing_rules.py`.
 
-## Verification Gate (latest run)
+## Verification Gate (latest run — 2026-06-04)
 
 Executed from this workspace branch:
 
 - `cd dashboard && npm run lint` ✅
 - `cd dashboard && npm run typecheck` ✅
-- `cd dashboard && npm run test` ✅
+- `cd dashboard && npm run test` ✅ (143 passed)
 - `cd dashboard && npm run build` ✅ (webpack mode)
 - `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m py_compile automations/*.py` ✅
-- `python3 -m pytest automations/tests -q` ✅
+- `python3 -m pytest automations/tests -q` ✅ (126 passed)
+
+Phase 4 activation (2026-06-04): air/land/market-rate feature flags enabled in dashboard env; `market-rates-phase-4` Modal app deployed and smoke-tested (`success: true`, mock mode, cheapest-first); dashboard `MODAL_WEBHOOK_MARKET_RATES` wired so the Market Rates refresh (POST) is live. Providers remain mock until `FREIGHT_API_MODE=live` + per-provider creds. Production Vercel/Modal env vars set separately.
 
 ## Production Validation (2026-02-23)
 
@@ -317,6 +319,7 @@ Executed from this workspace branch:
   - phase 1: `https://hafisjavad--rfq-analyzer-phase-1-gmail-push-phase1.modal.run`
   - phase 2: `https://hafisjavad--quote-analysis-phase-2-gmail-push-phase2.modal.run`
   - phase 3: `https://hafisjavad--select-and-quote-phase-3-select-agent.modal.run`
+  - phase 4 (market rates, mock mode): `https://hafisjavad--market-rates-phase-4-fetch-market-rates.modal.run`
 - scheduled app deployed: `https://modal.com/apps/hafisjavad/main/deployed/scheduled-tasks`
 - mailbox OAuth enforcement migration applied:
   - `workspace_mailboxes_connected_requires_refresh_token` check blocks token-less `connected` updates

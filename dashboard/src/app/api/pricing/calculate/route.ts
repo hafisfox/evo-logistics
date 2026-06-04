@@ -165,6 +165,9 @@ export async function POST(request: Request) {
     return NextResponse.json(result);
   } catch (error) {
     console.error("Failed to calculate pricing:", error);
-    return jsonError({ error: "Failed to calculate pricing" }, 500);
+    return jsonError(
+      { error: error instanceof Error ? error.message : "Failed to calculate pricing" },
+      500
+    );
   }
 }

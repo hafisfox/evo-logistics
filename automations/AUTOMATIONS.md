@@ -28,7 +28,6 @@ All Gmail access is now workspace-scoped and OAuth-backed through `workspace_mai
 - `detention.py` (D&D fee math used by `scheduled_tasks.check_detention_demurrage`)
 - `freight_apis/` (external rate provider package: `base`, `dat`, `smc3`, `uber_freight`, `vucem`, `mocks`)
 - `gmail_workspace_auth.py` (workspace Gmail credential resolver + refresh/persist)
-- `authenticate_google.py` (legacy local helper; not used by production flow)
 
 ## 4. Tenant Context and Isolation
 
@@ -62,9 +61,21 @@ Tenant-scoped tables include:
 - `workspace_invites`
 - `workspace_members`
 - `audit_events`
+- `processed_email_events`
+- `rfq_id_aliases`
+- `external_rate_quotes`
+- `detention_demurrage_events`
 - `exchange_rates`
 - `activity_logs`
 - `rfq_notes`
+- `rfq_shipment_pieces`
+- `rfq_shipment_truck_details`
+- `air_carrier_profiles`
+- `air_charge_rates`
+- `truck_carrier_profiles`
+- `truck_lane_rates`
+- `ltl_freight_classes`
+- `drayage_rates`
 
 Constraint note:
 

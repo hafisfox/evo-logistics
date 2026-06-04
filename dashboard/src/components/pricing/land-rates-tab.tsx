@@ -31,7 +31,18 @@ const inputClass =
 function optionalNumber(value: string): number | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
-  return Number(trimmed);
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : null;
+}
+
+function requiredNumber(value: string): number {
+  const n = Number(value.trim());
+  return Number.isFinite(n) ? n : 0;
+}
+
+function hasInvalidNumber(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed !== "" && !Number.isFinite(Number(trimmed));
 }
 
 function display(value: number | null | undefined, prefix = "") {
@@ -68,6 +79,18 @@ export function LandRatesTab() {
   );
 
   const handleCreate = async () => {
+    const invalidField = (
+      [
+        ["Per-mile rate", newRow.rate_per_mile_usd],
+        ["Flat rate", newRow.flat_rate_usd],
+        ["Min charge", newRow.min_charge_usd],
+        ["Fuel surcharge", newRow.fuel_surcharge_pct],
+      ] as const
+    ).find(([, value]) => hasInvalidNumber(value));
+    if (invalidField) {
+      toast.error(`${invalidField[0]} must be a valid number`);
+      return;
+    }
     const rate_per_mile_usd = optionalNumber(newRow.rate_per_mile_usd);
     const flat_rate_usd = optionalNumber(newRow.flat_rate_usd);
     const payload = {
@@ -214,28 +237,28 @@ export function LandRatesTab() {
                     </TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground py-3">
                       {editingId === row.id ? (
-                        <Input value={row.rate_per_mile_usd == null ? "" : String(editingRow?.rate_per_mile_usd ?? "")} onChange={(e) => setEditingRow((c) => (c ? { ...c, rate_per_mile_usd: e.target.value === "" ? null : Number(e.target.value) } : c))} disabled={disableManageActions || updateRow.isPending} className="h-9 w-16 rounded-lg text-right font-mono border-black/10 dark:border-white/10" />
+                        <Input value={row.rate_per_mile_usd == null ? "" : String(editingRow?.rate_per_mile_usd ?? "")} onChange={(e) => setEditingRow((c) => (c ? { ...c, rate_per_mile_usd: optionalNumber(e.target.value) } : c))} disabled={disableManageActions || updateRow.isPending} className="h-9 w-16 rounded-lg text-right font-mono border-black/10 dark:border-white/10" />
                       ) : (
                         display(row.rate_per_mile_usd, "$")
                       )}
                     </TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground py-3">
                       {editingId === row.id ? (
-                        <Input value={row.flat_rate_usd == null ? "" : String(editingRow?.flat_rate_usd ?? "")} onChange={(e) => setEditingRow((c) => (c ? { ...c, flat_rate_usd: e.target.value === "" ? null : Number(e.target.value) } : c))} disabled={disableManageActions || updateRow.isPending} className="h-9 w-20 rounded-lg text-right font-mono border-black/10 dark:border-white/10" />
+                        <Input value={row.flat_rate_usd == null ? "" : String(editingRow?.flat_rate_usd ?? "")} onChange={(e) => setEditingRow((c) => (c ? { ...c, flat_rate_usd: optionalNumber(e.target.value) } : c))} disabled={disableManageActions || updateRow.isPending} className="h-9 w-20 rounded-lg text-right font-mono border-black/10 dark:border-white/10" />
                       ) : (
                         display(row.flat_rate_usd, "$")
                       )}
                     </TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground py-3">
                       {editingId === row.id ? (
-                        <Input value={String(editingRow?.min_charge_usd ?? 0)} onChange={(e) => setEditingRow((c) => (c ? { ...c, min_charge_usd: Number(e.target.value) } : c))} disabled={disableManageActions || updateRow.isPending} className="h-9 w-20 rounded-lg text-right font-mono border-black/10 dark:border-white/10" />
+                        <Input value={String(editingRow?.min_charge_usd ?? 0)} onChange={(e) => setEditingRow((c) => (c ? { ...c, min_charge_usd: requiredNumber(e.target.value) } : c))} disabled={disableManageActions || updateRow.isPending} className="h-9 w-20 rounded-lg text-right font-mono border-black/10 dark:border-white/10" />
                       ) : (
                         `$${row.min_charge_usd}`
                       )}
                     </TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground py-3">
                       {editingId === row.id ? (
-                        <Input value={String(editingRow?.fuel_surcharge_pct ?? 0)} onChange={(e) => setEditingRow((c) => (c ? { ...c, fuel_surcharge_pct: Number(e.target.value) } : c))} disabled={disableManageActions || updateRow.isPending} className="h-9 w-16 rounded-lg text-right font-mono border-black/10 dark:border-white/10" />
+                        <Input value={String(editingRow?.fuel_surcharge_pct ?? 0)} onChange={(e) => setEditingRow((c) => (c ? { ...c, fuel_surcharge_pct: requiredNumber(e.target.value) } : c))} disabled={disableManageActions || updateRow.isPending} className="h-9 w-16 rounded-lg text-right font-mono border-black/10 dark:border-white/10" />
                       ) : (
                         `${row.fuel_surcharge_pct}%`
                       )}

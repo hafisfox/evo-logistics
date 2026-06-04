@@ -34,6 +34,17 @@ TENANT_TABLES = {
     "rfq_id_aliases",
     "external_rate_quotes",
     "detention_demurrage_events",
+    "exchange_rates",
+    "activity_logs",
+    "rfq_notes",
+    "rfq_shipment_pieces",
+    "rfq_shipment_truck_details",
+    "air_carrier_profiles",
+    "air_charge_rates",
+    "truck_carrier_profiles",
+    "truck_lane_rates",
+    "ltl_freight_classes",
+    "drayage_rates",
 }
 
 
@@ -94,8 +105,8 @@ def resolve_workspace_id(supabase, mailbox_email: Optional[str]) -> Optional[str
                     workspace_id = row[0].get("workspace_id")
                     if workspace_id:
                         return workspace_id
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Warning: workspace resolution query failed for {mailbox_email}: {e}")
 
     if ALLOW_BOOTSTRAP_WORKSPACE_FALLBACK:
         return BOOTSTRAP_WORKSPACE_ID
